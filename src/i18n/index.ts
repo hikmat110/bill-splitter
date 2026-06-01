@@ -1,0 +1,39 @@
+import { ru } from './ru'
+import { uz } from './uz'
+import { en } from './en'
+import type { Context } from 'grammy'
+
+type DeepPartial<T> = { [K in keyof T]?: T[K] extends object ? DeepPartial<T[K]> : T[K] }
+
+const locales: Record<string, DeepPartial<typeof ru>> = { ru, uz, en }
+
+type Path<T, Prefix extends string = ''> = T extends object
+  ? { [K in keyof T & string]: Path<T[K], Prefix extends '' ? K : `${Prefix}.${K}`> }[keyof T & string]
+  : Prefix
+
+type I18nKey = Path<typeof ru>
+
+function resolvePath(obj: Record<string, unknown>, path: string): string {
+  const parts = path.split('.')
+  let cur: unknown = obj
+  for (const part of parts) {
+    if (typeof cur !== 'object' || cur === null) return path
+    cur = (cur as Record<string, unknown>)[part]
+  }
+  return typeof cur === 'string' ? cur : path
+}
+
+export function t(ctx: Context, key: I18nKey, vars?: Record<string, string>): string {
+  const lang = ctx.from?.language_code ?? 'ru'
+  const locale = (locales[lang] ?? locales['ru']!) as Record<string, unknown>
+  const fallback = locales['ru'] as Record<string, unknown>
+
+  let text = resolvePath(locale, key) ?? resolvePath(fallback, key) ?? key
+
+  if (vars) {
+    for (const [k, v] of Object.entries(vars)) {
+      text = text.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), v)
+    }
+  }
+  return text
+}
