@@ -16,5 +16,8 @@ export const en = {
   },
   errors: {
     generic: 'Something went wrong. Please try again.',
+    not_registered: 'Please start with /start.',
+    not_found: 'Not found.',
+    not_your_action: 'This action is not for you.',
   },
 }

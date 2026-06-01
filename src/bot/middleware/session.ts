@@ -1,9 +1,46 @@
 import { session } from 'grammy'
 import type { SessionFlavor } from 'grammy'
 
+export interface WizardItem {
+  name: string
+  price: bigint
+  shareContactIds: string[]
+}
+
 export interface SessionData {
-  // Wizard state will be added here in future iterations
-  step?: string
+  contact_wizard?: {
+    step: 'awaiting_name' | 'awaiting_phone'
+    display_name?: string
+  }
+
+  // NOTE: bigint fields are safe here because session is in-memory.
+  // If session storage moves to Redis/Postgres, add a BigInt-aware serializer.
+  bill_wizard?: {
+    step:
+      | 'awaiting_title'
+      | 'awaiting_participants'
+      | 'awaiting_item_name'
+      | 'awaiting_item_price'
+      | 'awaiting_item_shares'
+      | 'awaiting_service'
+      | 'awaiting_service_custom'
+      | 'awaiting_tip'
+      | 'awaiting_tip_custom'
+      | 'review'
+    wizardMessageId?: number
+    title?: string
+    participantContactIds: string[]
+    items: WizardItem[]
+    currentItem?: Partial<WizardItem>
+    servicePct: number
+    serviceFixed: bigint
+    tip: bigint
+  }
+
+  dispute_wizard?: {
+    step: 'awaiting_reason'
+    participantId: string
+  }
 }
 
 export type SessionContext = SessionFlavor<SessionData>

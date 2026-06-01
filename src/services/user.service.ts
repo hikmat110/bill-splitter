@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { db } from '../db/client'
 import { users, contacts } from '../db/schema'
 import type { User } from '../db/schema'
+import { normalizePhone } from '../utils/phone'
 
 export async function findByTelegramId(telegramId: bigint): Promise<User | null> {
   const result = await db
@@ -52,6 +53,11 @@ export async function upsertFromContact(
   return user
 }
 
+export async function findById(userId: string): Promise<User | null> {
+  const result = await db.select().from(users).where(eq(users.id, userId)).limit(1)
+  return result[0] ?? null
+}
+
 export async function backfillLinkedUser(phone: string, userId: string): Promise<void> {
   const normalized = normalizePhone(phone)
   await db
@@ -60,7 +66,3 @@ export async function backfillLinkedUser(phone: string, userId: string): Promise
     .where(eq(contacts.phone, normalized))
 }
 
-function normalizePhone(raw: string): string {
-  const digits = raw.replace(/\D/g, '')
-  return `+${digits}`
-}

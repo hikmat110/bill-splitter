@@ -16,5 +16,8 @@ export const uz = {
   },
   errors: {
     generic: "Nimadir noto'g'ri ketdi. Iltimos, qayta urinib ko'ring.",
+    not_registered: "Iltimos, /start buyrug'idan boshlang.",
+    not_found: 'Topilmadi.',
+    not_your_action: 'Bu harakat siz uchun emas.',
   },
 }
