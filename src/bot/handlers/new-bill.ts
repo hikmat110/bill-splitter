@@ -2,7 +2,7 @@ import type { Bot } from 'grammy'
 import { InlineKeyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
-import { listContacts, findContactById } from '../../services/contact.service'
+import { listContacts, findContactById, findOrCreateSelfContact } from '../../services/contact.service'
 import { createBill } from '../../services/bill.service'
 import { sendBillNotifications } from '../../services/notification.service'
 import {
@@ -22,8 +22,12 @@ import type { Contact } from '../../db/schema'
 // ─── Entry point ─────────────────────────────────────────────────────────────
 
 export async function newBillStartHandler(ctx: MyContext): Promise<void> {
+  // Reuse the message that triggered this (main menu message)
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+
   ctx.session.bill_wizard = {
     step: 'awaiting_title',
+    wizardMessageId: msgId,
     participantContactIds: [],
     items: [],
     servicePct: 0,
@@ -31,8 +35,7 @@ export async function newBillStartHandler(ctx: MyContext): Promise<void> {
     tip: 0n,
   }
 
-  const msg = await ctx.reply(t(ctx, 'bill.ask_title'))
-  ctx.session.bill_wizard.wizardMessageId = msg.message_id
+  await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
 }
 
 // ─── Text dispatcher ──────────────────────────────────────────────────────────
@@ -101,7 +104,11 @@ export async function billCallbackHandler(
 
 async function saveTitleStep(ctx: MyContext, title: string): Promise<void> {
   const wizard = ctx.session.bill_wizard!
-  const allContacts = await listContacts(ctx.user.id)
+  const [allContacts, selfContact] = await Promise.all([
+    listContacts(ctx.user.id),
+    findOrCreateSelfContact(ctx.user.id, ctx.user.first_name),
+  ])
+
   if (allContacts.length === 0) {
     await editWizardMessage(ctx, t(ctx, 'bill.no_contacts'))
     ctx.session.bill_wizard = undefined
@@ -115,7 +122,7 @@ async function saveTitleStep(ctx: MyContext, title: string): Promise<void> {
   await editWizardMessage(
     ctx,
     t(ctx, 'bill.ask_participants'),
-    participantSelectKeyboard(allContacts, [], ctx)
+    participantSelectKeyboard(selfContact, allContacts, [], ctx)
   )
 }
 
@@ -128,11 +135,14 @@ async function toggleParticipant(ctx: MyContext, contactId: string): Promise<voi
     wizard.participantContactIds.splice(idx, 1)
   }
 
-  const allContacts = await listContacts(ctx.user.id)
+  const [allContacts, selfContact] = await Promise.all([
+    listContacts(ctx.user.id),
+    findOrCreateSelfContact(ctx.user.id, ctx.user.first_name),
+  ])
   await editWizardMessage(
     ctx,
     t(ctx, 'bill.ask_participants'),
-    participantSelectKeyboard(allContacts, wizard.participantContactIds, ctx)
+    participantSelectKeyboard(selfContact, allContacts, wizard.participantContactIds, ctx)
   )
 }
 
@@ -365,11 +375,10 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
   }
 
   ctx.session.bill_wizard = undefined
-  await editWizardMessage(ctx, t(ctx, 'bill.sent'))
   await showMainMenu(ctx)
 
-  // Send notifications after responding to user (non-blocking path)
-  await sendBillNotifications(bot, bill.id).catch((err) =>
+  // Send notifications non-blocking; pass creator's card number so recipients can copy it
+  await sendBillNotifications(bot, bill.id, ctx.user.card_number).catch((err) =>
     ctx.logger.error({ err, billId: bill.id }, 'sendBillNotifications failed')
   )
 }
@@ -388,7 +397,6 @@ async function editBillStep(ctx: MyContext): Promise<void> {
 
 async function cancelBillStep(ctx: MyContext): Promise<void> {
   ctx.session.bill_wizard = undefined
-  await editWizardMessage(ctx, t(ctx, 'bill.cancelled'))
   await showMainMenu(ctx)
 }
 
@@ -411,9 +419,10 @@ async function editWizardMessage(
   parseMode?: 'HTML'
 ): Promise<void> {
   const msgId = ctx.session.bill_wizard?.wizardMessageId
-  if (msgId) {
+  const chatId = ctx.chat?.id
+  if (msgId && chatId) {
     await ctx.api
-      .editMessageText(ctx.chat!.id, msgId, text, {
+      .editMessageText(chatId, msgId, text, {
         reply_markup: keyboard ?? new InlineKeyboard(),
         parse_mode: parseMode,
       })

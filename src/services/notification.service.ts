@@ -7,7 +7,7 @@ import {
   remindParticipant,
 } from './bill.service'
 import { findById } from './user.service'
-import { formatMoney } from '../utils/format'
+import { formatMoney, formatCard } from '../utils/format'
 import { t } from '../i18n'
 import type { Context } from 'grammy'
 
@@ -18,7 +18,8 @@ function langCtx(lang: string): Context {
 
 export async function sendBillNotifications(
   bot: Bot<MyContext>,
-  billId: string
+  billId: string,
+  creatorCardNumber?: string | null
 ): Promise<void> {
   const details = await getBillWithDetails(billId)
   if (!details) return
@@ -26,15 +27,22 @@ export async function sendBillNotifications(
   for (const participant of details.participants) {
     if (!participant.contact.linked_user_id) continue
 
+    // Skip notifying the creator about their own share
+    if (participant.contact.linked_user_id === details.bill.creator_id) continue
+
     const participantUser = await findById(participant.contact.linked_user_id)
     if (!participantUser) continue
 
     const ctx = langCtx(participantUser.language_code)
-    const text = t(ctx, 'payment.notification_message', {
+    let text = t(ctx, 'payment.notification_message', {
       title: details.bill.title,
       amount: formatMoney(participant.amount),
       creator: details.creator.first_name,
     })
+
+    if (creatorCardNumber) {
+      text += '\n\n' + t(ctx, 'payment.card_line', { card: formatCard(creatorCardNumber) })
+    }
 
     const kb = new InlineKeyboard().text(
       t(ctx, 'incoming.mark_paid'),

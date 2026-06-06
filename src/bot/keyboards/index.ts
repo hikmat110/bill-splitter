@@ -1,4 +1,4 @@
-import { InlineKeyboard } from 'grammy'
+import { InlineKeyboard, Keyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { encode } from '../../utils/callback'
@@ -12,6 +12,8 @@ export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
     .row()
     .text(t(ctx, 'menu.incoming'), 'menu:incoming')
     .text(t(ctx, 'menu.history'), 'menu:history')
+    .row()
+    .text(t(ctx, 'menu.settings'), 'menu:settings')
 }
 
 // ─── Contacts ────────────────────────────────────────────────────────────────
@@ -25,7 +27,7 @@ export function contactListKeyboard(contacts: Contact[], ctx: MyContext): Inline
     kb.text(label, encode('contact', 'view', c.id)).row()
   }
   kb.text(t(ctx, 'contacts.add_button'), encode('contact', 'add', 'new')).row()
-  kb.text(t(ctx, 'contacts.back_button'), 'menu:back')
+  kb.text(t(ctx, 'menu.back'), 'menu:back')
   return kb
 }
 
@@ -36,23 +38,49 @@ export function contactDetailKeyboard(contactId: string, ctx: MyContext): Inline
     .text(t(ctx, 'contacts.back_button'), encode('contact', 'list', 'all'))
 }
 
+export function contactAddSourceKeyboard(ctx: MyContext): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(t(ctx, 'contacts.add_manual'), encode('contact', 'add_manual', 'x'))
+    .row()
+    .text(t(ctx, 'contacts.add_telegram'), encode('contact', 'add_telegram', 'x'))
+    .row()
+    .text(t(ctx, 'contacts.back_button'), encode('contact', 'list', 'all'))
+}
+
 export function contactSkipPhoneKeyboard(ctx: MyContext): InlineKeyboard {
   return new InlineKeyboard()
     .text(t(ctx, 'contacts.skip_phone'), encode('contact', 'skip_phone', 'now'))
     .text(t(ctx, 'contacts.cancel'), encode('contact', 'cancel', 'now'))
 }
 
+/** Reply keyboard for Telegram contact sharing (cannot be inline) */
+export function contactShareRequestKeyboard(ctx: MyContext): Keyboard {
+  return new Keyboard()
+    .requestContact(t(ctx, 'contacts.share_button'))
+    .resized()
+    .oneTime()
+}
+
 // ─── Bill wizard ─────────────────────────────────────────────────────────────
 
 export function participantSelectKeyboard(
+  selfContact: Contact,
   contacts: Contact[],
   selected: string[],
   ctx: MyContext
 ): InlineKeyboard {
   const kb = new InlineKeyboard()
+
+  // "Me" entry — always first, unselected by default
+  const selfChecked = selected.includes(selfContact.id) ? '☑️' : '☐'
+  kb.text(
+    `${selfChecked} ${t(ctx, 'bill.me_label', { name: selfContact.display_name })}`,
+    encode('bill', 'toggle_participant', selfContact.id)
+  ).row()
+
   for (const c of contacts) {
-    const checked = selected.includes(c.id) ? '☑️ ' : '☐ '
-    kb.text(`${checked}${c.display_name}`, encode('bill', 'toggle_participant', c.id)).row()
+    const checked = selected.includes(c.id) ? '☑️' : '☐'
+    kb.text(`${checked} ${c.display_name}`, encode('bill', 'toggle_participant', c.id)).row()
   }
   if (selected.length > 0) {
     kb.text(t(ctx, 'bill.done_button'), 'bill:participants_done')
@@ -67,8 +95,8 @@ export function itemShareKeyboard(
 ): InlineKeyboard {
   const kb = new InlineKeyboard()
   for (const c of participants) {
-    const checked = selected.includes(c.id) ? '☑️ ' : '☐ '
-    kb.text(`${checked}${c.display_name}`, encode('bill', 'toggle_share', c.id)).row()
+    const checked = selected.includes(c.id) ? '☑️' : '☐'
+    kb.text(`${checked} ${c.display_name}`, encode('bill', 'toggle_share', c.id)).row()
   }
   kb.text(t(ctx, 'bill.select_all'), 'bill:shares_all').row()
   if (selected.length > 0) {
@@ -83,25 +111,25 @@ export function itemNextKeyboard(ctx: MyContext): InlineKeyboard {
     .text(t(ctx, 'bill.done_items'), 'bill:items_done')
 }
 
-export function serviceChargeKeyboard(_ctx: MyContext): InlineKeyboard {
+export function serviceChargeKeyboard(ctx: MyContext): InlineKeyboard {
   return new InlineKeyboard()
     .text('0%', 'bill:service:0')
     .text('10%', 'bill:service:10')
     .text('12%', 'bill:service:12')
     .row()
     .text('15%', 'bill:service:15')
-    .text('Другой...', 'bill:service:custom')
+    .text(t(ctx, 'bill.service_custom'), 'bill:service:custom')
 }
 
-export function tipKeyboard(_ctx: MyContext): InlineKeyboard {
+export function tipKeyboard(ctx: MyContext): InlineKeyboard {
   return new InlineKeyboard()
-    .text('Нет', 'bill:tip:0')
+    .text(t(ctx, 'bill.tip_none'), 'bill:tip:0')
     .text('5 000', 'bill:tip:5000')
     .row()
     .text('10 000', 'bill:tip:10000')
     .text('15 000', 'bill:tip:15000')
     .row()
-    .text('Другой...', 'bill:tip:custom')
+    .text(t(ctx, 'bill.tip_custom'), 'bill:tip:custom')
 }
 
 export function billReviewKeyboard(ctx: MyContext): InlineKeyboard {
@@ -135,7 +163,7 @@ export function incomingListKeyboard(
   for (const item of items) {
     kb.text(item.title, encode('incoming', 'view', item.participantId)).row()
   }
-  kb.text(t(ctx, 'incoming.back'), 'menu:back')
+  kb.text(t(ctx, 'menu.back'), 'menu:back')
   return kb
 }
 
@@ -164,6 +192,8 @@ export function historyTabKeyboard(activeTab: 'created' | 'received', ctx: MyCon
   return new InlineKeyboard()
     .text(createdLabel, 'history:tab:created')
     .text(receivedLabel, 'history:tab:received')
+    .row()
+    .text(t(ctx, 'menu.back'), 'menu:back')
 }
 
 export function historyBillKeyboard(
@@ -176,4 +206,18 @@ export function historyBillKeyboard(
   }
   kb.text(t(ctx, 'history.back'), 'menu:history')
   return kb
+}
+
+// ─── Settings ────────────────────────────────────────────────────────────────
+
+export function settingsKeyboard(ctx: MyContext, currentLang: string): InlineKeyboard {
+  const mark = (lang: string) => currentLang === lang ? '✅ ' : ''
+  return new InlineKeyboard()
+    .text(t(ctx, 'settings.set_card'), 'settings:set_card:x')
+    .row()
+    .text(`${mark('uz')}🇺🇿 O'zbek`, 'settings:lang:uz')
+    .text(`${mark('ru')}🇷🇺 Русский`, 'settings:lang:ru')
+    .text(`${mark('en')}🇺🇸 English`, 'settings:lang:en')
+    .row()
+    .text(t(ctx, 'menu.back'), 'menu:back')
 }
