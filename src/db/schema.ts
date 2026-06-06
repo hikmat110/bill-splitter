@@ -22,7 +22,8 @@ export const users = pgTable('users', {
   first_name: text('first_name').notNull(),
   last_name: text('last_name'),
   username: text('username'),
-  language_code: text('language_code').default('ru').notNull(),
+  language_code: text('language_code').default('uz').notNull(),
+  card_number: text('card_number'),
   created_at: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),

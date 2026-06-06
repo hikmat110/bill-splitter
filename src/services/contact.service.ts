@@ -1,4 +1,4 @@
-import { and, eq, or, exists } from 'drizzle-orm'
+import { and, eq, or, isNull, ne, exists } from 'drizzle-orm'
 import { db } from '../db/client'
 import { contacts, users, billParticipants, billItemShares } from '../db/schema'
 import type { Contact } from '../db/schema'
@@ -8,7 +8,14 @@ export async function listContacts(ownerId: string): Promise<Contact[]> {
   return db
     .select()
     .from(contacts)
-    .where(eq(contacts.owner_id, ownerId))
+    .where(and(
+      eq(contacts.owner_id, ownerId),
+      // Exclude self-contact (where the contact links back to the owner)
+      or(
+        isNull(contacts.linked_user_id),
+        ne(contacts.linked_user_id, ownerId)
+      )
+    ))
     .orderBy(contacts.display_name)
 }
 
@@ -51,6 +58,39 @@ export async function addContact(
 
   if (!contact) throw new Error('Failed to insert contact')
   return contact
+}
+
+export async function findOrCreateSelfContact(userId: string, firstName: string): Promise<Contact> {
+  // Find existing self-contact (where both owner and linked user are the same person)
+  const [existing] = await db
+    .select()
+    .from(contacts)
+    .where(and(eq(contacts.owner_id, userId), eq(contacts.linked_user_id, userId)))
+    .limit(1)
+  if (existing) return existing
+
+  // Try to insert; fall back to incrementing suffix on name collision
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const name = attempt === 0 ? firstName : `${firstName} (${attempt})`
+    try {
+      const [contact] = await db
+        .insert(contacts)
+        .values({ owner_id: userId, display_name: name, linked_user_id: userId, phone: null })
+        .returning()
+      if (contact) return contact
+    } catch {
+      // Unique violation on (owner_id, display_name) — try next suffix
+    }
+  }
+
+  // Final fallback: read whatever was created concurrently
+  const [fallback] = await db
+    .select()
+    .from(contacts)
+    .where(and(eq(contacts.owner_id, userId), eq(contacts.linked_user_id, userId)))
+    .limit(1)
+  if (fallback) return fallback
+  throw new Error('Could not create self-contact')
 }
 
 export async function isContactReferencedInBills(contactId: string): Promise<boolean> {

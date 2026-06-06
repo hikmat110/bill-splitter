@@ -27,6 +27,11 @@ export async function upsertFromContact(
 ): Promise<User> {
   const phone = normalizePhone(contact.phone_number)
   const telegramId = BigInt(from.id)
+  // Default to Uzbek if Telegram doesn't provide a supported language
+  const supportedLangs = ['uz', 'ru', 'en']
+  const lang = from.language_code && supportedLangs.includes(from.language_code)
+    ? from.language_code
+    : 'uz'
 
   const [user] = await db
     .insert(users)
@@ -36,7 +41,7 @@ export async function upsertFromContact(
       first_name: contact.first_name,
       last_name: contact.last_name ?? null,
       username: from.username ?? null,
-      language_code: from.language_code ?? 'ru',
+      language_code: lang,
     })
     .onConflictDoUpdate({
       target: users.telegram_id,
@@ -66,3 +71,10 @@ export async function backfillLinkedUser(phone: string, userId: string): Promise
     .where(eq(contacts.phone, normalized))
 }
 
+export async function updateCardNumber(userId: string, cardNumber: string | null): Promise<void> {
+  await db.update(users).set({ card_number: cardNumber }).where(eq(users.id, userId))
+}
+
+export async function updateLanguage(userId: string, lang: 'uz' | 'ru' | 'en'): Promise<void> {
+  await db.update(users).set({ language_code: lang }).where(eq(users.id, userId))
+}

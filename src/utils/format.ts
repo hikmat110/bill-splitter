@@ -20,21 +20,23 @@ export function formatDate(date: Date): string {
   return dateFormatter.format(date)
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: '⏳ Ожидает',
-  marked_paid: '💸 Отмечено оплаченным',
-  confirmed: '✅ Подтверждено',
-  disputed: '❌ Оспорено',
-  draft: '📝 Черновик',
-  sent: '📤 Отправлено',
-  settled: '✅ Завершено',
-  cancelled: '❌ Отменено',
+/** Format 16-digit card number string as "XXXX XXXX XXXX XXXX" */
+export function formatCard(digits: string): string {
+  return digits.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4')
 }
 
-export function formatStatus(status: string): string {
-  return STATUS_LABELS[status] ?? status
+/** Mask card: show only last 4 digits */
+export function maskCard(digits: string): string {
+  return `**** **** **** ${digits.slice(-4)}`
 }
 
+/** Strip non-digits and validate card number; returns 16 digits or null */
+export function parseCardNumber(input: string): string | null {
+  const digits = input.replace(/\D/g, '')
+  return digits.length === 16 ? digits : null
+}
+
+/** @deprecated Use i18n history.paid_summary instead */
 export function formatParticipantSummary(paid: number, total: number): string {
   return `${paid}/${total} оплачено`
 }
