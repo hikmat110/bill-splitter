@@ -1,6 +1,6 @@
 import type { Bot } from 'grammy'
 import type { MyContext } from '../index'
-import { t } from '../../i18n'
+import { t, statusLabel } from '../../i18n'
 import {
   listBillsCreatedBy,
   listBillsForParticipant,
@@ -11,7 +11,7 @@ import {
   historyTabKeyboard,
   historyBillKeyboard,
 } from '../keyboards'
-import { formatMoney, formatDate, formatParticipantSummary } from '../../utils/format'
+import { formatMoney, formatDate } from '../../utils/format'
 
 export async function historyHandler(ctx: MyContext): Promise<void> {
   await showHistoryTab(ctx, 'created')
@@ -19,13 +19,12 @@ export async function historyHandler(ctx: MyContext): Promise<void> {
 
 export async function historyTabHandler(ctx: MyContext, tab: string): Promise<void> {
   const activeTab = tab === 'received' ? 'received' : 'created'
-  await showHistoryTab(ctx, activeTab, true)
+  await showHistoryTab(ctx, activeTab)
 }
 
 async function showHistoryTab(
   ctx: MyContext,
-  tab: 'created' | 'received',
-  edit = false
+  tab: 'created' | 'received'
 ): Promise<void> {
   let lines: string[]
 
@@ -35,7 +34,7 @@ async function showHistoryTab(
       lines = [t(ctx, 'history.empty')]
     } else {
       lines = billsList.map((b) =>
-        `• <b>${b.title}</b> — ${formatMoney(b.total)} [${b.status}]`
+        `• <b>${b.title}</b> — ${formatMoney(b.total)} [${statusLabel(ctx, b.status)}]`
       )
     }
   } else {
@@ -45,7 +44,7 @@ async function showHistoryTab(
     } else {
       lines = rows.map(
         (r) =>
-          `• <b>${r.bill.title}</b> — ${formatMoney(r.participant.amount)} [${r.participant.status}]`
+          `• <b>${r.bill.title}</b> — ${formatMoney(r.participant.amount)} [${statusLabel(ctx, r.participant.status)}]`
       )
     }
   }
@@ -53,19 +52,13 @@ async function showHistoryTab(
   const text = `${t(ctx, 'history.title')}\n\n${lines.join('\n')}`
   const kb = historyTabKeyboard(tab, ctx)
 
-  if (edit) {
-    await ctx.editMessageText(text, { parse_mode: 'HTML', reply_markup: kb }).catch(() =>
-      ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb })
-    )
-  } else {
-    await ctx.reply(text, { parse_mode: 'HTML', reply_markup: kb })
-  }
+  await editOrReply(ctx, text, kb, 'HTML')
 }
 
 export async function historyDetailHandler(ctx: MyContext, billId: string): Promise<void> {
   const details = await getBillWithDetails(billId)
   if (!details) {
-    await ctx.reply(t(ctx, 'errors.not_found'))
+    await editOrReply(ctx, t(ctx, 'errors.not_found'))
     return
   }
 
@@ -81,23 +74,24 @@ export async function historyDetailHandler(ctx: MyContext, billId: string): Prom
     lines.push(`  ${item.name} × ${item.quantity}: ${formatMoney(item.price * BigInt(item.quantity))}`)
   }
   lines.push('')
-  lines.push(`<b>Итого: ${formatMoney(bill.total)}</b>`)
+  lines.push(t(ctx, 'history.detail_total', { amount: formatMoney(bill.total) }))
   lines.push('')
 
   const paidCount = participants.filter((p) => p.status === 'confirmed').length
-  lines.push(`<b>Оплата:</b> ${formatParticipantSummary(paidCount, participants.length)}`)
+  lines.push(t(ctx, 'history.detail_payment', { summary: `${paidCount}/${participants.length}` }))
   for (const p of participants) {
-    lines.push(`  ${p.contact.display_name}: ${formatMoney(p.amount)} — ${p.status}`)
+    lines.push(t(ctx, 'history.detail_participant_line', {
+      name: p.contact.display_name,
+      amount: formatMoney(p.amount),
+      status: statusLabel(ctx, p.status),
+    }))
   }
 
   const unpaid = participants
     .filter((p) => p.status === 'pending' || p.status === 'disputed')
     .map((p) => ({ id: p.id, contactName: p.contact.display_name }))
 
-  await ctx.reply(lines.join('\n'), {
-    parse_mode: 'HTML',
-    reply_markup: historyBillKeyboard(unpaid, ctx),
-  })
+  await editOrReply(ctx, lines.join('\n'), historyBillKeyboard(unpaid, ctx), 'HTML')
 }
 
 export async function remindHandler(
@@ -110,5 +104,23 @@ export async function remindHandler(
     await ctx.answerCallbackQuery(t(ctx, 'payment.remind_sent'))
   } else {
     await ctx.answerCallbackQuery(t(ctx, 'payment.remind_too_soon'))
+  }
+}
+
+async function editOrReply(
+  ctx: MyContext,
+  text: string,
+  keyboard?: import('grammy').InlineKeyboard,
+  parseMode?: 'HTML'
+): Promise<void> {
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+  const chatId = ctx.chat?.id
+  if (msgId && chatId) {
+    await ctx.api.editMessageText(chatId, msgId, text, {
+      reply_markup: keyboard,
+      parse_mode: parseMode,
+    }).catch(() => undefined)
+  } else {
+    await ctx.reply(text, { reply_markup: keyboard, parse_mode: parseMode })
   }
 }

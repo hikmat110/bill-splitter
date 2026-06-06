@@ -1,6 +1,6 @@
 import type { Bot } from 'grammy'
 import type { MyContext } from '../index'
-import { t } from '../../i18n'
+import { t, statusLabel } from '../../i18n'
 import {
   listBillsForParticipant,
   getBillWithDetails,
@@ -12,53 +12,52 @@ import {
   incomingListKeyboard,
   incomingDetailKeyboard,
 } from '../keyboards'
-import { formatMoney, formatStatus } from '../../utils/format'
+import { formatMoney } from '../../utils/format'
 
 export async function incomingHandler(ctx: MyContext): Promise<void> {
   const rows = await listBillsForParticipant(ctx.user.id)
 
-  if (rows.length === 0) {
-    await ctx.reply(t(ctx, 'incoming.empty'))
-    return
-  }
+  const text = rows.length === 0
+    ? t(ctx, 'incoming.empty')
+    : t(ctx, 'incoming.title')
 
-  const items = rows.map((r) => ({
-    participantId: r.participant.id,
-    title: `${r.bill.title} — ${formatMoney(r.participant.amount)} (${formatStatus(r.participant.status)})`,
-  }))
+  const kb = rows.length === 0
+    ? undefined
+    : incomingListKeyboard(
+        rows.map((r) => ({
+          participantId: r.participant.id,
+          title: `${r.bill.title} — ${formatMoney(r.participant.amount)} (${statusLabel(ctx, r.participant.status)})`,
+        })),
+        ctx
+      )
 
-  await ctx.reply(t(ctx, 'incoming.title'), {
-    reply_markup: incomingListKeyboard(items, ctx),
-  })
+  await editOrReply(ctx, text, kb)
 }
 
 export async function incomingDetailHandler(ctx: MyContext, participantId: string): Promise<void> {
   const participant = await getParticipantById(participantId)
   if (!participant) {
-    await ctx.reply(t(ctx, 'errors.not_found'))
+    await editOrReply(ctx, t(ctx, 'errors.not_found'))
     return
   }
 
   const details = await getBillWithDetails(participant.bill_id)
   if (!details) {
-    await ctx.reply(t(ctx, 'errors.not_found'))
+    await editOrReply(ctx, t(ctx, 'errors.not_found'))
     return
   }
 
   const lines = [
     t(ctx, 'incoming.detail_title', { title: details.bill.title }),
     t(ctx, 'incoming.your_share', { amount: formatMoney(participant.amount) }),
-    t(ctx, 'incoming.status_label', { status: formatStatus(participant.status) }),
+    t(ctx, 'incoming.status_label', { status: statusLabel(ctx, participant.status) }),
   ]
 
-  await ctx.editMessageText(lines.join('\n'), {
-    parse_mode: 'HTML',
-    reply_markup: incomingDetailKeyboard(participant.id, participant.status, ctx),
-  }).catch(() =>
-    ctx.reply(lines.join('\n'), {
-      parse_mode: 'HTML',
-      reply_markup: incomingDetailKeyboard(participant.id, participant.status, ctx),
-    })
+  await editOrReply(
+    ctx,
+    lines.join('\n'),
+    incomingDetailKeyboard(participant.id, participant.status, ctx),
+    'HTML'
   )
 }
 
@@ -69,22 +68,37 @@ export async function markPaidCallbackHandler(
 ): Promise<void> {
   const participant = await getParticipantById(participantId)
   if (!participant) {
-    await ctx.reply(t(ctx, 'errors.not_found'))
+    await editOrReply(ctx, t(ctx, 'errors.not_found'))
     return
   }
 
-  // Only the linked user can mark their own share as paid
   if (participant.contact.linked_user_id !== ctx.user.id) {
-    await ctx.reply(t(ctx, 'errors.not_your_action'))
+    await editOrReply(ctx, t(ctx, 'errors.not_your_action'))
     return
   }
 
-  if (participant.status !== 'pending') {
-    return
-  }
+  if (participant.status !== 'pending') return
 
   await markParticipantPaid(participantId)
   await notifyCreatorOfPaymentMark(bot, participantId)
 
   await ctx.editMessageText(t(ctx, 'incoming.awaiting_confirmation')).catch(() => undefined)
+}
+
+async function editOrReply(
+  ctx: MyContext,
+  text: string,
+  keyboard?: import('grammy').InlineKeyboard,
+  parseMode?: 'HTML'
+): Promise<void> {
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+  const chatId = ctx.chat?.id
+  if (msgId && chatId) {
+    await ctx.api.editMessageText(chatId, msgId, text, {
+      reply_markup: keyboard,
+      parse_mode: parseMode,
+    }).catch(() => undefined)
+  } else {
+    await ctx.reply(text, { reply_markup: keyboard, parse_mode: parseMode })
+  }
 }

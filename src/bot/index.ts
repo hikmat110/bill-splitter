@@ -10,6 +10,9 @@ import { showMainMenu } from './handlers/menu'
 import {
   contactsMenuHandler,
   contactAddStartHandler,
+  contactStartManualHandler,
+  contactStartTelegramHandler,
+  contactShareHandler,
   contactTextHandler,
   contactViewHandler,
   contactDeleteHandler,
@@ -37,6 +40,11 @@ import {
   disputeStartHandler,
   disputeReasonHandler,
 } from './handlers/payment'
+import {
+  showSettings,
+  settingsCallbackHandler,
+  settingsTextHandler,
+} from './handlers/settings'
 import type { User } from '../db/schema'
 import { decode } from '../utils/callback'
 import { t } from '../i18n'
@@ -62,11 +70,17 @@ bot.command('cancel', async (ctx) => {
   ctx.session.bill_wizard = undefined
   ctx.session.contact_wizard = undefined
   ctx.session.dispute_wizard = undefined
-  await ctx.reply(t(ctx, 'bill.cancelled'))
+  ctx.session.settings_wizard = undefined
   await showMainMenu(ctx)
 })
 
-bot.on('message:contact', contactHandler)
+// Route contact shares: registration vs. contacts import wizard
+bot.on('message:contact', async (ctx) => {
+  if (ctx.session.contact_wizard?.step === 'awaiting_contact_share') {
+    return contactShareHandler(ctx)
+  }
+  return contactHandler(ctx)
+})
 
 // ─── Text message dispatcher ─────────────────────────────────────────────────
 
@@ -74,6 +88,7 @@ bot.on('message:text', async (ctx) => {
   if (ctx.session.contact_wizard) return contactTextHandler(ctx)
   if (ctx.session.bill_wizard) return billTextHandler(ctx)
   if (ctx.session.dispute_wizard) return disputeReasonHandler(ctx, bot)
+  if (ctx.session.settings_wizard) return settingsTextHandler(ctx)
 })
 
 // ─── Menu callbacks ───────────────────────────────────────────────────────────
@@ -101,6 +116,11 @@ bot.callbackQuery('menu:incoming', async (ctx) => {
 bot.callbackQuery('menu:history', async (ctx) => {
   await ctx.answerCallbackQuery()
   await historyHandler(ctx)
+})
+
+bot.callbackQuery('menu:settings', async (ctx) => {
+  await ctx.answerCallbackQuery()
+  await showSettings(ctx)
 })
 
 // ─── Bill callbacks ───────────────────────────────────────────────────────────
@@ -142,6 +162,8 @@ bot.callbackQuery(/^contact:/, async (ctx) => {
   if (action === 'view') return contactViewHandler(ctx, id)
   if (action === 'delete') return contactDeleteHandler(ctx, id)
   if (action === 'add') return contactAddStartHandler(ctx)
+  if (action === 'add_manual') return contactStartManualHandler(ctx)
+  if (action === 'add_telegram') return contactStartTelegramHandler(ctx)
   if (action === 'list') return contactsMenuHandler(ctx)
   if (action === 'skip_phone') return contactSkipPhoneHandler(ctx)
   if (action === 'cancel') return contactCancelHandler(ctx)
@@ -162,6 +184,17 @@ bot.callbackQuery(/^history:/, async (ctx) => {
   const { action, id } = decode(ctx.callbackQuery.data)
   if (action === 'tab') return historyTabHandler(ctx, id)
   if (action === 'detail') return historyDetailHandler(ctx, id)
+})
+
+// ─── Settings callbacks ───────────────────────────────────────────────────────
+
+bot.callbackQuery(/^settings:/, async (ctx) => {
+  await ctx.answerCallbackQuery()
+  const data = ctx.callbackQuery.data
+  const parts = data.split(':')
+  const action = parts[1] ?? ''
+  const id = parts[2] ?? ''
+  return settingsCallbackHandler(ctx, action, id)
 })
 
 // ─── Global error handler ────────────────────────────────────────────────────
