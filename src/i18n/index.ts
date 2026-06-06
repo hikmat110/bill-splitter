@@ -24,9 +24,11 @@ function resolvePath(obj: Record<string, unknown>, path: string): string {
 }
 
 export function t(ctx: Context, key: I18nKey, vars?: Record<string, string>): string {
-  const lang = ctx.from?.language_code ?? 'ru'
-  const locale = (locales[lang] ?? locales['ru']!) as Record<string, unknown>
-  const fallback = locales['ru'] as Record<string, unknown>
+  // Prefer user's stored language preference over Telegram client language
+  const storedLang = (ctx as { user?: { language_code?: string } }).user?.language_code
+  const lang = storedLang ?? ctx.from?.language_code ?? 'uz'
+  const locale = (locales[lang] ?? locales['uz']!) as Record<string, unknown>
+  const fallback = locales['uz'] as Record<string, unknown>
 
   let text = resolvePath(locale, key) ?? resolvePath(fallback, key) ?? key
 
@@ -36,4 +38,9 @@ export function t(ctx: Context, key: I18nKey, vars?: Record<string, string>): st
     }
   }
   return text
+}
+
+export function statusLabel(ctx: Context, status: string): string {
+  const key = `status.${status}` as I18nKey
+  return t(ctx, key)
 }
