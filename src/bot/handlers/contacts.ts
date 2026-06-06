@@ -1,3 +1,4 @@
+import { InlineKeyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import {
@@ -11,8 +12,9 @@ import {
   contactListKeyboard,
   contactDetailKeyboard,
   contactSkipPhoneKeyboard,
+  contactAddSourceKeyboard,
+  contactShareRequestKeyboard,
 } from '../keyboards'
-import { decode } from '../../utils/callback'
 import { showMainMenu } from './menu'
 
 export async function contactsMenuHandler(ctx: MyContext): Promise<void> {
@@ -21,14 +23,73 @@ export async function contactsMenuHandler(ctx: MyContext): Promise<void> {
     ? t(ctx, 'contacts.empty')
     : t(ctx, 'contacts.list_title', { count: String(contacts.length) })
 
-  await ctx.editMessageText(text, {
-    reply_markup: contactListKeyboard(contacts, ctx),
-  }).catch(() => ctx.reply(text, { reply_markup: contactListKeyboard(contacts, ctx) }))
+  await editContactMessage(ctx, text, contactListKeyboard(contacts, ctx))
 }
 
 export async function contactAddStartHandler(ctx: MyContext): Promise<void> {
-  ctx.session.contact_wizard = { step: 'awaiting_name' }
-  await ctx.reply(t(ctx, 'contacts.add_name_prompt'))
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+  ctx.session.contact_wizard = { step: 'awaiting_contact_source', wizardMessageId: msgId }
+  await editContactWizardMessage(ctx, t(ctx, 'contacts.add_source'), contactAddSourceKeyboard(ctx))
+}
+
+export async function contactStartManualHandler(ctx: MyContext): Promise<void> {
+  if (!ctx.session.contact_wizard) {
+    const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+    ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: msgId }
+  } else {
+    ctx.session.contact_wizard.step = 'awaiting_name'
+  }
+  await editContactWizardMessage(ctx, t(ctx, 'contacts.add_name_prompt'))
+}
+
+export async function contactStartTelegramHandler(ctx: MyContext): Promise<void> {
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+  ctx.session.contact_wizard = { step: 'awaiting_contact_share', wizardMessageId: msgId }
+
+  // Must use a ReplyKeyboard for Telegram contact sharing — no inline alternative
+  await ctx.reply(t(ctx, 'contacts.share_prompt'), {
+    reply_markup: contactShareRequestKeyboard(ctx),
+  })
+}
+
+/** Called when the user shares a Telegram contact during the contacts import flow */
+export async function contactShareHandler(ctx: MyContext): Promise<void> {
+  const contact = ctx.message?.contact
+  const wizard = ctx.session.contact_wizard
+
+  if (!contact || !wizard) return
+
+  // Remove the reply keyboard first
+  await ctx.reply('...', { reply_markup: { remove_keyboard: true } })
+    .then((msg) => ctx.api.deleteMessage(ctx.chat!.id, msg.message_id).catch(() => undefined))
+    .catch(() => undefined)
+
+  // Reject if the user tries to share their own contact via this flow
+  if (contact.user_id === ctx.from?.id) {
+    ctx.session.contact_wizard = undefined
+    await editContactWizardMessage(ctx, t(ctx, 'contacts.share_yourself'))
+    await showContactList(ctx)
+    return
+  }
+
+  const firstName = contact.first_name ?? ''
+  const lastName = contact.last_name ? ` ${contact.last_name}` : ''
+  const displayName = `${firstName}${lastName}`.trim() || contact.phone_number
+
+  ctx.session.contact_wizard = undefined
+  try {
+    const added = await addContact(ctx.user.id, displayName, contact.phone_number)
+    await editContactWizardMessage(ctx, t(ctx, 'contacts.added', { name: added.display_name }))
+  } catch (err: unknown) {
+    if (isUniqueViolation(err)) {
+      await editContactWizardMessage(ctx, t(ctx, 'contacts.name_taken'))
+      ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: wizard.wizardMessageId }
+      return
+    }
+    ctx.logger.error({ err }, 'addContact (telegram share) failed')
+    await editContactWizardMessage(ctx, t(ctx, 'contacts.share_error'))
+  }
+  await showContactList(ctx)
 }
 
 export async function contactTextHandler(ctx: MyContext): Promise<void> {
@@ -41,55 +102,53 @@ export async function contactTextHandler(ctx: MyContext): Promise<void> {
   if (wizard.step === 'awaiting_name') {
     wizard.display_name = text
     wizard.step = 'awaiting_phone'
-    await ctx.reply(t(ctx, 'contacts.add_phone_prompt'), {
-      reply_markup: contactSkipPhoneKeyboard(ctx),
-    })
+    await editContactWizardMessage(ctx, t(ctx, 'contacts.add_phone_prompt'), contactSkipPhoneKeyboard(ctx))
     return
   }
 
   if (wizard.step === 'awaiting_phone') {
     const displayName = wizard.display_name!
+    const msgId = wizard.wizardMessageId
     ctx.session.contact_wizard = undefined
     try {
       const contact = await addContact(ctx.user.id, displayName, text)
-      await ctx.reply(t(ctx, 'contacts.added', { name: contact.display_name }))
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.added', { name: contact.display_name }))
     } catch (err: unknown) {
       if (isUniqueViolation(err)) {
-        await ctx.reply(t(ctx, 'contacts.name_taken'))
-        ctx.session.contact_wizard = { step: 'awaiting_name' }
+        await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.name_taken'))
+        ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: msgId }
         return
       }
       ctx.logger.error({ err }, 'addContact failed')
-      await ctx.reply(t(ctx, 'errors.generic'))
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
     }
-    await showContactList(ctx)
+    await showContactListById(ctx, msgId)
   }
 }
 
 export async function contactSkipPhoneHandler(ctx: MyContext): Promise<void> {
-  const displayName = ctx.session.contact_wizard?.display_name
+  const wizard = ctx.session.contact_wizard
+  const displayName = wizard?.display_name
+  const msgId = wizard?.wizardMessageId
   ctx.session.contact_wizard = undefined
 
-  if (!displayName) {
-    await ctx.answerCallbackQuery()
-    return
-  }
+  await ctx.answerCallbackQuery()
+
+  if (!displayName) return
 
   try {
     const contact = await addContact(ctx.user.id, displayName)
-    await ctx.answerCallbackQuery()
-    await ctx.reply(t(ctx, 'contacts.added', { name: contact.display_name }))
+    await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.added', { name: contact.display_name }))
   } catch (err: unknown) {
-    await ctx.answerCallbackQuery()
     if (isUniqueViolation(err)) {
-      await ctx.reply(t(ctx, 'contacts.name_taken'))
-      ctx.session.contact_wizard = { step: 'awaiting_name' }
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.name_taken'))
+      ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: msgId }
       return
     }
     ctx.logger.error({ err }, 'addContact (no phone) failed')
-    await ctx.reply(t(ctx, 'errors.generic'))
+    await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
   }
-  await showContactList(ctx)
+  await showContactListById(ctx, msgId)
 }
 
 export async function contactCancelHandler(ctx: MyContext): Promise<void> {
@@ -101,7 +160,7 @@ export async function contactCancelHandler(ctx: MyContext): Promise<void> {
 export async function contactViewHandler(ctx: MyContext, contactId: string): Promise<void> {
   const contact = await findContactById(contactId)
   if (!contact || contact.owner_id !== ctx.user.id) {
-    await ctx.reply(t(ctx, 'errors.not_found'))
+    await editContactMessage(ctx, t(ctx, 'errors.not_found'))
     return
   }
 
@@ -115,41 +174,86 @@ export async function contactViewHandler(ctx: MyContext, contactId: string): Pro
     ? t(ctx, 'contacts.detail_linked')
     : t(ctx, 'contacts.detail_not_linked'))
 
-  await ctx.editMessageText(lines.join('\n'), {
-    parse_mode: 'HTML',
-    reply_markup: contactDetailKeyboard(contact.id, ctx),
-  }).catch(() =>
-    ctx.reply(lines.join('\n'), {
-      parse_mode: 'HTML',
-      reply_markup: contactDetailKeyboard(contact.id, ctx),
-    })
-  )
+  await editContactMessage(ctx, lines.join('\n'), contactDetailKeyboard(contact.id, ctx), 'HTML')
 }
 
 export async function contactDeleteHandler(ctx: MyContext, contactId: string): Promise<void> {
   const contact = await findContactById(contactId)
   if (!contact || contact.owner_id !== ctx.user.id) {
-    await ctx.reply(t(ctx, 'errors.not_found'))
+    await editContactMessage(ctx, t(ctx, 'errors.not_found'))
     return
   }
 
   const referenced = await isContactReferencedInBills(contactId)
   if (referenced) {
-    await ctx.reply(t(ctx, 'contacts.cannot_delete'))
+    await editContactMessage(ctx, t(ctx, 'contacts.cannot_delete'))
     return
   }
 
   await deleteContact(contactId)
-  await ctx.reply(t(ctx, 'contacts.deleted'))
   await showContactList(ctx)
 }
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 async function showContactList(ctx: MyContext): Promise<void> {
   const contacts = await listContacts(ctx.user.id)
   const text = contacts.length === 0
     ? t(ctx, 'contacts.empty')
     : t(ctx, 'contacts.list_title', { count: String(contacts.length) })
-  await ctx.reply(text, { reply_markup: contactListKeyboard(contacts, ctx) })
+  await editContactMessage(ctx, text, contactListKeyboard(contacts, ctx))
+}
+
+async function showContactListById(ctx: MyContext, msgId?: number): Promise<void> {
+  const contacts = await listContacts(ctx.user.id)
+  const text = contacts.length === 0
+    ? t(ctx, 'contacts.empty')
+    : t(ctx, 'contacts.list_title', { count: String(contacts.length) })
+  await editContactWizardMessageById(ctx, msgId, text, contactListKeyboard(contacts, ctx))
+}
+
+/** Edit the message that triggered the current callback (or the main message) */
+async function editContactMessage(
+  ctx: MyContext,
+  text: string,
+  keyboard?: InlineKeyboard,
+  parseMode?: 'HTML'
+): Promise<void> {
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+  const chatId = ctx.chat?.id
+  if (msgId && chatId) {
+    await ctx.api.editMessageText(chatId, msgId, text, {
+      reply_markup: keyboard ?? new InlineKeyboard(),
+      parse_mode: parseMode,
+    }).catch(() => undefined)
+  }
+}
+
+/** Edit using the wizardMessageId stored in contact_wizard */
+async function editContactWizardMessage(
+  ctx: MyContext,
+  text: string,
+  keyboard?: InlineKeyboard,
+  parseMode?: 'HTML'
+): Promise<void> {
+  const msgId = ctx.session.contact_wizard?.wizardMessageId ?? ctx.session.mainMessageId
+  await editContactWizardMessageById(ctx, msgId, text, keyboard, parseMode)
+}
+
+async function editContactWizardMessageById(
+  ctx: MyContext,
+  msgId: number | undefined,
+  text: string,
+  keyboard?: InlineKeyboard,
+  parseMode?: 'HTML'
+): Promise<void> {
+  const chatId = ctx.chat?.id
+  if (msgId && chatId) {
+    await ctx.api.editMessageText(chatId, msgId, text, {
+      reply_markup: keyboard ?? new InlineKeyboard(),
+      parse_mode: parseMode,
+    }).catch(() => undefined)
+  }
 }
 
 function isUniqueViolation(err: unknown): boolean {

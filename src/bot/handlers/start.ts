@@ -13,6 +13,8 @@ export async function startHandler(ctx: MyContext): Promise<void> {
   const existing = await findByTelegramId(telegramId)
 
   if (existing) {
+    // Populate ctx.user so t() picks up the stored language
+    ctx.user = existing
     await ctx.reply(
       t(ctx, 'start.welcome_back', { name: existing.first_name }),
       { reply_markup: { remove_keyboard: true } }
@@ -60,6 +62,7 @@ export async function contactHandler(ctx: MyContext): Promise<void> {
 
   await backfillLinkedUser(contact.phone_number, user.id)
 
+  ctx.user = user
   ctx.logger.info({ user_id: user.id }, 'user registered')
 
   await ctx.reply(

@@ -8,9 +8,12 @@ export interface WizardItem {
 }
 
 export interface SessionData {
+  mainMessageId?: number
+
   contact_wizard?: {
-    step: 'awaiting_name' | 'awaiting_phone'
+    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_contact_share'
     display_name?: string
+    wizardMessageId?: number
   }
 
   // NOTE: bigint fields are safe here because session is in-memory.
@@ -40,6 +43,11 @@ export interface SessionData {
   dispute_wizard?: {
     step: 'awaiting_reason'
     participantId: string
+  }
+
+  settings_wizard?: {
+    step: 'awaiting_card_number'
+    wizardMessageId?: number
   }
 }
 
