@@ -414,7 +414,7 @@ async function editWizardMessage(
   if (msgId) {
     await ctx.api
       .editMessageText(ctx.chat!.id, msgId, text, {
-        reply_markup: keyboard,
+        reply_markup: keyboard ?? new InlineKeyboard(),
         parse_mode: parseMode,
       })
       .catch(() => undefined)
