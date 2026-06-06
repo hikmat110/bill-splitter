@@ -23,7 +23,7 @@ const schema = z.object({
     ),
 })
 
-const result = schema.safeParse(Bun.env)
+const result = schema.safeParse(process.env)
 
 if (!result.success) {
   const errors = result.error.issues
