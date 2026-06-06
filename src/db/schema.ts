@@ -84,8 +84,8 @@ export const bills = pgTable('bills', {
   title: text('title').notNull(),
   subtotal: bigint('subtotal', { mode: 'bigint' }).notNull(),
   service_pct: numeric('service_pct', { precision: 5, scale: 2 }).default('0').notNull(),
-  service_fixed: bigint('service_fixed', { mode: 'bigint' }).default(BigInt(0)).notNull(),
-  tip: bigint('tip', { mode: 'bigint' }).default(BigInt(0)).notNull(),
+  service_fixed: bigint('service_fixed', { mode: 'bigint' }).default(sql`0`).notNull(),
+  tip: bigint('tip', { mode: 'bigint' }).default(sql`0`).notNull(),
   total: bigint('total', { mode: 'bigint' }).notNull(),
   status: text('status').notNull().default('draft'),
   created_at: timestamp('created_at', { withTimezone: true })
