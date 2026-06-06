@@ -13,8 +13,8 @@ import {
   contactDetailKeyboard,
   contactSkipPhoneKeyboard,
   contactAddSourceKeyboard,
-  contactShareRequestKeyboard,
 } from '../keyboards'
+import { encode } from '../../utils/callback'
 import { showMainMenu } from './menu'
 
 export async function contactsMenuHandler(ctx: MyContext): Promise<void> {
@@ -46,25 +46,23 @@ export async function contactStartTelegramHandler(ctx: MyContext): Promise<void>
   const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
   ctx.session.contact_wizard = { step: 'awaiting_contact_share', wizardMessageId: msgId }
 
-  // Must use a ReplyKeyboard for Telegram contact sharing — no inline alternative
-  await ctx.reply(t(ctx, 'contacts.share_prompt'), {
-    reply_markup: contactShareRequestKeyboard(ctx),
-  })
+  const cancelKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
+
+  await ctx.answerCallbackQuery()
+  await editContactWizardMessage(ctx, t(ctx, 'contacts.share_prompt'), cancelKeyboard)
 }
 
-/** Called when the user shares a Telegram contact during the contacts import flow */
+/** Called when the user forwards a Telegram contact during the contacts import flow */
 export async function contactShareHandler(ctx: MyContext): Promise<void> {
   const contact = ctx.message?.contact
   const wizard = ctx.session.contact_wizard
 
   if (!contact || !wizard) return
 
-  // Remove the reply keyboard first
-  await ctx.reply('...', { reply_markup: { remove_keyboard: true } })
-    .then((msg) => ctx.api.deleteMessage(ctx.chat!.id, msg.message_id).catch(() => undefined))
-    .catch(() => undefined)
+  // Delete the forwarded contact message to keep the chat clean
+  await ctx.deleteMessage().catch(() => undefined)
 
-  // Reject if the user tries to share their own contact via this flow
   if (contact.user_id === ctx.from?.id) {
     ctx.session.contact_wizard = undefined
     await editContactWizardMessage(ctx, t(ctx, 'contacts.share_yourself'))

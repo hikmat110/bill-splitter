@@ -1,4 +1,4 @@
-import { InlineKeyboard, Keyboard } from 'grammy'
+import { InlineKeyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { encode } from '../../utils/callback'
@@ -51,14 +51,6 @@ export function contactSkipPhoneKeyboard(ctx: MyContext): InlineKeyboard {
   return new InlineKeyboard()
     .text(t(ctx, 'contacts.skip_phone'), encode('contact', 'skip_phone', 'now'))
     .text(t(ctx, 'contacts.cancel'), encode('contact', 'cancel', 'now'))
-}
-
-/** Reply keyboard for Telegram contact sharing (cannot be inline) */
-export function contactShareRequestKeyboard(ctx: MyContext): Keyboard {
-  return new Keyboard()
-    .requestContact(t(ctx, 'contacts.share_button'))
-    .resized()
-    .oneTime()
 }
 
 // ─── Bill wizard ─────────────────────────────────────────────────────────────
