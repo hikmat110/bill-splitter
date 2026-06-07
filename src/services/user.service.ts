@@ -1,8 +1,9 @@
-import { eq } from 'drizzle-orm'
+import { eq, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import { users, contacts } from '../db/schema'
 import type { User } from '../db/schema'
 import { normalizePhone } from '../utils/phone'
+import { normalizeUsername } from '../utils/username'
 
 export async function findByTelegramId(telegramId: bigint): Promise<User | null> {
   const result = await db
@@ -56,6 +57,19 @@ export async function upsertFromContact(
 
   if (!user) throw new Error('Failed to upsert user')
   return user
+}
+
+export async function findUserByUsername(username: string): Promise<User | null> {
+  const clean = normalizeUsername(username)
+  if (!clean) return null
+  // Exact, case-insensitive match. Avoid ILIKE: Telegram usernames contain
+  // underscores, which ILIKE would treat as a single-char wildcard.
+  const result = await db
+    .select()
+    .from(users)
+    .where(sql`lower(${users.username}) = ${clean}`)
+    .limit(1)
+  return result[0] ?? null
 }
 
 export async function findById(userId: string): Promise<User | null> {

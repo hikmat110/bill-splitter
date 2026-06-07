@@ -8,6 +8,8 @@ import {
   isContactReferencedInBills,
   deleteContact,
 } from '../../services/contact.service'
+import { findUserByUsername } from '../../services/user.service'
+import { normalizeUsername } from '../../utils/username'
 import {
   contactListKeyboard,
   contactDetailKeyboard,
@@ -49,8 +51,17 @@ export async function contactStartTelegramHandler(ctx: MyContext): Promise<void>
   const cancelKeyboard = new InlineKeyboard()
     .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
 
-  await ctx.answerCallbackQuery()
   await editContactWizardMessage(ctx, t(ctx, 'contacts.share_prompt'), cancelKeyboard)
+}
+
+export async function contactStartUsernameHandler(ctx: MyContext): Promise<void> {
+  const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
+  ctx.session.contact_wizard = { step: 'awaiting_username', wizardMessageId: msgId }
+
+  const cancelKeyboard = new InlineKeyboard()
+    .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
+
+  await editContactWizardMessage(ctx, t(ctx, 'contacts.username_prompt'), cancelKeyboard)
 }
 
 /** Called when the user forwards a Telegram contact during the contacts import flow */
@@ -118,6 +129,50 @@ export async function contactTextHandler(ctx: MyContext): Promise<void> {
         return
       }
       ctx.logger.error({ err }, 'addContact failed')
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
+    }
+    await showContactListById(ctx, msgId)
+    return
+  }
+
+  if (wizard.step === 'awaiting_username') {
+    const handle = normalizeUsername(text)
+    const msgId = wizard.wizardMessageId
+
+    const found = await findUserByUsername(handle)
+    if (!found) {
+      const cancelKeyboard = new InlineKeyboard()
+        .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
+      await editContactWizardMessageById(
+        ctx, msgId,
+        t(ctx, 'contacts.username_not_found', { username: handle }),
+        cancelKeyboard,
+      )
+      return
+    }
+
+    if (found.id === ctx.user.id) {
+      const cancelKeyboard = new InlineKeyboard()
+        .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.share_yourself'), cancelKeyboard)
+      return
+    }
+
+    ctx.session.contact_wizard = undefined
+    const displayName = [found.first_name, found.last_name].filter(Boolean).join(' ')
+    try {
+      const contact = await addContact(ctx.user.id, displayName, found.phone, found.id)
+      await editContactWizardMessageById(
+        ctx, msgId,
+        t(ctx, 'contacts.username_found', { name: contact.display_name }),
+      )
+    } catch (err: unknown) {
+      if (isUniqueViolation(err)) {
+        await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.name_taken'))
+        ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: msgId }
+        return
+      }
+      ctx.logger.error({ err }, 'addContact (username) failed')
       await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
     }
     await showContactListById(ctx, msgId)

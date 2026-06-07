@@ -12,6 +12,7 @@ import {
   contactAddStartHandler,
   contactStartManualHandler,
   contactStartTelegramHandler,
+  contactStartUsernameHandler,
   contactShareHandler,
   contactTextHandler,
   contactViewHandler,
@@ -164,6 +165,7 @@ bot.callbackQuery(/^contact:/, async (ctx) => {
   if (action === 'add') return contactAddStartHandler(ctx)
   if (action === 'add_manual') return contactStartManualHandler(ctx)
   if (action === 'add_telegram') return contactStartTelegramHandler(ctx)
+  if (action === 'add_username') return contactStartUsernameHandler(ctx)
   if (action === 'list') return contactsMenuHandler(ctx)
   if (action === 'skip_phone') return contactSkipPhoneHandler(ctx)
   if (action === 'cancel') return contactCancelHandler(ctx)

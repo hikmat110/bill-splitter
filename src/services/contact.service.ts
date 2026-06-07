@@ -31,19 +31,22 @@ export async function findContactById(contactId: string): Promise<Contact | null
 export async function addContact(
   ownerId: string,
   displayName: string,
-  phone?: string
+  phone?: string,
+  linkedUserId?: string,
 ): Promise<Contact> {
   let normalizedPhone: string | null = null
-  let linkedUserId: string | null = null
+  let resolvedLinkedUserId: string | null = linkedUserId ?? null
 
   if (phone) {
     normalizedPhone = normalizePhone(phone)
-    const linked = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.phone, normalizedPhone))
-      .limit(1)
-    linkedUserId = linked[0]?.id ?? null
+    if (!resolvedLinkedUserId) {
+      const linked = await db
+        .select({ id: users.id })
+        .from(users)
+        .where(eq(users.phone, normalizedPhone))
+        .limit(1)
+      resolvedLinkedUserId = linked[0]?.id ?? null
+    }
   }
 
   const [contact] = await db
@@ -52,7 +55,7 @@ export async function addContact(
       owner_id: ownerId,
       display_name: displayName,
       phone: normalizedPhone,
-      linked_user_id: linkedUserId,
+      linked_user_id: resolvedLinkedUserId,
     })
     .returning()
 

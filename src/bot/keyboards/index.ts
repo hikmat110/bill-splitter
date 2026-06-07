@@ -44,6 +44,8 @@ export function contactAddSourceKeyboard(ctx: MyContext): InlineKeyboard {
     .row()
     .text(t(ctx, 'contacts.add_telegram'), encode('contact', 'add_telegram', 'x'))
     .row()
+    .text(t(ctx, 'contacts.add_username'), encode('contact', 'add_username', 'x'))
+    .row()
     .text(t(ctx, 'contacts.back_button'), encode('contact', 'list', 'all'))
 }
 

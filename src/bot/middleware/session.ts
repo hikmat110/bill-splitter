@@ -11,7 +11,7 @@ export interface SessionData {
   mainMessageId?: number
 
   contact_wizard?: {
-    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_contact_share'
+    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_contact_share' | 'awaiting_username'
     display_name?: string
     wizardMessageId?: number
   }
