@@ -2,7 +2,7 @@ module.exports = {
   apps: [
     {
       name: 'bill-splitter',
-      script: 'src/bot/index.ts',
+      script: 'src/index.ts',
       interpreter: 'bun',
       watch: false,
       restart_delay: 3000,

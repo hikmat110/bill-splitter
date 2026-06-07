@@ -1,0 +1,63 @@
+// Minimal typings for the Telegram WebApp SDK (telegram-web-app.js), covering
+// only what this app uses.
+
+export {}
+
+interface TelegramHapticFeedback {
+  impactOccurred(style: 'light' | 'medium' | 'heavy' | 'rigid' | 'soft'): void
+  notificationOccurred(type: 'error' | 'success' | 'warning'): void
+  selectionChanged(): void
+}
+
+interface TelegramBackButton {
+  isVisible: boolean
+  show(): void
+  hide(): void
+  onClick(cb: () => void): void
+  offClick(cb: () => void): void
+}
+
+interface TelegramMainButton {
+  text: string
+  isVisible: boolean
+  isActive: boolean
+  showProgress(leaveActive?: boolean): void
+  hideProgress(): void
+  setText(text: string): void
+  show(): void
+  hide(): void
+  enable(): void
+  disable(): void
+  setParams(params: {
+    text?: string
+    color?: string
+    text_color?: string
+    is_active?: boolean
+    is_visible?: boolean
+  }): void
+  onClick(cb: () => void): void
+  offClick(cb: () => void): void
+}
+
+interface TelegramWebApp {
+  initData: string
+  colorScheme: 'light' | 'dark'
+  themeParams: Record<string, string>
+  isExpanded: boolean
+  ready(): void
+  expand(): void
+  setHeaderColor(color: string): void
+  setBackgroundColor(color: string): void
+  onEvent(event: string, cb: () => void): void
+  offEvent(event: string, cb: () => void): void
+  openTelegramLink(url: string): void
+  HapticFeedback: TelegramHapticFeedback
+  BackButton: TelegramBackButton
+  MainButton: TelegramMainButton
+}
+
+declare global {
+  interface Window {
+    Telegram?: { WebApp: TelegramWebApp }
+  }
+}

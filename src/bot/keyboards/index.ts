@@ -2,10 +2,16 @@ import { InlineKeyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { encode } from '../../utils/callback'
+import { config } from '../../config'
 import type { Contact } from '../../db/schema'
 
 export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
-  return new InlineKeyboard()
+  const kb = new InlineKeyboard()
+  // Mini App launcher (only when a public HTTPS URL is configured).
+  if (config.WEBAPP_URL) {
+    kb.webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL).row()
+  }
+  return kb
     .text(t(ctx, 'menu.new_bill'), 'menu:new_bill')
     .row()
     .text(t(ctx, 'menu.contacts'), 'menu:contacts')

@@ -8,6 +8,7 @@ export const uz = {
   },
   menu: {
     title: 'Asosiy menyu',
+    open_app: '🚀 Ilovani ochish',
     new_bill: '🧾 Yangi hisob',
     contacts: '👥 Kontaktlar',
     incoming: '📥 Kiruvchi',

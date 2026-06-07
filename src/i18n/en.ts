@@ -8,6 +8,7 @@ export const en = {
   },
   menu: {
     title: 'Main Menu',
+    open_app: '🚀 Open App',
     new_bill: '🧾 New Bill',
     contacts: '👥 Contacts',
     incoming: '📥 Incoming',

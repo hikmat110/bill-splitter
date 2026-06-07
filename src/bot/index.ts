@@ -3,7 +3,7 @@ import type { Logger } from 'pino'
 import { config } from '../config'
 import type { SessionContext } from './middleware/session'
 import { initial, sessionMiddleware } from './middleware/session'
-import { loggerMiddleware, rootLogger } from './middleware/logger'
+import { loggerMiddleware } from './middleware/logger'
 import { authMiddleware } from './middleware/auth'
 import { startHandler, contactHandler } from './handlers/start'
 import { showMainMenu } from './handlers/menu'
@@ -207,8 +207,6 @@ bot.catch((err) => {
   ctx.reply('Something went wrong. Please try again.').catch(() => undefined)
 })
 
-bot.start({
-  onStart: (info) => rootLogger.info({ username: info.username }, 'Bot started'),
-})
-
-export { initial }
+// Polling is started by the unified entry point (src/index.ts), which also boots
+// the Mini App HTTP server in the same process so notifications can reuse `bot`.
+export { bot, initial }

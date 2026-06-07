@@ -8,6 +8,7 @@ export const ru = {
   },
   menu: {
     title: 'Главное меню',
+    open_app: '🚀 Открыть приложение',
     new_bill: '🧾 Новый счёт',
     contacts: '👥 Контакты',
     incoming: '📥 Входящие',
