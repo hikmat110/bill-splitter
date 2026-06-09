@@ -180,7 +180,7 @@ export function App() {
           <i className="ti ti-receipt-2" style={{ fontSize: 21, color: 'var(--on-accent)' }} />
         </div>
         <div className="col" style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.3px' }}>Splitwell</span>
+          <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.3px' }}>Bill Split</span>
           <span
             className="muted3"
             style={{

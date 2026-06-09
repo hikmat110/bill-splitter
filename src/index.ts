@@ -13,7 +13,7 @@ if (config.WEBAPP_URL) {
   const url = config.WEBAPP_URL
   bot.api
     .setChatMenuButton({
-      menu_button: { type: 'web_app', text: 'Splitwell', web_app: { url } },
+      menu_button: { type: 'web_app', text: 'Bill Split', web_app: { url } },
     })
     .catch((err) => rootLogger.warn({ err }, 'Failed to set chat menu button'))
 }

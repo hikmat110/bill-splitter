@@ -23,7 +23,7 @@ export const uz: Dict = {
     new_bill_subtitle: 'Yangi hisob',
     unauthorized_title: 'Telegram orqali oching',
     unauthorized_help:
-      "Splitwell'ni botdan ishga tushiring (avval telefon raqamingiz bilan ro'yxatdan o'ting), so'ng ilovani qayta oching.",
+      "Bill Split'ni botdan ishga tushiring (avval telefon raqamingiz bilan ro'yxatdan o'ting), so'ng ilovani qayta oching.",
     error_title: "Nimadir noto'g'ri ketdi",
     bill_sent: 'Hisob ishtirokchilarga yuborildi',
     bill_send_failed: "Hisobni yuborib bo'lmadi",

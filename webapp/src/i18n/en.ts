@@ -25,7 +25,7 @@ export const en = {
     new_bill_subtitle: 'New bill',
     unauthorized_title: 'Open from Telegram',
     unauthorized_help:
-      'Launch Splitwell from the bot (register with your phone first), then reopen this app.',
+      'Launch Bill Split from the bot (register with your phone first), then reopen this app.',
     error_title: 'Something went wrong',
     bill_sent: 'Bill sent to participants',
     bill_send_failed: 'Could not send bill',

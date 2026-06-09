@@ -1,4 +1,4 @@
-# Deferred features — Splitwell Mini App
+# Deferred features — Bill Split Mini App
 
 The Mini App reproduces the `Splitwell.html` design but is trimmed to what the bot
 backend currently supports. Everything below appeared in the original design and was
