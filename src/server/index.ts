@@ -29,10 +29,20 @@ async function handleRequest(req: Request, bot: Bot<MyContext>): Promise<Respons
 
   if (url.pathname.startsWith('/api/')) {
     if (req.method === 'OPTIONS') return cors(new Response(null, { status: 204 }))
+    const start = Date.now()
+    const hasAuth = (req.headers.get('authorization') ?? '').startsWith('tma ')
     try {
-      return cors(await handleApi(req, url, bot))
+      const res = cors(await handleApi(req, url, bot))
+      rootLogger.info(
+        { method: req.method, path: url.pathname, status: res.status, hasAuth, ms: Date.now() - start },
+        'API request'
+      )
+      return res
     } catch (e) {
-      rootLogger.error({ err: e, path: url.pathname }, 'Mini App API error')
+      rootLogger.error(
+        { err: e, method: req.method, path: url.pathname, hasAuth, ms: Date.now() - start },
+        'Mini App API error'
+      )
       return cors(error(500, 'Internal error'))
     }
   }

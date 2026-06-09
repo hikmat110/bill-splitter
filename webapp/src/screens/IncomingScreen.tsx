@@ -1,11 +1,12 @@
 import { useState } from 'react'
 import { Money } from '../components/Money'
-import { SecTitle, Empty } from '../components/common'
+import { SecTitle, Empty, BreakdownLines } from '../components/common'
 import { useToast } from '../components/Toast'
 import { api } from '../lib/api'
 import { haptic } from '../lib/telegram'
 import { prettyDate } from '../lib/date'
 import { statusLabel, pillClass } from '../lib/status'
+import { useT } from '../i18n'
 import type { IncomingBill } from '../lib/types'
 
 export function IncomingScreen({
@@ -15,6 +16,7 @@ export function IncomingScreen({
   incoming: IncomingBill[]
   refresh: () => Promise<void>
 }) {
+  const { t, lang } = useT()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -28,9 +30,9 @@ export function IncomingScreen({
       await api.markPaid(x.participant.id)
       await refresh()
       haptic('success')
-      toast('Marked as paid', 'ti-check')
+      toast(t('incoming.marked_paid'), 'ti-check')
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Something went wrong', 'ti-alert-circle')
+      toast(e instanceof Error ? e.message : t('common.something_wrong'), 'ti-alert-circle')
     } finally {
       setBusy(null)
     }
@@ -51,7 +53,7 @@ export function IncomingScreen({
             letterSpacing: '.3px',
           }}
         >
-          You owe in total
+          {t('incoming.you_owe_total')}
         </span>
         <Money
           amount={owe}
@@ -66,12 +68,12 @@ export function IncomingScreen({
         />
       </div>
 
-      <SecTitle>Bills sent to you · {incoming.length}</SecTitle>
+      <SecTitle>{t('incoming.bills_sent', { n: incoming.length })}</SecTitle>
       {incoming.length === 0 ? (
         <Empty
           icon="ti-inbox"
-          title="Nothing incoming"
-          sub="When a friend sends you a bill, it shows up here to pay."
+          title={t('incoming.nothing')}
+          sub={t('incoming.nothing_sub')}
         />
       ) : (
         <div className="col" style={{ gap: 10 }}>
@@ -95,14 +97,16 @@ export function IncomingScreen({
                 <div className="col" style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 700, fontSize: 14.5 }}>{x.bill.title}</span>
                   <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
-                    from {x.bill.creatorName || 'friend'} · {prettyDate(x.bill.createdAt)}
+                    {t('incoming.from', { name: x.bill.creatorName || t('common.friend') })} ·{' '}
+                    {prettyDate(t, lang, x.bill.createdAt)}
                   </span>
                 </div>
                 <Money amount={x.participant.amount} style={{ fontWeight: 800, fontSize: 16 }} />
               </div>
+              <BreakdownLines b={x.participant} style={{ marginTop: 11 }} />
               <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}>
                 <span className={'pill ' + pillClass(x.participant.status)}>
-                  {statusLabel(x.participant.status)}
+                  {statusLabel(t, x.participant.status)}
                 </span>
                 {x.participant.status === 'pending' || x.participant.status === 'disputed' ? (
                   <button
@@ -110,15 +114,15 @@ export function IncomingScreen({
                     disabled={busy === x.participant.id}
                     onClick={() => markPaid(x)}
                   >
-                    <i className="ti ti-check" /> Mark as paid
+                    <i className="ti ti-check" /> {t('incoming.mark_paid')}
                   </button>
                 ) : x.participant.status === 'marked_paid' ? (
                   <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
-                    Awaiting confirmation
+                    {t('incoming.awaiting')}
                   </span>
                 ) : (
                   <span className="pill pill-pos">
-                    <i className="ti ti-check" style={{ fontSize: 13 }} /> Paid
+                    <i className="ti ti-check" style={{ fontSize: 13 }} /> {t('incoming.paid')}
                   </span>
                 )}
               </div>

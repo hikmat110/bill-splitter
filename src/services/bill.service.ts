@@ -1,4 +1,4 @@
-import { and, eq, desc, inArray, sql } from 'drizzle-orm'
+import { and, eq, ne, desc, inArray, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import {
   bills,
@@ -9,8 +9,8 @@ import {
   users,
 } from '../db/schema'
 import type { Bill, BillItem, BillParticipant, Contact, User } from '../db/schema'
-import { computeSettlement } from '../utils/settlement'
-import type { ItemSpec } from '../utils/settlement'
+import { computeSettlement, computeBreakdown } from '../utils/settlement'
+import type { ItemSpec, ParticipantBreakdown } from '../utils/settlement'
 
 export interface CreateBillItemInput {
   name: string
@@ -162,6 +162,25 @@ export async function getBillWithDetails(billId: string): Promise<BillWithDetail
   }
 }
 
+/**
+ * Per-participant itemized cost breakdown for a loaded bill: which items each
+ * contact shared, their portion of each, and their service/tip/total. Keyed by
+ * contact_id. Per-person totals equal the stored `bill_participants.amount`.
+ */
+export function getBillBreakdown(details: BillWithDetails): Map<string, ParticipantBreakdown> {
+  const { perContact } = computeBreakdown({
+    items: details.items.map((it) => ({
+      name: it.name,
+      price: it.price * BigInt(it.quantity),
+      shareContactIds: it.shares.map((s) => s.id),
+    })),
+    servicePct: Number(details.bill.service_pct),
+    serviceFixed: details.bill.service_fixed,
+    tip: details.bill.tip,
+  })
+  return perContact
+}
+
 export async function listBillsCreatedBy(creatorId: string): Promise<Bill[]> {
   return db
     .select()
@@ -181,7 +200,9 @@ export async function listBillsForParticipant(userId: string): Promise<Participa
     .from(billParticipants)
     .innerJoin(contacts, eq(billParticipants.contact_id, contacts.id))
     .innerJoin(bills, eq(billParticipants.bill_id, bills.id))
-    .where(eq(contacts.linked_user_id, userId))
+    // Bills sent TO this user — never their own bills (a creator doesn't owe
+    // themselves; their own share shows only as "spent" in the bill detail).
+    .where(and(eq(contacts.linked_user_id, userId), ne(bills.creator_id, userId)))
     .orderBy(desc(bills.created_at))
 
   return rows.map((r) => ({
@@ -228,14 +249,19 @@ export async function confirmPayment(participantId: string): Promise<BillPartici
     .returning()
   if (!updated) throw new Error('Participant not found')
 
-  // Auto-settle bill if all participants confirmed
+  // Auto-settle bill if all participants confirmed. The creator's own
+  // self-participant never "confirms" (they don't owe themselves), so it must
+  // be excluded from this check or the bill would never settle.
   const pending = await db
     .select({ id: billParticipants.id })
     .from(billParticipants)
+    .innerJoin(contacts, eq(billParticipants.contact_id, contacts.id))
+    .innerJoin(bills, eq(billParticipants.bill_id, bills.id))
     .where(
       and(
         eq(billParticipants.bill_id, updated.bill_id),
-        sql`${billParticipants.status} != 'confirmed'`
+        sql`${billParticipants.status} != 'confirmed'`,
+        sql`(${contacts.linked_user_id} IS NULL OR ${contacts.linked_user_id} != ${bills.creator_id})`
       )
     )
     .limit(1)

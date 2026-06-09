@@ -20,7 +20,21 @@ export interface ApiContact {
 export type ParticipantStatus = 'pending' | 'marked_paid' | 'confirmed' | 'disputed'
 export type BillStatus = 'draft' | 'sent' | 'settled' | 'cancelled'
 
-export interface BillParticipant {
+/** One item line as it applies to a single participant. */
+export interface BreakdownItem {
+  name: string
+  share: number
+}
+
+/** Per-participant cost breakdown attached to participants by the API. */
+export interface Breakdown {
+  items: BreakdownItem[]
+  base: number
+  service: number
+  tip: number
+}
+
+export interface BillParticipant extends Breakdown {
   id: string
   contactId: string
   displayName: string
@@ -62,7 +76,8 @@ export interface IncomingBill {
     createdAt: string
     creatorName: string
   }
-  participant: { id: string; amount: number; status: ParticipantStatus }
+  // Recipient's own itemization (what they're paying for).
+  participant: { id: string; amount: number; status: ParticipantStatus } & Breakdown
 }
 
 export interface BillsResponse {

@@ -34,10 +34,20 @@ describe('verifyInitData', () => {
     }
   })
 
-  it('ignores a `signature` field when checking the HMAC', () => {
-    // signature is excluded from the data-check-string, so adding one must not break it.
-    const initData = sign(validFields) + '&signature=ed25519stub'
-    expect(verifyInitData(initData, TOKEN).ok).toBe(true)
+  it('includes a `signature` field in the data-check-string', () => {
+    // Modern clients send `signature`; the bot-token HMAC is computed over it too,
+    // so a payload signed WITH signature present must validate.
+    const fields = { ...validFields, signature: 'ed25519stub' }
+    expect(verifyInitData(sign(fields), TOKEN).ok).toBe(true)
+  })
+
+  it('rejects when `signature` is tampered after signing', () => {
+    // If signature were (wrongly) excluded from the check string, this would pass.
+    const fields = { ...validFields, signature: 'original' }
+    const initData = sign(fields).replace('signature=original', 'signature=tampered')
+    const result = verifyInitData(initData, TOKEN)
+    expect(result.ok).toBe(false)
+    if (!result.ok) expect(result.reason).toBe('bad hash')
   })
 
   it('rejects a tampered hash', () => {

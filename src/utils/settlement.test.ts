@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { computeSettlement, round100 } from './settlement'
+import { computeSettlement, computeBreakdown, round100 } from './settlement'
 import type { BillSpec } from './settlement'
 
 // Helper: assert sum of shares equals total
@@ -139,5 +139,66 @@ describe('computeSettlement', () => {
     expect(result.shares.get('A')).toBe(60_000n)
     expect(result.shares.get('B')).toBe(20_000n)
     expect(result.shares.get('C')).toBe(20_000n)
+  })
+})
+
+describe('computeBreakdown', () => {
+  test('per-participant total matches computeSettlement shares', () => {
+    const spec: BillSpec = {
+      items: [
+        { name: 'Steak', price: 100_000n, shareContactIds: ['A'] },
+        { name: 'Wine', price: 60_000n, shareContactIds: ['A', 'B', 'C'] },
+        { name: 'Salad', price: 40_000n, shareContactIds: ['B'] },
+      ],
+      servicePct: 10,
+      serviceFixed: 5_000n,
+      tip: 9_000n,
+    }
+    const breakdown = computeBreakdown(spec)
+    const settlement = computeSettlement(spec)
+    for (const [id, p] of breakdown.perContact) {
+      expect(p.total).toBe(settlement.shares.get(id)!)
+    }
+    expect(breakdown.subtotal).toBe(settlement.subtotal)
+    expect(breakdown.total).toBe(settlement.total)
+  })
+
+  test('item shares sum to base, and totals sum to grand total', () => {
+    const spec: BillSpec = {
+      items: [
+        { name: 'A', price: 100_000n, shareContactIds: ['A', 'B', 'C'] },
+        { name: 'B', price: 33_333n, shareContactIds: ['A', 'B'] },
+      ],
+      servicePct: 12,
+      serviceFixed: 0n,
+      tip: 7_000n,
+    }
+    const { perContact, total } = computeBreakdown(spec)
+    for (const p of perContact.values()) {
+      const itemsSum = p.items.reduce((s, it) => s + it.share, 0n)
+      expect(itemsSum).toBe(p.base)
+    }
+    const sumTotals = [...perContact.values()].reduce((s, p) => s + p.total, 0n)
+    expect(sumTotals).toBe(total)
+  })
+
+  test('records the items each participant shared, with their portion', () => {
+    const spec: BillSpec = {
+      items: [
+        { name: 'Pizza', price: 90_000n, shareContactIds: ['A', 'B', 'C'] },
+        { name: 'Beer', price: 20_000n, shareContactIds: ['A'] },
+      ],
+      servicePct: 0,
+      serviceFixed: 0n,
+      tip: 0n,
+    }
+    const { perContact } = computeBreakdown(spec)
+    const a = perContact.get('A')!
+    expect(a.items).toEqual([
+      { name: 'Pizza', share: 30_000n },
+      { name: 'Beer', share: 20_000n },
+    ])
+    const b = perContact.get('B')!
+    expect(b.items).toEqual([{ name: 'Pizza', share: 30_000n }])
   })
 })

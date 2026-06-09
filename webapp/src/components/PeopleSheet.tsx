@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Avatar } from './Avatar'
 import { Sheet } from './Sheet'
+import { useT } from '../i18n'
 import type { Person } from '../lib/draft'
 
 export function PeopleSheet({
@@ -18,6 +19,7 @@ export function PeopleSheet({
   onToggle: (id: string) => void
   onAddContact: (name: string) => Promise<void>
 }) {
+  const { t } = useT()
   const [name, setName] = useState('')
   const [adding, setAdding] = useState(false)
 
@@ -34,13 +36,13 @@ export function PeopleSheet({
   }
 
   return (
-    <Sheet open={open} onClose={onClose} title="Who's splitting?">
+    <Sheet open={open} onClose={onClose} title={t('people.title')}>
       <div className="col" style={{ gap: 14, paddingBottom: 6 }}>
         <div className="row" style={{ gap: 8 }}>
           <input
             className="inp"
             value={name}
-            placeholder="Add someone by name…"
+            placeholder={t('people.add_placeholder')}
             onChange={(e) => setName(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && add()}
           />
@@ -105,13 +107,13 @@ export function PeopleSheet({
           })}
           {people.length === 0 && (
             <div className="muted" style={{ fontSize: 13, fontWeight: 600, padding: '8px 10px' }}>
-              No contacts yet — add someone by name above.
+              {t('people.no_contacts')}
             </div>
           )}
         </div>
 
         <button className="btn btn-primary btn-block btn-lg" onClick={onClose}>
-          Done · {selected.length} people
+          {t('people.done', { n: selected.length })}
         </button>
       </div>
     </Sheet>

@@ -1,16 +1,11 @@
+import type { I18nKey } from '../i18n'
 import type { ParticipantStatus } from './types'
 
-export function statusLabel(s: ParticipantStatus): string {
-  switch (s) {
-    case 'pending':
-      return 'Pending'
-    case 'marked_paid':
-      return 'Marked paid'
-    case 'confirmed':
-      return 'Confirmed'
-    case 'disputed':
-      return 'Disputed'
-  }
+export function statusLabel(
+  t: (key: I18nKey) => string,
+  s: ParticipantStatus
+): string {
+  return t(`status.${s}`)
 }
 
 export function pillClass(s: ParticipantStatus): string {

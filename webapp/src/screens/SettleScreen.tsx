@@ -1,13 +1,14 @@
 import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Money } from '../components/Money'
-import { SecTitle, Empty } from '../components/common'
+import { SecTitle, Empty, BreakdownLines } from '../components/common'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/currency'
 import { api, ApiError } from '../lib/api'
 import { haptic } from '../lib/telegram'
 import { statusLabel, pillClass } from '../lib/status'
 import { isSelf, createdOutstanding } from '../lib/billCalc'
+import { useT } from '../i18n'
 import type { BillDetail, BillParticipant, Me } from '../lib/types'
 
 export function SettleScreen({
@@ -21,6 +22,7 @@ export function SettleScreen({
   refresh: () => Promise<void>
   goSplit: () => void
 }) {
+  const { t } = useT()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
 
@@ -29,11 +31,11 @@ export function SettleScreen({
       <div className="tg-scroll" style={{ padding: '4px 16px 24px' }}>
         <Empty
           icon="ti-arrows-exchange"
-          title="No bill selected"
-          sub="Create a bill in Split, or pick one from Activity to settle it."
+          title={t('settle.no_bill_selected')}
+          sub={t('settle.no_bill_sub')}
         />
         <button className="btn btn-block btn-soft btn-lg" onClick={goSplit}>
-          <i className="ti ti-plus" /> New bill
+          <i className="ti ti-plus" /> {t('settle.new_bill')}
         </button>
       </div>
     )
@@ -51,7 +53,7 @@ export function SettleScreen({
       haptic('success')
       toast(okMsg, icon)
     } catch (e) {
-      toast(e instanceof Error ? e.message : 'Something went wrong', 'ti-alert-circle')
+      toast(e instanceof Error ? e.message : t('common.something_wrong'), 'ti-alert-circle')
     } finally {
       setBusy(null)
     }
@@ -62,19 +64,29 @@ export function SettleScreen({
       p.id,
       async () => {
         const r = await api.remind(bill.id, p.id)
-        if (!r.ok) throw new ApiError('Reminded recently — try again later', 429)
+        if (!r.ok) throw new ApiError(t('settle.reminded_recently'), 429)
       },
-      `Reminder sent to ${p.displayName}`,
+      t('settle.reminder_sent', { name: p.displayName }),
       'ti-bell'
     )
 
   const onConfirm = (p: BillParticipant) =>
-    run(p.id, () => api.confirm(bill.id, p.id), `Confirmed ${p.displayName}'s payment`, 'ti-check')
+    run(
+      p.id,
+      () => api.confirm(bill.id, p.id),
+      t('settle.confirmed_payment', { name: p.displayName }),
+      'ti-check'
+    )
 
   const onDispute = (p: BillParticipant) => {
-    const reason = window.prompt(`Dispute ${p.displayName}'s payment — reason?`)?.trim()
+    const reason = window.prompt(t('settle.dispute_prompt', { name: p.displayName }))?.trim()
     if (!reason) return
-    run(p.id, () => api.dispute(bill.id, p.id, reason), `Disputed ${p.displayName}'s payment`, 'ti-alert-triangle')
+    run(
+      p.id,
+      () => api.dispute(bill.id, p.id, reason),
+      t('settle.disputed_payment', { name: p.displayName }),
+      'ti-alert-triangle'
+    )
   }
 
   return (
@@ -99,7 +111,7 @@ export function SettleScreen({
             color: allSettled ? 'var(--pos-text)' : 'var(--text-2)',
           }}
         >
-          {allSettled ? 'All settled' : "You're owed"}
+          {allSettled ? t('settle.all_settled') : t('settle.youre_owed')}
         </div>
         <Money
           amount={outstanding}
@@ -113,12 +125,12 @@ export function SettleScreen({
           }}
         />
         <div className="muted" style={{ fontSize: 13, fontWeight: 600, marginTop: 4 }}>
-          {bill.title} · total {money(bill.total)}
+          {t('settle.bill_total_line', { title: bill.title, amount: money(bill.total) })}
         </div>
       </div>
 
       {/* who owes you */}
-      <SecTitle>Who owes you</SecTitle>
+      <SecTitle>{t('settle.who_owes_you')}</SecTitle>
       {others.length === 0 ? (
         <div
           className="card"
@@ -131,7 +143,7 @@ export function SettleScreen({
             marginBottom: 18,
           }}
         >
-          Just you on this bill.
+          {t('settle.just_you')}
         </div>
       ) : (
         <div className="col" style={{ gap: 10, marginBottom: 18 }}>
@@ -142,7 +154,7 @@ export function SettleScreen({
                 <div className="col" style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 700, fontSize: 14.5 }}>{p.displayName}</span>
                   <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
-                    {statusLabel(p.status)}
+                    {statusLabel(t, p.status)}
                   </span>
                 </div>
                 <Money amount={p.amount} style={{ fontSize: 16, fontWeight: 800 }} />
@@ -150,18 +162,18 @@ export function SettleScreen({
               {p.status === 'confirmed' ? (
                 <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}>
                   <span className="pill pill-pos">
-                    <i className="ti ti-check" style={{ fontSize: 13 }} /> Settled
+                    <i className="ti ti-check" style={{ fontSize: 13 }} /> {t('settle.settled')}
                   </span>
                 </div>
               ) : (
                 <div className="row" style={{ gap: 7, marginTop: 12, justifyContent: 'flex-end' }}>
                   {p.status === 'marked_paid' ? (
                     <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onDispute(p)}>
-                      <i className="ti ti-x" /> Dispute
+                      <i className="ti ti-x" /> {t('settle.dispute')}
                     </button>
                   ) : (
                     <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onRemind(p)}>
-                      <i className="ti ti-bell" /> Remind
+                      <i className="ti ti-bell" /> {t('settle.remind')}
                     </button>
                   )}
                   <button
@@ -169,7 +181,7 @@ export function SettleScreen({
                     disabled={busy === p.id}
                     onClick={() => onConfirm(p)}
                   >
-                    <i className="ti ti-check" /> Confirm
+                    <i className="ti ti-check" /> {t('settle.confirm')}
                   </button>
                 </div>
               )}
@@ -178,31 +190,35 @@ export function SettleScreen({
         </div>
       )}
 
-      {/* per person */}
-      <SecTitle>Per person</SecTitle>
-      <div className="card" style={{ padding: '6px 4px' }}>
-        {bill.participants.map((p, i) => (
-          <div
-            key={p.id}
-            className="row"
-            style={{
-              gap: 12,
-              padding: '11px 12px',
-              borderBottom: i < bill.participants.length - 1 ? '1px solid var(--border)' : 'none',
-            }}
-          >
-            <Avatar id={p.contactId} name={p.displayName} size={40} />
-            <div className="col" style={{ flex: 1, minWidth: 0 }}>
-              <span style={{ fontWeight: 700, fontSize: 14.5 }}>
-                {isSelf(p, me) ? 'You' : p.displayName}
-              </span>
-              <span className="muted tnum" style={{ fontSize: 12.5, fontWeight: 600 }}>
-                share {money(p.amount)}
-              </span>
+      {/* per person — full itemization (creator's view) */}
+      <SecTitle>{t('settle.per_person')}</SecTitle>
+      <div className="col" style={{ gap: 10 }}>
+        {bill.participants.map((p) => {
+          const self = isSelf(p, me)
+          return (
+            <div key={p.id} className="card pop" style={{ padding: 'calc(13px * var(--dens))' }}>
+              <div className="row" style={{ gap: 11 }}>
+                <Avatar id={p.contactId} name={self ? t('common.you') : p.displayName} size={38} />
+                <div className="col" style={{ flex: 1, minWidth: 0 }}>
+                  <span style={{ fontWeight: 700, fontSize: 14.5 }}>
+                    {self ? t('common.you') : p.displayName}
+                  </span>
+                  <span className="muted tnum" style={{ fontSize: 12.5, fontWeight: 600 }}>
+                    {self
+                      ? t('settle.spent_label', { amount: money(p.amount) })
+                      : t('settle.owes_label', { amount: money(p.amount) })}
+                  </span>
+                </div>
+                {self ? (
+                  <span className="pill pill-mut">{t('settle.spent_pill')}</span>
+                ) : (
+                  <span className={'pill ' + pillClass(p.status)}>{statusLabel(t, p.status)}</span>
+                )}
+              </div>
+              <BreakdownLines b={p} style={{ marginTop: 11, paddingLeft: 49 }} />
             </div>
-            <span className={'pill ' + pillClass(p.status)}>{statusLabel(p.status)}</span>
-          </div>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

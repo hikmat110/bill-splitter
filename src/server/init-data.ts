@@ -3,12 +3,14 @@
 // Mini App" spec:
 //
 //   secret_key       = HMAC_SHA256(key="WebAppData", msg=bot_token)
-//   data_check_string = sorted "key=value" lines of every field except `hash`
-//                       and `signature`, joined by "\n"
+//   data_check_string = sorted "key=value" lines of every field except `hash`,
+//                       joined by "\n"
 //   valid  <=>  HMAC_SHA256(key=secret_key, msg=data_check_string) === hash
 //
-// `signature` (the newer Ed25519 third-party field) is excluded from the HMAC
-// data-check-string, matching current Telegram client behaviour.
+// Only `hash` is removed. The newer `signature` field (Ed25519, used for the
+// separate *third-party* validation method) stays IN the data-check-string for
+// this bot-token HMAC check — modern clients include it, and excluding it makes
+// the reconstructed string differ from what the client signed ("bad hash").
 
 import { createHmac, timingSafeEqual } from 'node:crypto'
 
@@ -50,7 +52,7 @@ export function verifyInitData(
 
   const pairs: string[] = []
   for (const [key, value] of params) {
-    if (key === 'hash' || key === 'signature') continue
+    if (key === 'hash') continue
     pairs.push(`${key}=${value}`)
   }
   pairs.sort()

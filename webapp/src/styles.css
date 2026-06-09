@@ -187,6 +187,25 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
 }
 .seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
 
+/* snap slider (service / tip) */
+.snap-ticks { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text-3); }
+.snap-ticks > span { transition: color .15s; white-space: nowrap; }
+.snap-ticks > span.on { color: var(--accent-text); font-weight: 800; }
+.snap-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px; border-radius: 999px; outline: none; cursor: pointer; margin: 5px 0;
+  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--surface-2) var(--fill, 0%));
+}
+.snap-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); cursor: pointer;
+}
+.snap-slider::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); cursor: pointer;
+}
+
 /* pill badges */
 .pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--r-pill); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
 .pill-pos { background: var(--pos-soft); color: var(--pos-text); }

@@ -4,6 +4,7 @@ import { t, statusLabel } from '../../i18n'
 import {
   listBillsForParticipant,
   getBillWithDetails,
+  getBillBreakdown,
   getParticipantById,
   markParticipantPaid,
 } from '../../services/bill.service'
@@ -52,6 +53,17 @@ export async function incomingDetailHandler(ctx: MyContext, participantId: strin
     t(ctx, 'incoming.your_share', { amount: formatMoney(participant.amount) }),
     t(ctx, 'incoming.status_label', { status: statusLabel(ctx, participant.status) }),
   ]
+
+  // Recipient sees only their own items — what they're paying for.
+  const own = getBillBreakdown(details).get(participant.contact_id)
+  if (own && own.items.length > 0) {
+    lines.push(t(ctx, 'incoming.your_items_header'))
+    for (const it of own.items) {
+      lines.push(t(ctx, 'history.detail_item_share', { name: it.name, amount: formatMoney(it.share) }))
+    }
+    if (own.service > 0n) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(own.service) }))
+    if (own.tip > 0n) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(own.tip) }))
+  }
 
   await editOrReply(
     ctx,

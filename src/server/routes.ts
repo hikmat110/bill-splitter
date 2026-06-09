@@ -12,6 +12,7 @@ import type {
 import {
   createBill,
   getBillWithDetails,
+  getBillBreakdown,
   listBillsCreatedBy,
   listBillsForParticipant,
   getParticipantById,
@@ -20,6 +21,7 @@ import {
   disputePayment,
 } from '../services/bill.service'
 import type { BillWithDetails, BillItemWithShares, BillParticipantWithContact } from '../services/bill.service'
+import type { ParticipantBreakdown } from '../utils/settlement'
 import { listContacts, addContact, findOrCreateSelfContact } from '../services/contact.service'
 import { findById } from '../services/user.service'
 import {
@@ -52,7 +54,17 @@ function shapeItem(it: BillItemWithShares) {
   }
 }
 
-function shapeParticipant(p: BillParticipantWithContact) {
+function shapeBreakdown(b: ParticipantBreakdown | undefined) {
+  if (!b) return { items: [], base: 0, service: 0, tip: 0 }
+  return {
+    items: b.items.map((it) => ({ name: it.name, share: it.share })),
+    base: b.base,
+    service: b.service,
+    tip: b.tip,
+  }
+}
+
+function shapeParticipant(p: BillParticipantWithContact, breakdown?: ParticipantBreakdown) {
   return {
     id: p.id,
     contactId: p.contact_id,
@@ -60,10 +72,12 @@ function shapeParticipant(p: BillParticipantWithContact) {
     linkedUserId: p.contact.linked_user_id,
     amount: p.amount,
     status: p.status,
+    ...shapeBreakdown(breakdown),
   }
 }
 
 function shapeBillDetail(d: BillWithDetails) {
+  const breakdown = getBillBreakdown(d)
   return {
     id: d.bill.id,
     title: d.bill.title,
@@ -80,7 +94,7 @@ function shapeBillDetail(d: BillWithDetails) {
       cardNumber: d.creator.card_number,
     },
     items: d.items.map(shapeItem),
-    participants: d.participants.map(shapeParticipant),
+    participants: d.participants.map((p) => shapeParticipant(p, breakdown.get(p.contact_id))),
   }
 }
 
@@ -198,6 +212,9 @@ async function getBills(user: User): Promise<Response> {
       creatorName = creator?.first_name ?? ''
       creatorNames.set(r.bill.creator_id, creatorName)
     }
+    // Recipient sees only their own itemization (what they're paying for).
+    const d = await getBillWithDetails(r.bill.id)
+    const own = d ? getBillBreakdown(d).get(r.participant.contact_id) : undefined
     incoming.push({
       bill: {
         id: r.bill.id,
@@ -211,6 +228,7 @@ async function getBills(user: User): Promise<Response> {
         id: r.participant.id,
         amount: r.participant.amount,
         status: r.participant.status,
+        ...shapeBreakdown(own),
       },
     })
   }
@@ -225,7 +243,18 @@ async function getBill(user: User, billId: string): Promise<Response> {
   const isCreator = d.bill.creator_id === user.id
   const isParticipant = d.participants.some((p) => p.contact.linked_user_id === user.id)
   if (!isCreator && !isParticipant) return error(403, 'Forbidden')
-  return json(shapeBillDetail(d))
+
+  const shaped = shapeBillDetail(d)
+  if (isCreator) return json(shaped)
+
+  // Recipient sees only their own share — redact others' participants/items.
+  // Breakdown amounts stay correct because they were computed over the full bill.
+  const own = shaped.participants.filter((p) => p.linkedUserId === user.id)
+  const ownContactIds = new Set(own.map((p) => p.contactId))
+  const items = shaped.items.filter((it) =>
+    it.shareContactIds.some((id) => ownContactIds.has(id))
+  )
+  return json({ ...shaped, participants: own, items })
 }
 
 async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {

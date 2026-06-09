@@ -341,7 +341,11 @@ async function showReview(ctx: MyContext): Promise<void> {
   lines.push('')
   lines.push(t(ctx, 'bill.review_participants'))
   for (const [contactId, amount] of settlement.shares) {
-    const name = contactMap.get(contactId)?.display_name ?? contactId
+    const c = contactMap.get(contactId)
+    const name =
+      c?.linked_user_id === ctx.user.id
+        ? t(ctx, 'bill.me_label', { name: c?.display_name ?? '' })
+        : c?.display_name ?? contactId
     lines.push(t(ctx, 'bill.review_line', { name, amount: formatMoney(amount) }))
   }
 

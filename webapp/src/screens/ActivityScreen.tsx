@@ -4,6 +4,7 @@ import { SecTitle, Empty } from '../components/common'
 import { money } from '../lib/currency'
 import { prettyDate } from '../lib/date'
 import { createdOutstanding, isSelf, paidCount } from '../lib/billCalc'
+import { useT } from '../i18n'
 import type { BillDetail, IncomingBill, Me } from '../lib/types'
 
 type Row =
@@ -23,6 +24,7 @@ export function ActivityScreen({
   openCreated: (bill: BillDetail) => void
   goIncoming: () => void
 }) {
+  const { t } = useT()
   const youreOwed = created.reduce((s, b) => s + createdOutstanding(b, me), 0)
   const youOwe = incoming
     .filter((x) => x.participant.status !== 'confirmed')
@@ -47,7 +49,7 @@ export function ActivityScreen({
               letterSpacing: '.3px',
             }}
           >
-            You're owed
+            {t('activity.youre_owed')}
           </span>
           <Money
             amount={youreOwed}
@@ -64,7 +66,7 @@ export function ActivityScreen({
               letterSpacing: '.3px',
             }}
           >
-            You owe
+            {t('activity.you_owe')}
           </span>
           <Money
             amount={youOwe}
@@ -73,9 +75,9 @@ export function ActivityScreen({
         </div>
       </div>
 
-      <SecTitle>History</SecTitle>
+      <SecTitle>{t('activity.history')}</SecTitle>
       {rows.length === 0 ? (
-        <Empty icon="ti-history" title="No bills yet" sub="Bills you create or receive will appear here." />
+        <Empty icon="ti-history" title={t('activity.no_bills')} sub={t('activity.no_bills_sub')} />
       ) : (
         <div className="col" style={{ gap: 10 }}>
           {rows.map((row) =>
@@ -92,29 +94,33 @@ export function ActivityScreen({
 }
 
 function CreatedRow({ bill, me, onClick }: { bill: BillDetail; me: Me; onClick: () => void }) {
+  const { t, lang } = useT()
   const outstanding = createdOutstanding(bill, me)
   const { paid, total } = paidCount(bill, me)
   const settled = bill.status === 'settled' || (total > 0 && paid === total)
-  const people = bill.participants.map((p) => ({ id: p.contactId, name: isSelf(p, me) ? 'You' : p.displayName }))
+  const people = bill.participants.map((p) => ({
+    id: p.contactId,
+    name: isSelf(p, me) ? t('common.you') : p.displayName,
+  }))
   return (
     <button onClick={onClick} className="card pop" style={rowStyle}>
       <IconBox />
       <div className="col" style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <div className="row" style={{ gap: 7 }}>
           <span style={titleStyle}>{bill.title}</span>
-          <span className="pill pill-acc" style={{ fontSize: 10.5, padding: '1px 7px' }}>SENT</span>
+          <span className="pill pill-acc" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('activity.sent')}</span>
         </div>
         <div className="row" style={{ gap: 8 }}>
           <AvatarStack people={people} size={22} max={4} />
           <span className="muted3" style={{ fontSize: 12, fontWeight: 600 }}>
-            {prettyDate(bill.createdAt)} · {money(bill.total)}
+            {prettyDate(t, lang, bill.createdAt)} · {money(bill.total)}
           </span>
         </div>
       </div>
       <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
         {settled ? (
           <span className="pill pill-mut" style={{ fontSize: 11 }}>
-            <i className="ti ti-check" style={{ fontSize: 12 }} /> Settled
+            <i className="ti ti-check" style={{ fontSize: 12 }} /> {t('activity.settled')}
           </span>
         ) : (
           <>
@@ -122,7 +128,7 @@ function CreatedRow({ bill, me, onClick }: { bill: BillDetail; me: Me; onClick: 
               +{money(outstanding)}
             </span>
             <span className="muted3" style={{ fontSize: 11, fontWeight: 600 }}>
-              {paid}/{total} paid
+              {t('activity.paid_count', { paid, total })}
             </span>
           </>
         )}
@@ -132,6 +138,7 @@ function CreatedRow({ bill, me, onClick }: { bill: BillDetail; me: Me; onClick: 
 }
 
 function IncomingRow({ item, onClick }: { item: IncomingBill; onClick: () => void }) {
+  const { t, lang } = useT()
   const owed = item.participant.status !== 'confirmed'
   return (
     <button onClick={onClick} className="card pop" style={rowStyle}>
@@ -139,10 +146,11 @@ function IncomingRow({ item, onClick }: { item: IncomingBill; onClick: () => voi
       <div className="col" style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <div className="row" style={{ gap: 7 }}>
           <span style={titleStyle}>{item.bill.title}</span>
-          <span className="pill pill-mut" style={{ fontSize: 10.5, padding: '1px 7px' }}>RECEIVED</span>
+          <span className="pill pill-mut" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('activity.received')}</span>
         </div>
         <span className="muted3" style={{ fontSize: 12, fontWeight: 600 }}>
-          from {item.bill.creatorName || 'friend'} · {prettyDate(item.bill.createdAt)}
+          {t('activity.from', { name: item.bill.creatorName || t('common.friend') })} ·{' '}
+          {prettyDate(t, lang, item.bill.createdAt)}
         </span>
       </div>
       <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
@@ -151,11 +159,11 @@ function IncomingRow({ item, onClick }: { item: IncomingBill; onClick: () => voi
             <span className="tnum" style={{ fontWeight: 800, fontSize: 14.5, color: 'var(--neg-text)' }}>
               −{money(item.participant.amount)}
             </span>
-            <span className="muted3" style={{ fontSize: 11, fontWeight: 600 }}>you owe</span>
+            <span className="muted3" style={{ fontSize: 11, fontWeight: 600 }}>{t('activity.you_owe_short')}</span>
           </>
         ) : (
           <span className="pill pill-pos" style={{ fontSize: 11 }}>
-            <i className="ti ti-check" style={{ fontSize: 12 }} /> Paid
+            <i className="ti ti-check" style={{ fontSize: 12 }} /> {t('incoming.paid')}
           </span>
         )}
       </div>

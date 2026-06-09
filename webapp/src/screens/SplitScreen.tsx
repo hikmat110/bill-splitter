@@ -1,14 +1,16 @@
 import { Avatar } from '../components/Avatar'
 import { Money } from '../components/Money'
 import { SecTitle } from '../components/common'
+import { SnapSlider } from '../components/SnapSlider'
 import { previewTotals } from '../lib/calc'
 import { money } from '../lib/currency'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
 import { haptic } from '../lib/telegram'
+import { useT } from '../i18n'
 
 const TIP_PRESETS = [0, 10_000, 20_000, 30_000]
-const SERVICE_PRESETS = [0, 5, 10, 15]
+const SERVICE_PRESETS = [0, 5, 10, 15, 20]
 
 export function SplitScreen({
   draft,
@@ -25,9 +27,12 @@ export function SplitScreen({
   onSend: () => void
   sending: boolean
 }) {
+  const { t } = useT()
   const calc = previewTotals(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
+  const serviceOptions = SERVICE_PRESETS.map((p) => ({ value: p, label: p ? p + '%' : t('common.off') }))
+  const tipOptions = TIP_PRESETS.map((tp) => ({ value: tp, label: tp === 0 ? t('common.none') : money(tp) }))
 
   const patch = (p: Partial<DraftBill>) => setDraft({ ...draft, ...p })
   const patchItem = (id: string, p: Partial<DraftItem>) =>
@@ -70,7 +75,7 @@ export function SplitScreen({
             <input
               className="inp ghost"
               value={draft.title}
-              placeholder="Untitled bill"
+              placeholder={t('split.untitled')}
               onChange={(e) => patch({ title: e.target.value })}
               style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.3px' }}
             />
@@ -79,10 +84,10 @@ export function SplitScreen({
               style={{ gap: 6, color: 'var(--text-3)', fontSize: 13, fontWeight: 600 }}
             >
               <i className="ti ti-calendar" style={{ fontSize: 15 }} />
-              <span>Today</span>
+              <span>{t('common.today')}</span>
               <span style={{ opacity: 0.4 }}>·</span>
               <i className="ti ti-users" style={{ fontSize: 15 }} />
-              <span>{participants.length} people</span>
+              <span>{t('split.people', { n: participants.length })}</span>
             </div>
           </div>
         </div>
@@ -137,11 +142,11 @@ export function SplitScreen({
             disabled={participants.length === 0}
             style={{ padding: '6px 12px' }}
           >
-            <i className="ti ti-plus" /> Item
+            <i className="ti ti-plus" /> {t('split.item')}
           </button>
         }
       >
-        Items · {draft.items.length}
+        {t('split.items', { n: draft.items.length })}
       </SecTitle>
 
       <div className="col" style={{ gap: 10, marginBottom: 18 }}>
@@ -156,7 +161,7 @@ export function SplitScreen({
               padding: 22,
             }}
           >
-            No items yet — add people, then add an item.
+            {t('split.no_items')}
           </div>
         )}
         {draft.items.map((item, i) => (
@@ -173,46 +178,30 @@ export function SplitScreen({
       </div>
 
       {/* adjustments */}
-      <SecTitle>Service · Tip</SecTitle>
+      <SecTitle>{t('split.service_tip')}</SecTitle>
       <div className="card" style={{ padding: 'calc(15px * var(--dens))' }}>
-        <div className="between" style={{ marginBottom: 14 }}>
-          <div className="col" style={{ gap: 2 }}>
-            <span style={{ fontWeight: 700, fontSize: 14.5 }}>Service charge</span>
-            <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
-              {calc.service > 0 ? '+' + money(calc.service) : 'None'}
-            </span>
-          </div>
-          <div className="seg">
-            {SERVICE_PRESETS.map((p) => (
-              <button
-                key={p}
-                className={draft.servicePct === p ? 'on' : ''}
-                onClick={() => patch({ servicePct: p })}
-              >
-                {p ? p + '%' : 'Off'}
-              </button>
-            ))}
-          </div>
-        </div>
-        <div style={{ height: 1, background: 'var(--border)', margin: '0 -2px 14px' }} />
-        <div className="col" style={{ gap: 9 }}>
+        <div className="col" style={{ gap: 10 }}>
           <div className="between">
-            <span style={{ fontWeight: 700, fontSize: 14.5 }}>Tip</span>
+            <span style={{ fontWeight: 700, fontSize: 14.5 }}>{t('split.service_charge')}</span>
             <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
-              {draft.tip > 0 ? '+' + money(draft.tip) : 'None'}
+              {calc.service > 0 ? '+' + money(calc.service) : t('common.none')}
             </span>
           </div>
-          <div className="row" style={{ gap: 7, flexWrap: 'wrap' }}>
-            {TIP_PRESETS.map((t) => (
-              <button
-                key={t}
-                className={'chip' + (draft.tip === t ? ' on' : '')}
-                onClick={() => patch({ tip: t })}
-              >
-                {t === 0 ? 'No tip' : money(t)}
-              </button>
-            ))}
+          <SnapSlider
+            options={serviceOptions}
+            value={draft.servicePct}
+            onChange={(v) => patch({ servicePct: v })}
+          />
+        </div>
+        <div style={{ height: 1, background: 'var(--border)', margin: '14px -2px' }} />
+        <div className="col" style={{ gap: 10 }}>
+          <div className="between">
+            <span style={{ fontWeight: 700, fontSize: 14.5 }}>{t('split.tip')}</span>
+            <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
+              {draft.tip > 0 ? '+' + money(draft.tip) : t('common.none')}
+            </span>
           </div>
+          <SnapSlider options={tipOptions} value={draft.tip} onChange={(v) => patch({ tip: v })} />
         </div>
       </div>
 
@@ -229,7 +218,7 @@ export function SplitScreen({
       >
         <div className="between">
           <div className="col" style={{ gap: 2 }}>
-            <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.6 }}>Bill total</span>
+            <span style={{ fontSize: 12.5, fontWeight: 600, opacity: 0.6 }}>{t('split.bill_total')}</span>
             <Money amount={calc.total} style={{ fontSize: 27, fontWeight: 800, letterSpacing: '-.5px' }} />
           </div>
           <button
@@ -242,10 +231,10 @@ export function SplitScreen({
             style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', fontWeight: 700 }}
           >
             {sending ? (
-              'Sending…'
+              t('split.sending')
             ) : (
               <>
-                Send <i className="ti ti-send" />
+                {t('split.send')} <i className="ti ti-send" />
               </>
             )}
           </button>
@@ -254,9 +243,9 @@ export function SplitScreen({
           className="row"
           style={{ gap: 16, marginTop: 12, fontSize: 12.5, fontWeight: 600, opacity: 0.7 }}
         >
-          <span>Subtotal {money(calc.subtotal)}</span>
-          {calc.service > 0 && <span>· Service {money(calc.service)}</span>}
-          {calc.tip > 0 && <span>· Tip {money(calc.tip)}</span>}
+          <span>{t('split.subtotal', { amount: money(calc.subtotal) })}</span>
+          {calc.service > 0 && <span>· {t('split.service', { amount: money(calc.service) })}</span>}
+          {calc.tip > 0 && <span>· {t('split.tip_summary', { amount: money(calc.tip) })}</span>}
         </div>
       </div>
     </div>
@@ -278,6 +267,7 @@ function ItemCard({
   onPatch: (p: Partial<DraftItem>) => void
   onRemove: () => void
 }) {
+  const { t } = useT()
   const who = item.who.filter((w) => participants.includes(w))
   const multi = who.length > 1
   const toggleWho = (id: string) => {
@@ -309,7 +299,7 @@ function ItemCard({
         <input
           className="inp ghost"
           value={item.name}
-          placeholder="Item name"
+          placeholder={t('split.item_name')}
           onChange={(e) => onPatch({ name: e.target.value })}
           style={{ flex: 1, fontWeight: 700, fontSize: 15 }}
         />
@@ -379,7 +369,7 @@ function ItemCard({
             className="muted tnum"
             style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}
           >
-            {perHead} ea.
+            {t('split.each', { amount: perHead })}
           </span>
         </div>
       )}

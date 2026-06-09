@@ -6,6 +6,7 @@ import { findByTelegramId } from '../services/user.service'
 import type { User } from '../db/schema'
 import { error } from './json'
 import { verifyInitData } from './init-data'
+import { rootLogger } from '../bot/middleware/logger'
 
 /** Pull the raw initData string from `Authorization: tma <initData>`. */
 export function extractInitData(req: Request): string | null {
@@ -23,13 +24,25 @@ export type AuthOutcome = { user: User } | { response: Response }
  */
 export async function authenticate(req: Request): Promise<AuthOutcome> {
   const initData = extractInitData(req)
-  if (!initData) return { response: error(401, 'Missing initData') }
+  if (!initData) {
+    rootLogger.warn({ authReason: 'missing initData' }, 'Mini App auth rejected')
+    return { response: error(401, 'Missing initData') }
+  }
 
   const result = verifyInitData(initData, config.BOT_TOKEN)
-  if (!result.ok) return { response: error(401, `Invalid initData: ${result.reason}`) }
+  if (!result.ok) {
+    rootLogger.warn({ authReason: 'invalid initData', detail: result.reason }, 'Mini App auth rejected')
+    return { response: error(401, `Invalid initData: ${result.reason}`) }
+  }
 
   const user = await findByTelegramId(BigInt(result.user.id))
-  if (!user) return { response: error(401, 'User not registered — open the bot first') }
+  if (!user) {
+    rootLogger.warn(
+      { authReason: 'user not registered', telegramId: result.user.id },
+      'Mini App auth rejected'
+    )
+    return { response: error(401, 'User not registered — open the bot first') }
+  }
 
   return { user }
 }
