@@ -134,20 +134,7 @@ export function SplitScreen({
       </div>
 
       {/* items */}
-      <SecTitle
-        action={
-          <button
-            className="btn btn-sm btn-soft"
-            onClick={addItem}
-            disabled={participants.length === 0}
-            style={{ padding: '6px 12px' }}
-          >
-            <i className="ti ti-plus" /> {t('split.item')}
-          </button>
-        }
-      >
-        {t('split.items', { n: draft.items.length })}
-      </SecTitle>
+      <SecTitle>{t('split.items', { n: draft.items.length })}</SecTitle>
 
       <div className="col" style={{ gap: 10, marginBottom: 18 }}>
         {draft.items.length === 0 && (
@@ -175,6 +162,13 @@ export function SplitScreen({
             onRemove={() => removeItem(item.id)}
           />
         ))}
+        <button
+          className="btn btn-soft btn-block"
+          onClick={addItem}
+          disabled={participants.length === 0}
+        >
+          <i className="ti ti-plus" /> {t('split.add_item')}
+        </button>
       </div>
 
       {/* adjustments */}

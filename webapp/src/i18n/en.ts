@@ -35,6 +35,7 @@ export const en = {
     people: '{{n}} people',
     items: 'Items · {{n}}',
     item: 'Item',
+    add_item: 'Add item',
     no_items: 'No items yet — add people, then add an item.',
     service_tip: 'Service · Tip',
     service_charge: 'Service charge',
