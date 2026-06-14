@@ -23,7 +23,9 @@ export function startServer(bot: Bot<MyContext>) {
 }
 
 async function handleRequest(req: Request, bot: Bot<MyContext>): Promise<Response> {
-  const url = new URL(req.url)
+  // `req.url` is normally absolute, but some runtimes/proxies hand us a bare path
+  // (e.g. "/"), which `new URL` can't parse without a base. Fall back to the Host.
+  const url = new URL(req.url, `http://${req.headers.get('host') ?? 'localhost'}`)
 
   if (url.pathname === '/health') return new Response('ok')
 
