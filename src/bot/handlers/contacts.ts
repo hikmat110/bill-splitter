@@ -1,15 +1,21 @@
-import { InlineKeyboard } from 'grammy'
+import { InlineKeyboard, Keyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import {
   listContacts,
   findContactById,
   addContact,
+  addLinkedContactsBatch,
   isContactReferencedInBills,
   deleteContact,
+  type BatchPerson,
+  type BatchResult,
 } from '../../services/contact.service'
-import { findUserByUsername } from '../../services/user.service'
-import { normalizeUsername } from '../../utils/username'
+import { findUserByUsername, findByTelegramIds } from '../../services/user.service'
+import { parseUsernameList } from '../../utils/username'
+
+/** Fixed request_id for the multi-select user picker (only one active at a time). */
+const PICK_REQUEST_ID = 1
 import {
   contactListKeyboard,
   contactDetailKeyboard,
@@ -46,12 +52,26 @@ export async function contactStartManualHandler(ctx: MyContext): Promise<void> {
 
 export async function contactStartTelegramHandler(ctx: MyContext): Promise<void> {
   const msgId = ctx.callbackQuery?.message?.message_id ?? ctx.session.mainMessageId
-  ctx.session.contact_wizard = { step: 'awaiting_contact_share', wizardMessageId: msgId }
+  ctx.session.contact_wizard = { step: 'awaiting_users_share', wizardMessageId: msgId }
 
   const cancelKeyboard = new InlineKeyboard()
     .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
+  await editContactWizardMessage(ctx, t(ctx, 'contacts.pick_prompt'), cancelKeyboard)
 
-  await editContactWizardMessage(ctx, t(ctx, 'contacts.share_prompt'), cancelKeyboard)
+  // The native multi-select picker lives on a reply keyboard, which must ride on
+  // its own carrier message; we delete that message once a selection comes back.
+  const pickKeyboard = new Keyboard()
+    .requestUsers(t(ctx, 'contacts.pick_button'), PICK_REQUEST_ID, {
+      max_quantity: 10,
+      user_is_bot: false,
+      request_name: true,
+      request_username: true,
+    })
+    .resized()
+    .oneTime()
+
+  const sent = await ctx.reply(t(ctx, 'contacts.pick_hint'), { reply_markup: pickKeyboard })
+  if (ctx.session.contact_wizard) ctx.session.contact_wizard.pickerMessageId = sent.message_id
 }
 
 export async function contactStartUsernameHandler(ctx: MyContext): Promise<void> {
@@ -64,41 +84,54 @@ export async function contactStartUsernameHandler(ctx: MyContext): Promise<void>
   await editContactWizardMessage(ctx, t(ctx, 'contacts.username_prompt'), cancelKeyboard)
 }
 
-/** Called when the user forwards a Telegram contact during the contacts import flow */
-export async function contactShareHandler(ctx: MyContext): Promise<void> {
-  const contact = ctx.message?.contact
+/** Called when the user picks people via the native multi-select (`request_users`). */
+export async function usersSharedHandler(ctx: MyContext): Promise<void> {
   const wizard = ctx.session.contact_wizard
+  const shared = ctx.message?.users_shared
 
-  if (!contact || !wizard) return
+  if (!shared || wizard?.step !== 'awaiting_users_share') return
 
-  // Delete the forwarded contact message to keep the chat clean
+  const msgId = wizard.wizardMessageId
+  const pickerMsgId = wizard.pickerMessageId
+  ctx.session.contact_wizard = undefined
+
+  // Clean up the hidden service message and the reply-keyboard carrier message
   await ctx.deleteMessage().catch(() => undefined)
+  if (pickerMsgId && ctx.chat) {
+    await ctx.api.deleteMessage(ctx.chat.id, pickerMsgId).catch(() => undefined)
+  }
 
-  if (contact.user_id === ctx.from?.id) {
-    ctx.session.contact_wizard = undefined
-    await editContactWizardMessage(ctx, t(ctx, 'contacts.share_yourself'))
-    await showContactList(ctx)
+  const picked = shared.users.filter((u) => u.user_id !== ctx.from?.id)
+  if (picked.length === 0) {
+    await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.pick_none'))
+    await showContactListById(ctx, msgId)
     return
   }
 
-  const firstName = contact.first_name ?? ''
-  const lastName = contact.last_name ? ` ${contact.last_name}` : ''
-  const displayName = `${firstName}${lastName}`.trim() || contact.phone_number
+  // Resolve which picks are already registered, to link them and use their real names
+  const registered = await findByTelegramIds(picked.map((u) => BigInt(u.user_id)))
+  const byTgId = new Map(registered.map((u) => [u.telegram_id, u]))
 
-  ctx.session.contact_wizard = undefined
+  const people: BatchPerson[] = picked.map((u) => {
+    const reg = byTgId.get(BigInt(u.user_id))
+    const fromShare = [u.first_name, u.last_name].filter(Boolean).join(' ')
+    const displayName =
+      (reg ? [reg.first_name, reg.last_name].filter(Boolean).join(' ') : fromShare) ||
+      (u.username ? `@${u.username}` : '') ||
+      `User ${u.user_id}`
+    return reg
+      ? { userId: reg.id, phone: reg.phone, displayName }
+      : { telegramId: BigInt(u.user_id), displayName }
+  })
+
   try {
-    const added = await addContact(ctx.user.id, displayName, contact.phone_number)
-    await editContactWizardMessage(ctx, t(ctx, 'contacts.added', { name: added.display_name }))
-  } catch (err: unknown) {
-    if (isUniqueViolation(err)) {
-      await editContactWizardMessage(ctx, t(ctx, 'contacts.name_taken'))
-      ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: wizard.wizardMessageId }
-      return
-    }
-    ctx.logger.error({ err }, 'addContact (telegram share) failed')
-    await editContactWizardMessage(ctx, t(ctx, 'contacts.share_error'))
+    const result = await addLinkedContactsBatch(ctx.user.id, people)
+    await editContactWizardMessageById(ctx, msgId, formatBatchResult(ctx, result))
+  } catch (err) {
+    ctx.logger.error({ err }, 'addLinkedContactsBatch (picker) failed')
+    await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
   }
-  await showContactList(ctx)
+  await showContactListById(ctx, msgId)
 }
 
 export async function contactTextHandler(ctx: MyContext): Promise<void> {
@@ -136,45 +169,57 @@ export async function contactTextHandler(ctx: MyContext): Promise<void> {
   }
 
   if (wizard.step === 'awaiting_username') {
-    const handle = normalizeUsername(text)
     const msgId = wizard.wizardMessageId
+    const handles = parseUsernameList(text)
 
-    const found = await findUserByUsername(handle)
-    if (!found) {
+    // Nothing parseable — keep the wizard open so the user can retry
+    if (handles.length === 0) {
       const cancelKeyboard = new InlineKeyboard()
         .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
-      await editContactWizardMessageById(
-        ctx, msgId,
-        t(ctx, 'contacts.username_not_found', { username: handle }),
-        cancelKeyboard,
-      )
-      return
-    }
-
-    if (found.id === ctx.user.id) {
-      const cancelKeyboard = new InlineKeyboard()
-        .text(t(ctx, 'contacts.cancel_share'), encode('contact', 'cancel', 'now'))
-      await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.share_yourself'), cancelKeyboard)
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.username_prompt'), cancelKeyboard)
       return
     }
 
     ctx.session.contact_wizard = undefined
-    const displayName = [found.first_name, found.last_name].filter(Boolean).join(' ')
-    try {
-      const contact = await addContact(ctx.user.id, displayName, found.phone, found.id)
-      await editContactWizardMessageById(
-        ctx, msgId,
-        t(ctx, 'contacts.username_found', { name: contact.display_name }),
-      )
-    } catch (err: unknown) {
-      if (isUniqueViolation(err)) {
-        await editContactWizardMessageById(ctx, msgId, t(ctx, 'contacts.name_taken'))
-        ctx.session.contact_wizard = { step: 'awaiting_name', wizardMessageId: msgId }
-        return
+
+    const people: BatchPerson[] = []
+    const notFound: string[] = []
+    let selfPicked = false
+    for (const handle of handles) {
+      const found = await findUserByUsername(handle)
+      if (!found) {
+        notFound.push(handle)
+        continue
       }
-      ctx.logger.error({ err }, 'addContact (username) failed')
-      await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
+      if (found.id === ctx.user.id) {
+        selfPicked = true
+        continue
+      }
+      const displayName = [found.first_name, found.last_name].filter(Boolean).join(' ') || `@${handle}`
+      people.push({ userId: found.id, phone: found.phone, displayName })
     }
+
+    let result: BatchResult = { linked: [], added: [], skipped: [] }
+    try {
+      if (people.length > 0) result = await addLinkedContactsBatch(ctx.user.id, people)
+    } catch (err) {
+      ctx.logger.error({ err }, 'addLinkedContactsBatch (username) failed')
+      await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
+      return
+    }
+
+    const lines: string[] = []
+    const added = [...result.linked, ...result.added]
+    if (added.length) lines.push(t(ctx, 'contacts.batch_added', { names: added.join(', ') }))
+    if (result.skipped.length) lines.push(t(ctx, 'contacts.batch_skipped', { names: result.skipped.join(', ') }))
+    if (notFound.length) {
+      lines.push(t(ctx, 'contacts.batch_not_found', { names: notFound.map((h) => `@${h}`).join(', ') }))
+    }
+    if (lines.length === 0) {
+      lines.push(selfPicked ? t(ctx, 'contacts.share_yourself') : t(ctx, 'contacts.pick_none'))
+    }
+
+    await editContactWizardMessageById(ctx, msgId, lines.join('\n'))
     await showContactListById(ctx, msgId)
   }
 }
@@ -205,8 +250,13 @@ export async function contactSkipPhoneHandler(ctx: MyContext): Promise<void> {
 }
 
 export async function contactCancelHandler(ctx: MyContext): Promise<void> {
+  const pickerMsgId = ctx.session.contact_wizard?.pickerMessageId
   ctx.session.contact_wizard = undefined
   await ctx.answerCallbackQuery()
+  // Clean up the multi-select picker's reply-keyboard carrier message, if any
+  if (pickerMsgId && ctx.chat) {
+    await ctx.api.deleteMessage(ctx.chat.id, pickerMsgId).catch(() => undefined)
+  }
   await showContactList(ctx)
 }
 
@@ -307,6 +357,17 @@ async function editContactWizardMessageById(
       parse_mode: parseMode,
     }).catch(() => undefined)
   }
+}
+
+/** Build a localized summary of a batch add (added / pending-link / skipped). */
+function formatBatchResult(ctx: MyContext, r: BatchResult): string {
+  const lines: string[] = []
+  const added = [...r.linked, ...r.added]
+  if (added.length) lines.push(t(ctx, 'contacts.batch_added', { names: added.join(', ') }))
+  if (r.added.length) lines.push(t(ctx, 'contacts.batch_pending', { names: r.added.join(', ') }))
+  if (r.skipped.length) lines.push(t(ctx, 'contacts.batch_skipped', { names: r.skipped.join(', ') }))
+  if (lines.length === 0) lines.push(t(ctx, 'contacts.pick_none'))
+  return lines.join('\n')
 }
 
 function isUniqueViolation(err: unknown): boolean {

@@ -6,6 +6,7 @@ import {
   findByTelegramId,
   upsertFromContact,
   backfillLinkedUser,
+  backfillLinkedUserByTelegramId,
 } from '../../services/user.service'
 
 export async function startHandler(ctx: MyContext): Promise<void> {
@@ -61,6 +62,7 @@ export async function contactHandler(ctx: MyContext): Promise<void> {
   )
 
   await backfillLinkedUser(contact.phone_number, user.id)
+  await backfillLinkedUserByTelegramId(BigInt(from.id), user.id)
 
   ctx.user = user
   ctx.logger.info({ user_id: user.id }, 'user registered')

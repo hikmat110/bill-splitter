@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { normalizeUsername } from './username'
+import { normalizeUsername, parseUsernameList } from './username'
 
 describe('normalizeUsername', () => {
   test('strips a single leading @', () => {
@@ -55,5 +55,43 @@ describe('normalizeUsername', () => {
   test('is idempotent', () => {
     const once = normalizeUsername('@John_Doe')
     expect(normalizeUsername(once)).toBe(once)
+  })
+})
+
+describe('parseUsernameList', () => {
+  test('parses a single handle', () => {
+    expect(parseUsernameList('@john')).toEqual(['john'])
+  })
+
+  test('splits on commas', () => {
+    expect(parseUsernameList('@a,@b,@c')).toEqual(['a', 'b', 'c'])
+  })
+
+  test('splits on spaces', () => {
+    expect(parseUsernameList('@a @b @c')).toEqual(['a', 'b', 'c'])
+  })
+
+  test('splits on newlines', () => {
+    expect(parseUsernameList('@a\n@b\n@c')).toEqual(['a', 'b', 'c'])
+  })
+
+  test('handles a mix of separators and extra whitespace', () => {
+    expect(parseUsernameList('  @Alex ,  kavin\n@DILNOZA ')).toEqual(['alex', 'kavin', 'dilnoza'])
+  })
+
+  test('de-duplicates case-insensitively, preserving first-seen order', () => {
+    expect(parseUsernameList('@Alex, alex, @ALEX, bob')).toEqual(['alex', 'bob'])
+  })
+
+  test('drops empty tokens (stray separators)', () => {
+    expect(parseUsernameList('@a,,  ,@b')).toEqual(['a', 'b'])
+  })
+
+  test('preserves underscores and digits', () => {
+    expect(parseUsernameList('@john_doe @user123')).toEqual(['john_doe', 'user123'])
+  })
+
+  test('returns empty array for blank input', () => {
+    expect(parseUsernameList('   ,  \n ')).toEqual([])
   })
 })

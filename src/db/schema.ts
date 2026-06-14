@@ -49,6 +49,10 @@ export const contacts = pgTable(
     linked_user_id: uuid('linked_user_id').references(() => users.id, {
       onDelete: 'set null',
     }),
+    // Telegram id of a person added before they registered (e.g. via the
+    // multi-select picker, which never returns a phone). Backfilled into
+    // linked_user_id when that person starts the bot.
+    linked_telegram_id: bigint('linked_telegram_id', { mode: 'bigint' }),
     display_name: text('display_name').notNull(),
     phone: text('phone'),
     created_at: timestamp('created_at', { withTimezone: true })

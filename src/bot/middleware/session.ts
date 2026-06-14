@@ -11,9 +11,11 @@ export interface SessionData {
   mainMessageId?: number
 
   contact_wizard?: {
-    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_contact_share' | 'awaiting_username'
+    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_users_share' | 'awaiting_username'
     display_name?: string
     wizardMessageId?: number
+    /** Carrier message holding the request_users reply keyboard, deleted after selection. */
+    pickerMessageId?: number
   }
 
   // NOTE: bigint fields are safe here because session is in-memory.

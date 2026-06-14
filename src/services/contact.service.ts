@@ -33,6 +33,7 @@ export async function addContact(
   displayName: string,
   phone?: string,
   linkedUserId?: string,
+  linkedTelegramId?: bigint,
 ): Promise<Contact> {
   let normalizedPhone: string | null = null
   let resolvedLinkedUserId: string | null = linkedUserId ?? null
@@ -56,11 +57,144 @@ export async function addContact(
       display_name: displayName,
       phone: normalizedPhone,
       linked_user_id: resolvedLinkedUserId,
+      // Only keep a pending telegram link while the person is unregistered.
+      linked_telegram_id: resolvedLinkedUserId ? null : (linkedTelegramId ?? null),
     })
     .returning()
 
   if (!contact) throw new Error('Failed to insert contact')
   return contact
+}
+
+function isUniqueViolation(err: unknown): boolean {
+  const code = (err as { code?: string })?.code
+  if (code === '23505') return true
+  return (
+    err instanceof Error &&
+    (err.message.includes('unique') || err.message.includes('duplicate'))
+  )
+}
+
+/**
+ * Insert a contact, retrying with a numeric suffix (`Name (2)`, `Name (3)`…) on
+ * the `(owner_id, display_name)` unique constraint. Returns null if no free name
+ * is found within the attempt budget.
+ */
+async function insertContactWithUniqueName(
+  values: {
+    owner_id: string
+    linked_user_id?: string | null
+    linked_telegram_id?: bigint | null
+    phone?: string | null
+  },
+  baseName: string,
+): Promise<Contact | null> {
+  for (let attempt = 1; attempt <= 50; attempt++) {
+    const name = attempt === 1 ? baseName : `${baseName} (${attempt})`
+    try {
+      const [contact] = await db
+        .insert(contacts)
+        .values({ ...values, display_name: name })
+        .returning()
+      if (contact) return contact
+    } catch (err) {
+      if (isUniqueViolation(err)) continue
+      throw err
+    }
+  }
+  return null
+}
+
+export interface BatchPerson {
+  /** UUID of an already-registered user (preferred link). */
+  userId?: string
+  /** Telegram id, used for deferred linking when the person isn't registered. */
+  telegramId?: bigint
+  phone?: string | null
+  displayName: string
+}
+
+export interface BatchResult {
+  /** Newly added and linked to a registered user. */
+  linked: string[]
+  /** Newly added, name-only (not on the bot yet). */
+  added: string[]
+  /** Already in the owner's contacts — skipped. */
+  skipped: string[]
+}
+
+/**
+ * Add several contacts at once (multi-select picker / batch @username paste).
+ * Dedupes against existing contacts and within the batch by linked user / telegram id,
+ * and resolves name collisions with a numeric suffix.
+ */
+export async function addLinkedContactsBatch(
+  ownerId: string,
+  people: BatchPerson[],
+): Promise<BatchResult> {
+  const existing = await db
+    .select({
+      linked_user_id: contacts.linked_user_id,
+      linked_telegram_id: contacts.linked_telegram_id,
+    })
+    .from(contacts)
+    .where(eq(contacts.owner_id, ownerId))
+
+  const seenUserIds = new Set<string>(
+    existing.map((c) => c.linked_user_id).filter((v): v is string => v != null)
+  )
+  const seenTgIds = new Set<bigint>(
+    existing.map((c) => c.linked_telegram_id).filter((v): v is bigint => v != null)
+  )
+
+  const result: BatchResult = { linked: [], added: [], skipped: [] }
+
+  for (const p of people) {
+    if (p.userId && seenUserIds.has(p.userId)) {
+      result.skipped.push(p.displayName)
+      continue
+    }
+    if (p.telegramId != null && seenTgIds.has(p.telegramId)) {
+      result.skipped.push(p.displayName)
+      continue
+    }
+
+    let linkedUserId: string | null = p.userId ?? null
+    let normalizedPhone: string | null = null
+    if (p.phone) {
+      normalizedPhone = normalizePhone(p.phone)
+      if (!linkedUserId) {
+        const [u] = await db
+          .select({ id: users.id })
+          .from(users)
+          .where(eq(users.phone, normalizedPhone))
+          .limit(1)
+        linkedUserId = u?.id ?? null
+      }
+    }
+    const linkedTelegramId = linkedUserId ? null : (p.telegramId ?? null)
+
+    const contact = await insertContactWithUniqueName(
+      {
+        owner_id: ownerId,
+        linked_user_id: linkedUserId,
+        linked_telegram_id: linkedTelegramId,
+        phone: normalizedPhone,
+      },
+      p.displayName,
+    )
+    if (!contact) {
+      result.skipped.push(p.displayName)
+      continue
+    }
+
+    if (p.userId) seenUserIds.add(p.userId)
+    if (p.telegramId != null) seenTgIds.add(p.telegramId)
+    if (linkedUserId) result.linked.push(contact.display_name)
+    else result.added.push(contact.display_name)
+  }
+
+  return result
 }
 
 export async function findOrCreateSelfContact(userId: string, firstName: string): Promise<Contact> {
@@ -72,19 +206,12 @@ export async function findOrCreateSelfContact(userId: string, firstName: string)
     .limit(1)
   if (existing) return existing
 
-  // Try to insert; fall back to incrementing suffix on name collision
-  for (let attempt = 0; attempt < 5; attempt++) {
-    const name = attempt === 0 ? firstName : `${firstName} (${attempt})`
-    try {
-      const [contact] = await db
-        .insert(contacts)
-        .values({ owner_id: userId, display_name: name, linked_user_id: userId, phone: null })
-        .returning()
-      if (contact) return contact
-    } catch {
-      // Unique violation on (owner_id, display_name) — try next suffix
-    }
-  }
+  // Insert with suffix-on-collision via the shared helper
+  const contact = await insertContactWithUniqueName(
+    { owner_id: userId, linked_user_id: userId, phone: null },
+    firstName,
+  )
+  if (contact) return contact
 
   // Final fallback: read whatever was created concurrently
   const [fallback] = await db

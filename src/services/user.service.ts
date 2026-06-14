@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/client'
 import { users, contacts } from '../db/schema'
 import type { User } from '../db/schema'
@@ -77,12 +77,32 @@ export async function findById(userId: string): Promise<User | null> {
   return result[0] ?? null
 }
 
+/** Resolve several Telegram ids to registered users in one query. */
+export async function findByTelegramIds(ids: bigint[]): Promise<User[]> {
+  if (ids.length === 0) return []
+  return db.select().from(users).where(inArray(users.telegram_id, ids))
+}
+
 export async function backfillLinkedUser(phone: string, userId: string): Promise<void> {
   const normalized = normalizePhone(phone)
   await db
     .update(contacts)
     .set({ linked_user_id: userId })
     .where(eq(contacts.phone, normalized))
+}
+
+/**
+ * Link contacts that were added by Telegram id before this person registered
+ * (e.g. via the multi-select picker). Clears the now-resolved pending id.
+ */
+export async function backfillLinkedUserByTelegramId(
+  telegramId: bigint,
+  userId: string
+): Promise<void> {
+  await db
+    .update(contacts)
+    .set({ linked_user_id: userId, linked_telegram_id: null })
+    .where(and(eq(contacts.linked_telegram_id, telegramId), isNull(contacts.linked_user_id)))
 }
 
 export async function updateCardNumber(userId: string, cardNumber: string | null): Promise<void> {

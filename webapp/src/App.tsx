@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PeopleSheet } from './components/PeopleSheet'
+import { ErrorBoundary } from './components/ErrorBoundary'
 import { useToast } from './components/Toast'
 import { SplitScreen } from './screens/SplitScreen'
 import { SettleScreen } from './screens/SettleScreen'
@@ -199,33 +200,35 @@ export function App() {
         </button>
       </div>
 
-      {/* screens */}
-      {tab === 'split' && (
-        <SplitScreen
-          draft={draft}
-          setDraft={setDraft}
-          people={people}
-          onAddPeople={() => setPeopleOpen(true)}
-          onSend={send}
-          sending={sending}
-        />
-      )}
-      {tab === 'settle' && me && (
-        <SettleScreen bill={currentBill} me={me} refresh={refresh} goSplit={newBill} />
-      )}
-      {tab === 'pay' && <IncomingScreen incoming={bills.incoming} refresh={refresh} />}
-      {tab === 'activity' && me && (
-        <ActivityScreen
-          created={bills.created}
-          incoming={bills.incoming}
-          me={me}
-          openCreated={(b) => {
-            setCurrentBillId(b.id)
-            setTab('settle')
-          }}
-          goIncoming={() => setTab('pay')}
-        />
-      )}
+      {/* screens — boundary keeps a single screen's crash from blanking the whole app */}
+      <ErrorBoundary resetKey={tab}>
+        {tab === 'split' && (
+          <SplitScreen
+            draft={draft}
+            setDraft={setDraft}
+            people={people}
+            onAddPeople={() => setPeopleOpen(true)}
+            onSend={send}
+            sending={sending}
+          />
+        )}
+        {tab === 'settle' && me && (
+          <SettleScreen bill={currentBill} me={me} refresh={refresh} goSplit={newBill} />
+        )}
+        {tab === 'pay' && <IncomingScreen incoming={bills.incoming} refresh={refresh} />}
+        {tab === 'activity' && me && (
+          <ActivityScreen
+            created={bills.created}
+            incoming={bills.incoming}
+            me={me}
+            openCreated={(b) => {
+              setCurrentBillId(b.id)
+              setTab('settle')
+            }}
+            goIncoming={() => setTab('pay')}
+          />
+        )}
+      </ErrorBoundary>
 
       {/* bottom nav */}
       <div className="tabbar">

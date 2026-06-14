@@ -20,9 +20,15 @@ export function IncomingScreen({
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
 
-  const owe = incoming
+  // Be resilient to unexpected payloads: drop malformed rows and coerce amounts
+  // to numbers so one bad record can't throw and blank the screen.
+  const items = (Array.isArray(incoming) ? incoming : []).filter(
+    (x): x is IncomingBill => !!x && !!x.bill && !!x.participant
+  )
+
+  const owe = items
     .filter((x) => x.participant.status !== 'confirmed')
-    .reduce((s, x) => s + x.participant.amount, 0)
+    .reduce((s, x) => s + (Number(x.participant.amount) || 0), 0)
 
   const markPaid = async (x: IncomingBill) => {
     setBusy(x.participant.id)
@@ -68,8 +74,8 @@ export function IncomingScreen({
         />
       </div>
 
-      <SecTitle>{t('incoming.bills_sent', { n: incoming.length })}</SecTitle>
-      {incoming.length === 0 ? (
+      <SecTitle>{t('incoming.bills_sent', { n: items.length })}</SecTitle>
+      {items.length === 0 ? (
         <Empty
           icon="ti-inbox"
           title={t('incoming.nothing')}
@@ -77,7 +83,7 @@ export function IncomingScreen({
         />
       ) : (
         <div className="col" style={{ gap: 10 }}>
-          {incoming.map((x) => (
+          {items.map((x) => (
             <div key={x.participant.id} className="card pop" style={{ padding: 'calc(14px * var(--dens))' }}>
               <div className="row" style={{ gap: 12 }}>
                 <div
@@ -101,7 +107,7 @@ export function IncomingScreen({
                     {prettyDate(t, lang, x.bill.createdAt)}
                   </span>
                 </div>
-                <Money amount={x.participant.amount} style={{ fontWeight: 800, fontSize: 16 }} />
+                <Money amount={Number(x.participant.amount) || 0} style={{ fontWeight: 800, fontSize: 16 }} />
               </div>
               <BreakdownLines b={x.participant} style={{ marginTop: 11 }} />
               <div className="row" style={{ marginTop: 12, justifyContent: 'space-between' }}>

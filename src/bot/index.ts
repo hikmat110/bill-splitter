@@ -13,7 +13,7 @@ import {
   contactStartManualHandler,
   contactStartTelegramHandler,
   contactStartUsernameHandler,
-  contactShareHandler,
+  usersSharedHandler,
   contactTextHandler,
   contactViewHandler,
   contactDeleteHandler,
@@ -75,13 +75,11 @@ bot.command('cancel', async (ctx) => {
   await showMainMenu(ctx)
 })
 
-// Route contact shares: registration vs. contacts import wizard
-bot.on('message:contact', async (ctx) => {
-  if (ctx.session.contact_wizard?.step === 'awaiting_contact_share') {
-    return contactShareHandler(ctx)
-  }
-  return contactHandler(ctx)
-})
+// Contact shares are only used for phone-based registration
+bot.on('message:contact', contactHandler)
+
+// Multi-select picker results (request_users) → batch-add contacts
+bot.on('message:users_shared', usersSharedHandler)
 
 // ─── Text message dispatcher ─────────────────────────────────────────────────
 
