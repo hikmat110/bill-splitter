@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Money } from '../components/Money'
 import { SecTitle } from '../components/common'
@@ -11,11 +12,14 @@ import { useT } from '../i18n'
 
 const TIP_PRESETS = [0, 10_000, 20_000, 30_000]
 const SERVICE_PRESETS = [0, 5, 10, 15, 20]
+// Sentinel slider position that reveals a free-form tip input.
+const TIP_CUSTOM = -1
 
 export function SplitScreen({
   draft,
   setDraft,
   people,
+  selfContactId,
   onAddPeople,
   onSend,
   sending,
@@ -23,6 +27,7 @@ export function SplitScreen({
   draft: DraftBill
   setDraft: (d: DraftBill) => void
   people: Person[]
+  selfContactId: string
   onAddPeople: () => void
   onSend: () => void
   sending: boolean
@@ -32,7 +37,15 @@ export function SplitScreen({
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
   const serviceOptions = SERVICE_PRESETS.map((p) => ({ value: p, label: p ? p + '%' : t('common.off') }))
-  const tipOptions = TIP_PRESETS.map((tp) => ({ value: tp, label: tp === 0 ? t('common.none') : money(tp) }))
+  // Custom mode: the tip isn't one of the presets, or the user picked "Custom".
+  const [tipCustom, setTipCustom] = useState(() => draft.tip > 0 && !TIP_PRESETS.includes(draft.tip))
+  const tipOptions = [
+    ...TIP_PRESETS.map((tp) => ({ value: tp, label: tp === 0 ? t('common.none') : money(tp) })),
+    { value: TIP_CUSTOM, label: t('split.tip_custom') },
+  ]
+  // Tip payer always includes the creator ("You", default) plus the participants.
+  const payerOptions = [selfContactId, ...participants.filter((id) => id !== selfContactId)]
+  const tipPayer = draft.tipPaidBy ?? selfContactId
 
   const patch = (p: Partial<DraftBill>) => setDraft({ ...draft, ...p })
   const patchItem = (id: string, p: Partial<DraftItem>) =>
@@ -44,6 +57,8 @@ export function SplitScreen({
     patch({
       participantIds: participants.filter((p) => p !== id),
       items: draft.items.map((i) => ({ ...i, who: i.who.filter((w) => w !== id) })),
+      // If the removed person was paying the tip, fall back to the creator.
+      ...(draft.tipPaidBy === id ? { tipPaidBy: null } : {}),
     })
 
   const canSend =
@@ -195,8 +210,72 @@ export function SplitScreen({
               {draft.tip > 0 ? '+' + money(draft.tip) : t('common.none')}
             </span>
           </div>
-          <SnapSlider options={tipOptions} value={draft.tip} onChange={(v) => patch({ tip: v })} />
+          <SnapSlider
+            options={tipOptions}
+            value={tipCustom ? TIP_CUSTOM : draft.tip}
+            onChange={(v) => {
+              if (v === TIP_CUSTOM) {
+                setTipCustom(true)
+              } else {
+                setTipCustom(false)
+                patch({ tip: v })
+              }
+            }}
+          />
+          {tipCustom && (
+            <input
+              className="inp"
+              type="number"
+              inputMode="numeric"
+              value={draft.tip || ''}
+              placeholder="0"
+              autoFocus
+              onChange={(e) => patch({ tip: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
+            />
+          )}
         </div>
+
+        {/* who paid the tip — only relevant once there's a tip */}
+        {draft.tip > 0 && (
+          <>
+            <div style={{ height: 1, background: 'var(--border)', margin: '14px -2px' }} />
+            <div className="col" style={{ gap: 10 }}>
+              <span style={{ fontWeight: 700, fontSize: 14.5 }}>{t('split.tip_paid_by')}</span>
+              <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+                {payerOptions.map((id) => {
+                  const on = id === tipPayer
+                  const label = id === selfContactId ? t('common.you') : nameById(id)
+                  return (
+                    <button
+                      key={id}
+                      onClick={() => {
+                        haptic('light')
+                        patch({ tipPaidBy: id === selfContactId ? null : id })
+                      }}
+                      className="row"
+                      style={{
+                        gap: 7,
+                        background: on ? 'var(--accent-soft)' : 'var(--surface-2)',
+                        color: on ? 'var(--accent-text)' : 'inherit',
+                        borderRadius: 'var(--r-pill)',
+                        padding: '4px 11px 4px 4px',
+                        fontWeight: 600,
+                        fontSize: 13.5,
+                        border: on ? '1px solid var(--accent)' : '1px solid transparent',
+                        cursor: 'pointer',
+                      }}
+                    >
+                      <Avatar id={id} name={label} size={26} />
+                      <span>{label}</span>
+                      {on && <i className="ti ti-check" style={{ fontSize: 14 }} />}
+                    </button>
+                  )
+                })}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* total bar */}

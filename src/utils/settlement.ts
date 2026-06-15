@@ -9,6 +9,13 @@ export interface BillSpec {
   servicePct: number
   serviceFixed: bigint
   tip: bigint
+  /**
+   * Contact who fronted the tip. `null`/undefined = the creator paid it
+   * (default) — every participant owes their equal tip share as usual. A
+   * non-creator here is credited the full tip: their owed total drops by it,
+   * while the tip is still divided equally across everyone's breakdown.
+   */
+  tipPaidByContactId?: string | null
 }
 
 export interface SettlementResult {
@@ -29,7 +36,8 @@ export interface ParticipantBreakdown {
   base: bigint // sum of this participant's item shares
   service: bigint // proportional + equal service charge
   tip: bigint // equal tip share
-  total: bigint // round100(base + service + tip), incl. reconciliation diff
+  tipPaid: bigint // full tip this participant fronted (credit); 0 unless they paid the tip
+  total: bigint // round100(base + service + tip) − tipPaid, incl. reconciliation diff
 }
 
 export interface BreakdownResult {
@@ -53,7 +61,7 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
   const ensure = (id: string): ParticipantBreakdown => {
     let p = perContact.get(id)
     if (!p) {
-      p = { items: [], base: 0n, service: 0n, tip: 0n, total: 0n }
+      p = { items: [], base: 0n, service: 0n, tip: 0n, tipPaid: 0n, total: 0n }
       perContact.set(id, p)
     }
     return p
@@ -107,6 +115,18 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
     }
     if (largest) {
       largest.total += diff
+    }
+  }
+
+  // Credit the tip payer: the tip is still split equally above, but whoever
+  // fronted it owes the full amount less. Applied after reconciliation so fair
+  // shares (and the "largest payer" pick) are untouched. No-op for the creator
+  // (caller passes null) or a payer with no item shares (absent from perContact).
+  if (spec.tipPaidByContactId) {
+    const payer = perContact.get(spec.tipPaidByContactId)
+    if (payer) {
+      payer.tipPaid = spec.tip
+      payer.total -= spec.tip
     }
   }
 

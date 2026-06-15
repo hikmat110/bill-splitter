@@ -132,6 +132,22 @@ export function tipKeyboard(ctx: MyContext): InlineKeyboard {
     .text(t(ctx, 'bill.tip_custom'), 'bill:tip:custom')
 }
 
+export function tipPayerKeyboard(
+  participants: Contact[],
+  selected: string | undefined,
+  ctx: MyContext
+): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  // Default: the creator paid the tip. Selected when no explicit payer is set.
+  const creatorMark = selected ? '' : '✅ '
+  kb.text(`${creatorMark}${t(ctx, 'bill.tip_payer_creator')}`, encode('bill', 'tip_payer', 'creator')).row()
+  for (const c of participants) {
+    const mark = selected === c.id ? '✅ ' : ''
+    kb.text(`${mark}${c.display_name}`, encode('bill', 'tip_payer', c.id)).row()
+  }
+  return kb
+}
+
 export function billReviewKeyboard(ctx: MyContext): InlineKeyboard {
   return new InlineKeyboard()
     .text(t(ctx, 'bill.edit_button'), 'bill:edit')

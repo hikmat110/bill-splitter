@@ -11,6 +11,7 @@ import {
   itemNextKeyboard,
   serviceChargeKeyboard,
   tipKeyboard,
+  tipPayerKeyboard,
   billReviewKeyboard,
 } from '../keyboards'
 import { formatMoney } from '../../utils/format'
@@ -91,6 +92,8 @@ export async function billCallbackHandler(
       return serviceChargeStep(ctx, id)
     case 'tip':
       return tipStep(ctx, id)
+    case 'tip_payer':
+      return tipPayerStep(ctx, id)
     case 'send':
       return sendBillStep(ctx, bot)
     case 'edit':
@@ -288,8 +291,7 @@ async function tipStep(ctx: MyContext, choice: string): Promise<void> {
   const amount = parseInt(choice, 10)
   if (isNaN(amount)) return
   wizard.tip = BigInt(amount)
-  wizard.step = 'review'
-  await showReview(ctx)
+  await proceedAfterTip(ctx)
 }
 
 async function saveTipCustomStep(ctx: MyContext, text: string): Promise<void> {
@@ -300,6 +302,37 @@ async function saveTipCustomStep(ctx: MyContext, text: string): Promise<void> {
     return
   }
   wizard.tip = BigInt(amount)
+  await proceedAfterTip(ctx)
+}
+
+/**
+ * After the tip is set: if there's a tip and at least one non-creator
+ * participant, ask who paid it (default = creator). Otherwise go to review.
+ */
+async function proceedAfterTip(ctx: MyContext): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
+  if (wizard.tip > 0n) {
+    const participantContacts = await getParticipantContacts(wizard.participantContactIds)
+    const others = participantContacts.filter((c) => c.linked_user_id !== ctx.user.id)
+    if (others.length > 0) {
+      wizard.step = 'awaiting_tip_payer'
+      await editWizardMessage(
+        ctx,
+        t(ctx, 'bill.ask_tip_payer'),
+        tipPayerKeyboard(others, wizard.tipPaidByContactId, ctx)
+      )
+      return
+    }
+  }
+  wizard.tipPaidByContactId = undefined
+  wizard.step = 'review'
+  await showReview(ctx)
+}
+
+async function tipPayerStep(ctx: MyContext, choice: string): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
+  // "creator" is the default payer and is never credited.
+  wizard.tipPaidByContactId = choice === 'creator' ? undefined : choice
   wizard.step = 'review'
   await showReview(ctx)
 }
@@ -319,6 +352,7 @@ async function showReview(ctx: MyContext): Promise<void> {
     servicePct: wizard.servicePct,
     serviceFixed: wizard.serviceFixed,
     tip: wizard.tip,
+    tipPaidByContactId: wizard.tipPaidByContactId ?? null,
   })
 
   const lines: string[] = [
@@ -336,6 +370,12 @@ async function showReview(ctx: MyContext): Promise<void> {
   }
   if (wizard.tip > 0n) {
     lines.push(t(ctx, 'bill.review_tip', { amount: formatMoney(wizard.tip) }))
+    if (wizard.tipPaidByContactId) {
+      const payer = contactMap.get(wizard.tipPaidByContactId)
+      if (payer) {
+        lines.push(t(ctx, 'bill.review_tip_payer', { name: payer.display_name }))
+      }
+    }
   }
   lines.push(t(ctx, 'bill.review_total', { amount: formatMoney(settlement.total) }))
   lines.push('')
@@ -370,6 +410,7 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
       servicePct: wizard.servicePct,
       serviceFixed: wizard.serviceFixed,
       tip: wizard.tip,
+      tipPaidByContactId: wizard.tipPaidByContactId ?? null,
       participantContactIds: wizard.participantContactIds,
     })
   } catch (err) {
@@ -396,6 +437,7 @@ async function editBillStep(ctx: MyContext): Promise<void> {
   wizard.servicePct = 0
   wizard.serviceFixed = 0n
   wizard.tip = 0n
+  wizard.tipPaidByContactId = undefined
   await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
 }
 

@@ -142,6 +142,65 @@ describe('computeSettlement', () => {
   })
 })
 
+describe('tip payer credit', () => {
+  // 3-way even split of 300k + 30k tip; tip split equally is 10k each.
+  const base3: BillSpec = {
+    items: [{ price: 300_000n, shareContactIds: ['A', 'B', 'C'] }],
+    servicePct: 0,
+    serviceFixed: 0n,
+    tip: 30_000n,
+  }
+
+  test('null payer (creator default) is unchanged — sum equals total', () => {
+    const result = computeSettlement({ ...base3, tipPaidByContactId: null })
+    assertSumEqualsTotal(result)
+    expect(result.shares.get('A')).toBe(110_000n)
+    expect(result.shares.get('B')).toBe(110_000n)
+    expect(result.shares.get('C')).toBe(110_000n)
+  })
+
+  test('non-creator payer is credited the full tip; others unchanged', () => {
+    const result = computeSettlement({ ...base3, tipPaidByContactId: 'B' })
+    // B fronted the 30k tip: 110k fair share − 30k = 80k owed.
+    expect(result.shares.get('A')).toBe(110_000n)
+    expect(result.shares.get('B')).toBe(80_000n)
+    expect(result.shares.get('C')).toBe(110_000n)
+    // Owed amounts now sum to total − tip (creator only fronted total − tip).
+    const sum = [...result.shares.values()].reduce((a, b) => a + b, 0n)
+    expect(sum).toBe(result.total - base3.tip)
+    expect(result.total).toBe(330_000n)
+  })
+
+  test('breakdown carries the credit on tipPaid and equal tip share on tip', () => {
+    const { perContact } = computeBreakdown({ ...base3, tipPaidByContactId: 'B' })
+    const b = perContact.get('B')!
+    expect(b.tip).toBe(10_000n) // still owes an equal tip share
+    expect(b.tipPaid).toBe(30_000n) // credited the full tip they fronted
+    expect(b.total).toBe(80_000n)
+    const a = perContact.get('A')!
+    expect(a.tipPaid).toBe(0n)
+  })
+
+  test('payer not among item sharers is a no-op (no row to credit)', () => {
+    const result = computeSettlement({ ...base3, tipPaidByContactId: 'Z' })
+    assertSumEqualsTotal(result)
+    expect(result.shares.get('A')).toBe(110_000n)
+  })
+
+  test('zero tip with a payer set credits nothing', () => {
+    const spec: BillSpec = {
+      items: [{ price: 300_000n, shareContactIds: ['A', 'B', 'C'] }],
+      servicePct: 0,
+      serviceFixed: 0n,
+      tip: 0n,
+      tipPaidByContactId: 'B',
+    }
+    const result = computeSettlement(spec)
+    assertSumEqualsTotal(result)
+    expect(result.shares.get('B')).toBe(100_000n)
+  })
+})
+
 describe('computeBreakdown', () => {
   test('per-participant total matches computeSettlement shares', () => {
     const spec: BillSpec = {

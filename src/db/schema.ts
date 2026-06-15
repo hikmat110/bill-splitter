@@ -91,6 +91,10 @@ export const bills = pgTable('bills', {
   service_pct: numeric('service_pct', { precision: 5, scale: 2 }).default('0').notNull(),
   service_fixed: bigint('service_fixed', { mode: 'bigint' }).default(sql`0`).notNull(),
   tip: bigint('tip', { mode: 'bigint' }).default(sql`0`).notNull(),
+  // Which participant fronted the tip. NULL = the creator paid it (default) —
+  // existing rows keep today's behaviour. A non-creator here is credited the
+  // full tip in settlement (their owed amount drops by it).
+  tip_paid_by_contact_id: uuid('tip_paid_by_contact_id').references(() => contacts.id),
   total: bigint('total', { mode: 'bigint' }).notNull(),
   status: text('status').notNull().default('draft'),
   created_at: timestamp('created_at', { withTimezone: true })

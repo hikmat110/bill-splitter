@@ -40,6 +40,8 @@ export const en = {
     service_tip: 'Service · Tip',
     service_charge: 'Service charge',
     tip: 'Tip',
+    tip_custom: 'Custom',
+    tip_paid_by: 'Tip paid by',
     bill_total: 'Bill total',
     send: 'Send',
     sending: 'Sending…',
@@ -67,6 +69,7 @@ export const en = {
     spent_label: 'spent {{amount}}',
     owes_label: 'owes {{amount}}',
     spent_pill: 'Spent',
+    paid_tip_pill: 'Paid tip',
     reminder_sent: 'Reminder sent to {{name}}',
     confirmed_payment: "Confirmed {{name}}'s payment",
     disputed_payment: "Disputed {{name}}'s payment",
@@ -106,6 +109,7 @@ export const en = {
   breakdown: {
     service: 'Service',
     tip: 'Tip',
+    tip_paid: 'Tip paid',
   },
   status: {
     pending: 'Pending',

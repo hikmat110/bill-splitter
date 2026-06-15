@@ -5,14 +5,25 @@
 import type { CreateBillInput } from '../services/bill.service'
 import type { CreateBillBody } from './schemas'
 
-export function toCreateBillInput(body: CreateBillBody, creatorId: string): CreateBillInput {
+export function toCreateBillInput(
+  body: CreateBillBody,
+  creatorId: string,
+  creatorSelfContactId?: string
+): CreateBillInput {
   const participants = new Set(body.participantContactIds)
+  // Normalize the tip payer to "non-creator participant or null": the creator
+  // paying is the default (null) and must never be credited, and a payer who
+  // somehow isn't a participant is ignored.
+  const rawPayer = body.tipPaidByContactId ?? null
+  const tipPaidByContactId =
+    rawPayer && rawPayer !== creatorSelfContactId && participants.has(rawPayer) ? rawPayer : null
   return {
     creatorId,
     title: body.title,
     servicePct: body.servicePct,
     serviceFixed: 0n,
     tip: BigInt(body.tip),
+    tipPaidByContactId,
     participantContactIds: [...body.participantContactIds],
     items: body.items.map((item, index) => ({
       name: item.name,

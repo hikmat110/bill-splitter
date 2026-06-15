@@ -27,6 +27,8 @@ export interface CreateBillInput {
   servicePct: number
   serviceFixed: bigint
   tip: bigint
+  /** Contact who fronted the tip; null = creator paid it (default). */
+  tipPaidByContactId?: string | null
   participantContactIds: string[]
 }
 
@@ -59,6 +61,7 @@ export async function createBill(input: CreateBillInput): Promise<Bill> {
     servicePct: input.servicePct,
     serviceFixed: input.serviceFixed,
     tip: input.tip,
+    tipPaidByContactId: input.tipPaidByContactId ?? null,
   })
 
   return db.transaction(async (tx) => {
@@ -71,6 +74,7 @@ export async function createBill(input: CreateBillInput): Promise<Bill> {
         service_pct: String(input.servicePct),
         service_fixed: input.serviceFixed,
         tip: input.tip,
+        tip_paid_by_contact_id: input.tipPaidByContactId ?? null,
         total: settlement.total,
         status: 'sent',
       })
@@ -177,6 +181,7 @@ export function getBillBreakdown(details: BillWithDetails): Map<string, Particip
     servicePct: Number(details.bill.service_pct),
     serviceFixed: details.bill.service_fixed,
     tip: details.bill.tip,
+    tipPaidByContactId: details.bill.tip_paid_by_contact_id,
   })
   return perContact
 }
