@@ -61,8 +61,8 @@ export async function incomingDetailHandler(ctx: MyContext, participantId: strin
     for (const it of own.items) {
       lines.push(t(ctx, 'history.detail_item_share', { name: it.name, amount: formatMoney(it.share) }))
     }
-    if (own.service > 0n) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(own.service) }))
-    if (own.tip > 0n) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(own.tip) }))
+    if (own.service > 0) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(own.service) }))
+    if (own.tip > 0) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(own.tip) }))
   }
 
   await editOrReply(

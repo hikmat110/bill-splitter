@@ -27,18 +27,27 @@ describe('toCreateBillInput', () => {
     expect(input.title).toBe('Dinner at Milano')
     expect(input.participantContactIds).toEqual([P1, P2, P3])
     expect(input.servicePct).toBe(10)
-    expect(input.serviceFixed).toBe(0n)
-    expect(input.tip).toBe(20000n)
+    expect(input.serviceFixed).toBe(0)
+    expect(input.tip).toBe(20000)
   })
 
-  it('defaults quantity to 1, assigns positions, and coerces price to bigint', () => {
+  it('defaults quantity to 1, assigns positions, and keeps price as a number', () => {
     const input = toCreateBillInput(body, CREATOR)
     input.items.forEach((item, i) => {
       expect(item.quantity).toBe(1)
       expect(item.position).toBe(i)
-      expect(typeof item.price).toBe('bigint')
+      expect(typeof item.price).toBe('number')
     })
-    expect(input.items[0]!.price).toBe(68000n)
+    expect(input.items[0]!.price).toBe(68000)
+  })
+
+  it('passes decimal prices through unchanged', () => {
+    const decimalBody: CreateBillBody = {
+      ...body,
+      items: [{ name: 'Coffee', price: 10.33, shareContactIds: [P1, P2] }],
+    }
+    const input = toCreateBillInput(decimalBody, CREATOR)
+    expect(input.items[0]!.price).toBe(10.33)
   })
 
   it('filters item sharers down to the participant set', () => {
@@ -50,10 +59,10 @@ describe('toCreateBillInput', () => {
     expect(input.items[0]!.shareContactIds).toEqual([P1])
   })
 
-  it('round-trips through computeSettlement: sum(shares) === total', () => {
+  it('round-trips through computeSettlement: sum(shares) ≤ total', () => {
     const input = toCreateBillInput(body, CREATOR)
     const items: ItemSpec[] = input.items.map((it) => ({
-      price: it.price * BigInt(it.quantity),
+      price: it.price * it.quantity,
       shareContactIds: it.shareContactIds,
     }))
     const settlement = computeSettlement({
@@ -62,7 +71,10 @@ describe('toCreateBillInput', () => {
       serviceFixed: input.serviceFixed,
       tip: input.tip,
     })
-    const sum = [...settlement.shares.values()].reduce((a, b) => a + b, 0n)
-    expect(sum).toBe(settlement.total)
+    const sum = [...settlement.shares.values()].reduce((a, b) => a + b, 0)
+    // Shares never collect more than the total; the small remainder is carried
+    // by `total` rather than nudged onto a participant.
+    expect(sum).toBeLessThanOrEqual(settlement.total + 1e-9)
+    expect(settlement.total - sum).toBeLessThan(1)
   })
 })

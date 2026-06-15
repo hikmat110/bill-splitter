@@ -76,7 +76,7 @@ export async function historyDetailHandler(ctx: MyContext, billId: string): Prom
   ]
 
   for (const item of items) {
-    lines.push(`  ${item.name} × ${item.quantity}: ${formatMoney(item.price * BigInt(item.quantity))}`)
+    lines.push(`  ${item.name} × ${item.quantity}: ${formatMoney(item.price * item.quantity)}`)
   }
   lines.push('')
   lines.push(t(ctx, 'history.detail_total', { amount: formatMoney(bill.total) }))
@@ -104,8 +104,8 @@ export async function historyDetailHandler(ctx: MyContext, billId: string): Prom
       for (const it of b.items) {
         lines.push(t(ctx, 'history.detail_item_share', { name: it.name, amount: formatMoney(it.share) }))
       }
-      if (b.service > 0n) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(b.service) }))
-      if (b.tip > 0n) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(b.tip) }))
+      if (b.service > 0) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(b.service) }))
+      if (b.tip > 0) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(b.tip) }))
     }
   }
 

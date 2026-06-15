@@ -78,11 +78,11 @@ Per-user address book. Holds a name and optional phone; if phone matches a regis
 - `id` uuid pk
 - `creator_id` uuid fk → users.id
 - `title` text not null
-- `subtotal` bigint not null — sum of items, in whole UZS
-- `service_pct` numeric(5,2) default 0
-- `service_fixed` bigint default 0
-- `tip` bigint default 0
-- `total` bigint not null
+- `subtotal` numeric(14,2) not null — sum of items, in UZS
+- `service_pct` numeric(5,2) default 0 — a percentage, not money
+- `service_fixed` numeric(14,2) default 0
+- `tip` numeric(14,2) default 0
+- `total` numeric(14,2) not null
 - `status` text not null default `'draft'` — one of `draft`, `sent`, `settled`, `cancelled`
 - `created_at`, `updated_at` timestamptz
 
@@ -90,7 +90,7 @@ Per-user address book. Holds a name and optional phone; if phone matches a regis
 - `id` uuid pk
 - `bill_id` uuid fk (cascade)
 - `name` text not null
-- `price` bigint not null
+- `price` numeric(14,2) not null
 - `quantity` int default 1
 - `position` int — display order
 
@@ -105,7 +105,7 @@ Final per-person amounts and payment status.
 - `id` uuid pk
 - `bill_id` uuid fk (cascade)
 - `contact_id` uuid fk → contacts.id
-- `amount` bigint not null
+- `amount` numeric(14,2) not null
 - `status` text not null default `'pending'` — `pending`, `marked_paid`, `confirmed`, `disputed`
 - `marked_paid_at`, `confirmed_at`, `last_reminded_at` timestamptz (nullable)
 - `notification_message_id` bigint — Telegram message id sent to participant, for editing later
@@ -174,29 +174,29 @@ Pure functions in `utils/settlement.ts`. Given a bill spec, return `Map<contactI
 ```
 For each item I:
   shareCount = I.shares.length
-  perShare = I.price / shareCount
+  perShare = to2(I.price / shareCount)   // equal sharers get equal shares
   for each contact C in I.shares:
     itemTotals[C] += perShare
 
-subtotal = sum(itemTotals)
+subtotal = sum(I.price for items with ≥1 sharer)   // the TRUE subtotal
 participantCount = number of distinct contacts across all items
 
 for each participant P:
   base = itemTotals[P]
-  serviceShare = base * (service_pct / 100) + service_fixed / participantCount
-  tipShare = tip / participantCount
-  total[P] = round100(base + serviceShare + tipShare)
+  serviceShare = to2(base * service_pct / 100) + to2(service_fixed / participantCount)
+  tipShare = to2(tip / participantCount)
+  total[P] = to2(base + serviceShare + tipShare)
 
-// Reconcile rounding: adjust the largest share by the remainder
-diff = bill.total - sum(total values)
-total[largestPayer] += diff
+// No reconciliation onto individuals. The bill total holds the true aggregate;
+// per-person truncation means the small remainder lives in `total`.
+bill.total = to2(subtotal + to2(subtotal * service_pct / 100) + service_fixed + tip)
 ```
 
-Round to nearest 100 som. All money is `bigint`. Always test with property-based tests that `sum(splits) === bill.total`.
+Truncate every money result to 2 decimals via `to2` (a dust-guarded floor). Shares are kept equal and are never nudged; `total` carries the small remainder, so the invariant is `sum(splits) ≤ bill.total` with `bill.total − sum(splits)` sub-som (≥ 0).
 
 ## Conventions
 
-- **Money**: `bigint` whole-som, never floats. UZS has no decimal subunit in practice.
+- **Money**: stored as `numeric(14,2)` and handled as a JS `number` (real 2-decimal som, e.g. `33333.33`) via Drizzle `mode: 'number'`. Floats are permitted, but every computed money value must be normalized to 2 decimals with `to2` (`utils/settlement`) so float dust never surfaces. Ids (`telegram_id`, `notification_message_id`) remain `bigint`.
 - **Callback data**: format `<entity>:<action>:<id>`, e.g. `bill:mark_paid:abc-123`. Hard 64-byte limit; for long ids use a short opaque ref stored in session.
 - **Replies**: during a wizard, prefer `editMessageText` over sending new messages — keeps chats clean.
 - **Errors**: never show stack traces to users. Catch at handler boundary, log with pino, reply with a generic localized error message.

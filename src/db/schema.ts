@@ -87,11 +87,15 @@ export const bills = pgTable('bills', {
     .notNull()
     .references(() => users.id),
   title: text('title').notNull(),
-  subtotal: bigint('subtotal', { mode: 'bigint' }).notNull(),
+  // Money is stored as numeric(14,2) — the real 2-decimal som value (e.g.
+  // 33333.33), surfaced as a JS `number` via Drizzle's mode:'number'.
+  subtotal: numeric('subtotal', { precision: 14, scale: 2, mode: 'number' }).notNull(),
   service_pct: numeric('service_pct', { precision: 5, scale: 2 }).default('0').notNull(),
-  service_fixed: bigint('service_fixed', { mode: 'bigint' }).default(sql`0`).notNull(),
-  tip: bigint('tip', { mode: 'bigint' }).default(sql`0`).notNull(),
-  total: bigint('total', { mode: 'bigint' }).notNull(),
+  service_fixed: numeric('service_fixed', { precision: 14, scale: 2, mode: 'number' })
+    .default(0)
+    .notNull(),
+  tip: numeric('tip', { precision: 14, scale: 2, mode: 'number' }).default(0).notNull(),
+  total: numeric('total', { precision: 14, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull().default('draft'),
   created_at: timestamp('created_at', { withTimezone: true })
     .defaultNow()
@@ -120,7 +124,7 @@ export const billItems = pgTable('bill_items', {
     .notNull()
     .references(() => bills.id, { onDelete: 'cascade' }),
   name: text('name').notNull(),
-  price: bigint('price', { mode: 'bigint' }).notNull(),
+  price: numeric('price', { precision: 14, scale: 2, mode: 'number' }).notNull(),
   quantity: integer('quantity').default(1).notNull(),
   position: integer('position').notNull(),
 })
@@ -173,7 +177,7 @@ export const billParticipants = pgTable(
     contact_id: uuid('contact_id')
       .notNull()
       .references(() => contacts.id),
-    amount: bigint('amount', { mode: 'bigint' }).notNull(),
+    amount: numeric('amount', { precision: 14, scale: 2, mode: 'number' }).notNull(),
     status: text('status').notNull().default('pending'),
     marked_paid_at: timestamp('marked_paid_at', { withTimezone: true }),
     confirmed_at: timestamp('confirmed_at', { withTimezone: true }),

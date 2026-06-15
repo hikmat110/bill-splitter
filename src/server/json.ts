@@ -1,9 +1,8 @@
 // JSON helpers for the Mini App API.
 //
-// Money is stored as `bigint` whole-som throughout the backend, but JSON has no
-// bigint type. UZS totals fit comfortably in a JS `number` (consistent with how
-// `utils/format.ts` already does `Number(amount)` for display), so we serialize
-// every bigint as a number.
+// Money is `numeric(14,2)` surfaced as a JS `number`, so it serializes directly.
+// The only remaining `bigint`s are ids (telegram_id, notification_message_id);
+// JSON has no bigint type, so we serialize every bigint as a number.
 
 function replacer(_key: string, value: unknown): unknown {
   return typeof value === 'bigint' ? Number(value) : value

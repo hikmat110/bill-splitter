@@ -11,12 +11,12 @@ export function toCreateBillInput(body: CreateBillBody, creatorId: string): Crea
     creatorId,
     title: body.title,
     servicePct: body.servicePct,
-    serviceFixed: 0n,
-    tip: BigInt(body.tip),
+    serviceFixed: 0,
+    tip: body.tip,
     participantContactIds: [...body.participantContactIds],
     items: body.items.map((item, index) => ({
       name: item.name,
-      price: BigInt(item.price),
+      price: item.price,
       quantity: 1,
       position: index,
       // Defensive: keep only sharers that are participants (schema enforces this too).

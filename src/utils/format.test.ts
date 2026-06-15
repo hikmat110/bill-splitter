@@ -2,25 +2,32 @@ import { describe, expect, test } from 'bun:test'
 import { formatMoney, formatDate, formatParticipantSummary } from './format'
 
 describe('formatMoney', () => {
-  test('formats 12500n with space thousands separator', () => {
-    expect(formatMoney(12500n)).toMatch('12')
-    expect(formatMoney(12500n)).toContain('UZS')
+  test('formats 12500 with space thousands separator', () => {
+    expect(formatMoney(12500)).toMatch('12')
+    expect(formatMoney(12500)).toContain('UZS')
   })
 
-  test('formats 0n', () => {
-    expect(formatMoney(0n)).toContain('0')
-    expect(formatMoney(0n)).toContain('UZS')
+  test('formats 0', () => {
+    expect(formatMoney(0)).toContain('0')
+    expect(formatMoney(0)).toContain('UZS')
   })
 
-  test('formats 1_000_000n', () => {
-    const result = formatMoney(1_000_000n)
+  test('formats 1_000_000', () => {
+    const result = formatMoney(1_000_000)
     expect(result).toContain('UZS')
     expect(result).toContain('000')
   })
 
-  test('formats 100n', () => {
-    expect(formatMoney(100n)).toContain('100')
-    expect(formatMoney(100n)).toContain('UZS')
+  test('formats 100', () => {
+    expect(formatMoney(100)).toContain('100')
+    expect(formatMoney(100)).toContain('UZS')
+  })
+
+  test('shows 2 decimals for a non-integer amount, none for a whole one', () => {
+    // ru-RU uses a comma decimal separator: 33 333,33
+    expect(formatMoney(33_333.33)).toContain('33')
+    expect(formatMoney(33_333.33)).toContain(',')
+    expect(formatMoney(100_000)).not.toContain(',')
   })
 })
 

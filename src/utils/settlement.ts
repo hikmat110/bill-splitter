@@ -1,45 +1,51 @@
 export interface ItemSpec {
   name?: string
-  price: bigint
+  price: number
   shareContactIds: string[]
 }
 
 export interface BillSpec {
   items: ItemSpec[]
   servicePct: number
-  serviceFixed: bigint
-  tip: bigint
+  serviceFixed: number
+  tip: number
 }
 
 export interface SettlementResult {
-  shares: Map<string, bigint>
-  subtotal: bigint
-  total: bigint
+  shares: Map<string, number>
+  subtotal: number
+  total: number
 }
 
 /** One item line as it applies to a single participant. */
 export interface BreakdownItem {
   name: string
-  share: bigint
+  share: number
 }
 
 /** Full cost breakdown for one participant. */
 export interface ParticipantBreakdown {
   items: BreakdownItem[]
-  base: bigint // sum of this participant's item shares
-  service: bigint // proportional + equal service charge
-  tip: bigint // equal tip share
-  total: bigint // round100(base + service + tip), incl. reconciliation diff
+  base: number // sum of this participant's item shares
+  service: number // proportional + equal service charge
+  tip: number // equal tip share
+  total: number // to2(base + service + tip)
 }
 
 export interface BreakdownResult {
   perContact: Map<string, ParticipantBreakdown>
-  subtotal: bigint
-  total: bigint
+  subtotal: number
+  total: number
 }
 
-export function round100(amount: bigint): bigint {
-  return ((amount + 50n) / 100n) * 100n
+/**
+ * Truncate a money value to 2 decimals (floor at the cent). The tiny epsilon
+ * absorbs binary-float dust — e.g. a true 33333.33 can land in a double as
+ * 33333.3299999…, whose ×100 floors to the wrong cent — so the result is always
+ * the correct 2-decimal value. Money here is non-negative.
+ */
+export function to2(n: number): number {
+  return Math.floor(n * 100 + 1e-6) / 100
 }
 
 /**
@@ -47,75 +53,61 @@ export function round100(amount: bigint): bigint {
  * their portion of each, and their service/tip/total. Single source of truth —
  * `computeSettlement` derives its `shares` map from this, so per-person totals
  * here always equal the stored `bill_participants.amount`.
+ *
+ * Every money result is truncated to 2 decimals (`to2`). Shares are kept equal
+ * for equal sharers and are never nudged; the bill `total` holds the true
+ * aggregate, so `total − Σ(shares)` is a small (≥ 0) "remembered" remainder.
  */
 export function computeBreakdown(spec: BillSpec): BreakdownResult {
   const perContact = new Map<string, ParticipantBreakdown>()
   const ensure = (id: string): ParticipantBreakdown => {
     let p = perContact.get(id)
     if (!p) {
-      p = { items: [], base: 0n, service: 0n, tip: 0n, total: 0n }
+      p = { items: [], base: 0, service: 0, tip: 0, total: 0 }
       perContact.set(id, p)
     }
     return p
   }
 
-  // Phase 1: allocate item costs proportionally via integer division
+  // Phase 1: split each item equally among its sharers, truncated to 2 decimals.
+  // `subtotal` is the true sum of item prices (not the truncated per-shares).
+  let subtotal = 0
   for (const item of spec.items) {
-    const count = BigInt(item.shareContactIds.length)
-    if (count === 0n) continue
-    const perShare = item.price / count
+    const count = item.shareContactIds.length
+    if (count === 0) continue
+    subtotal = to2(subtotal + item.price)
+    const perShare = to2(item.price / count)
     for (const contactId of item.shareContactIds) {
       const p = ensure(contactId)
       p.items.push({ name: item.name ?? '', share: perShare })
-      p.base += perShare
+      p.base = to2(p.base + perShare)
     }
   }
 
-  const subtotal = [...perContact.values()].reduce((a, p) => a + p.base, 0n)
-  const participantCount = BigInt(perContact.size)
+  const participantCount = perContact.size
 
-  // servicePct is e.g. 10 for 10%; scale by 100 to avoid floats entirely
-  const servicePctScaled = BigInt(Math.round(spec.servicePct * 100))
-
-  // Phase 2: add service + tip per participant, round each to 100 som
+  // Phase 2: add service + tip per participant, each truncated to 2 decimals.
   for (const p of perContact.values()) {
-    const serviceProportional = (p.base * servicePctScaled) / 10000n
-    const serviceEqual = participantCount > 0n ? spec.serviceFixed / participantCount : 0n
-    const tipShare = participantCount > 0n ? spec.tip / participantCount : 0n
-    p.service = serviceProportional + serviceEqual
+    const serviceProportional = to2((p.base * spec.servicePct) / 100)
+    const serviceEqual = participantCount > 0 ? to2(spec.serviceFixed / participantCount) : 0
+    const tipShare = participantCount > 0 ? to2(spec.tip / participantCount) : 0
+    p.service = to2(serviceProportional + serviceEqual)
     p.tip = tipShare
-    p.total = round100(p.base + p.service + p.tip)
+    p.total = to2(p.base + p.service + p.tip)
   }
 
-  // Compute expected grand total using same rounding logic applied to the whole
-  const grandTotal =
-    round100(subtotal + (subtotal * servicePctScaled) / 10000n) +
-    spec.serviceFixed +
-    spec.tip
+  // True grand total. Per-person truncation means Σ(shares) ≤ total; the
+  // difference is carried here rather than nudged onto any one participant.
+  const total = to2(
+    subtotal + to2((subtotal * spec.servicePct) / 100) + spec.serviceFixed + spec.tip
+  )
 
-  // Reconcile: difference from per-person rounding goes to the largest payer
-  const sumShares = [...perContact.values()].reduce((a, p) => a + p.total, 0n)
-  const diff = grandTotal - sumShares
-  if (diff !== 0n) {
-    let largest: ParticipantBreakdown | undefined
-    let largestAmt = -1n
-    for (const p of perContact.values()) {
-      if (p.total > largestAmt) {
-        largestAmt = p.total
-        largest = p
-      }
-    }
-    if (largest) {
-      largest.total += diff
-    }
-  }
-
-  return { perContact, subtotal, total: grandTotal }
+  return { perContact, subtotal, total }
 }
 
 export function computeSettlement(spec: BillSpec): SettlementResult {
   const { perContact, subtotal, total } = computeBreakdown(spec)
-  const shares = new Map<string, bigint>()
+  const shares = new Map<string, number>()
   for (const [contactId, p] of perContact) {
     shares.set(contactId, p.total)
   }

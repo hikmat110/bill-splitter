@@ -300,10 +300,13 @@ function ItemCard({
         <input
           className="inp"
           type="number"
-          inputMode="numeric"
+          inputMode="decimal"
+          step="0.01"
           value={item.price || ''}
           placeholder="0"
-          onChange={(e) => onPatch({ price: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+          onChange={(e) =>
+            onPatch({ price: Math.max(0, Math.round((Number(e.target.value) || 0) * 100) / 100) })
+          }
           style={{ width: 96, textAlign: 'right', fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
         />
         <i

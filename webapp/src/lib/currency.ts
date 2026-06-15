@@ -10,8 +10,11 @@ export function setMoneyLang(code: string): void {
 }
 
 export function money(n: number, opts: { signed?: boolean } = {}): string {
-  const value = Math.round(Math.abs(n))
-  const grouped = value.toLocaleString('en-US')
+  // Real 2-decimal som: show decimals only when the amount isn't whole.
+  const grouped = Math.abs(n).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
   const sign = opts.signed && n > 0 ? '+' : opts.signed && n < 0 ? '−' : ''
   return `${sign}${grouped} ${SUFFIX[lang] ?? "so'm"}`
 }

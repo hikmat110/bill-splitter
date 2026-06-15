@@ -31,8 +31,8 @@ export async function newBillStartHandler(ctx: MyContext): Promise<void> {
     participantContactIds: [],
     items: [],
     servicePct: 0,
-    serviceFixed: 0n,
-    tip: 0n,
+    serviceFixed: 0,
+    tip: 0,
   }
 
   await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
@@ -166,13 +166,13 @@ async function saveItemNameStep(ctx: MyContext, name: string): Promise<void> {
 
 async function saveItemPriceStep(ctx: MyContext, text: string): Promise<void> {
   const wizard = ctx.session.bill_wizard!
-  const parsed = parseInt(text.replace(/[\s,._]/g, ''), 10)
-  if (isNaN(parsed) || parsed <= 0 || parsed > 10_000_000_000) {
+  const parsed = parseMoneyInput(text)
+  if (parsed === null || parsed <= 0 || parsed > 10_000_000_000) {
     await editWizardMessage(ctx, t(ctx, 'bill.price_invalid'))
     return
   }
 
-  wizard.currentItem!.price = BigInt(parsed)
+  wizard.currentItem!.price = parsed
   wizard.step = 'awaiting_item_shares'
 
   const participantContacts = await getParticipantContacts(wizard.participantContactIds)
@@ -258,7 +258,7 @@ async function serviceChargeStep(ctx: MyContext, choice: string): Promise<void> 
   const pct = parseFloat(choice)
   if (isNaN(pct)) return
   wizard.servicePct = pct
-  wizard.serviceFixed = 0n
+  wizard.serviceFixed = 0
   wizard.step = 'awaiting_tip'
   await editWizardMessage(ctx, t(ctx, 'bill.ask_tip'), tipKeyboard(ctx))
 }
@@ -271,7 +271,7 @@ async function saveServiceCustomStep(ctx: MyContext, text: string): Promise<void
     return
   }
   wizard.servicePct = pct
-  wizard.serviceFixed = 0n
+  wizard.serviceFixed = 0
   wizard.step = 'awaiting_tip'
   await editWizardMessage(ctx, t(ctx, 'bill.ask_tip'), tipKeyboard(ctx))
 }
@@ -285,21 +285,21 @@ async function tipStep(ctx: MyContext, choice: string): Promise<void> {
     return
   }
 
-  const amount = parseInt(choice, 10)
+  const amount = parseFloat(choice)
   if (isNaN(amount)) return
-  wizard.tip = BigInt(amount)
+  wizard.tip = amount
   wizard.step = 'review'
   await showReview(ctx)
 }
 
 async function saveTipCustomStep(ctx: MyContext, text: string): Promise<void> {
   const wizard = ctx.session.bill_wizard!
-  const amount = parseInt(text.replace(/[\s,._]/g, ''), 10)
-  if (isNaN(amount) || amount < 0) {
+  const amount = parseMoneyInput(text)
+  if (amount === null || amount < 0) {
     await editWizardMessage(ctx, t(ctx, 'bill.tip_invalid'))
     return
   }
-  wizard.tip = BigInt(amount)
+  wizard.tip = amount
   wizard.step = 'review'
   await showReview(ctx)
 }
@@ -332,9 +332,9 @@ async function showReview(ctx: MyContext): Promise<void> {
   lines.push(`${t(ctx, 'bill.review_subtotal', { amount: formatMoney(settlement.subtotal) })}`)
   if (wizard.servicePct > 0) {
     const svcAmount = settlement.total - settlement.subtotal - wizard.tip
-    lines.push(t(ctx, 'bill.review_service', { amount: formatMoney(svcAmount > 0n ? svcAmount : 0n) }))
+    lines.push(t(ctx, 'bill.review_service', { amount: formatMoney(svcAmount > 0 ? svcAmount : 0) }))
   }
-  if (wizard.tip > 0n) {
+  if (wizard.tip > 0) {
     lines.push(t(ctx, 'bill.review_tip', { amount: formatMoney(wizard.tip) }))
   }
   lines.push(t(ctx, 'bill.review_total', { amount: formatMoney(settlement.total) }))
@@ -394,8 +394,8 @@ async function editBillStep(ctx: MyContext): Promise<void> {
   wizard.items = []
   wizard.currentItem = undefined
   wizard.servicePct = 0
-  wizard.serviceFixed = 0n
-  wizard.tip = 0n
+  wizard.serviceFixed = 0
+  wizard.tip = 0
   await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
 }
 
@@ -405,6 +405,19 @@ async function cancelBillStep(ctx: MyContext): Promise<void> {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Parse a money amount typed by the user into a 2-decimal som number, or null if
+ * invalid. ru/uz locale: space/underscore group thousands, comma or dot is the
+ * decimal separator (so "10 000" → 10000, "10,33" → 10.33).
+ */
+function parseMoneyInput(text: string): number | null {
+  const normalized = text.replace(/[\s_]/g, '').replace(',', '.')
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null
+  const n = parseFloat(normalized)
+  if (!isFinite(n)) return null
+  return Math.round(n * 100) / 100
+}
 
 async function getParticipantContacts(ids: string[]): Promise<Contact[]> {
   if (ids.length === 0) return []

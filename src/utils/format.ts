@@ -9,10 +9,14 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 })
 
-export function formatMoney(amount: bigint): string {
-  // Convert to number only for display — UZS bill totals safely fit in Number
-  const n = Number(amount)
-  const formatted = n.toLocaleString('ru-RU').replace(/,/g, ' ')
+export function formatMoney(amount: number): string {
+  // Real 2-decimal som; show decimals only when the amount isn't whole. ru-RU
+  // groups thousands with a space and uses a comma decimal separator, e.g.
+  // "33 333,33 UZS" / "100 000 UZS".
+  const formatted = amount.toLocaleString('ru-RU', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
   return `${formatted} UZS`
 }
 

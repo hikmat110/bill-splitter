@@ -3,7 +3,7 @@ import type { SessionFlavor } from 'grammy'
 
 export interface WizardItem {
   name: string
-  price: bigint
+  price: number // real 2-decimal som
   shareContactIds: string[]
 }
 
@@ -18,8 +18,6 @@ export interface SessionData {
     pickerMessageId?: number
   }
 
-  // NOTE: bigint fields are safe here because session is in-memory.
-  // If session storage moves to Redis/Postgres, add a BigInt-aware serializer.
   bill_wizard?: {
     step:
       | 'awaiting_title'
@@ -38,8 +36,8 @@ export interface SessionData {
     items: WizardItem[]
     currentItem?: Partial<WizardItem>
     servicePct: number
-    serviceFixed: bigint
-    tip: bigint
+    serviceFixed: number
+    tip: number
   }
 
   dispute_wizard?: {

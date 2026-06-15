@@ -11,8 +11,9 @@ describe('money', () => {
     expect(money(0)).toBe("0 so'm")
   })
 
-  it('rounds to whole som', () => {
-    expect(money(68000.6)).toBe("68,001 so'm")
+  it('shows up to 2 decimals for non-integer amounts', () => {
+    expect(money(33333.33)).toBe("33,333.33 so'm")
+    expect(money(68000.6)).toBe("68,000.6 so'm")
   })
 
   it('shows a sign only when requested', () => {

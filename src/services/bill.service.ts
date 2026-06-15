@@ -14,7 +14,7 @@ import type { ItemSpec, ParticipantBreakdown } from '../utils/settlement'
 
 export interface CreateBillItemInput {
   name: string
-  price: bigint
+  price: number
   quantity: number
   position: number
   shareContactIds: string[]
@@ -25,8 +25,8 @@ export interface CreateBillInput {
   title: string
   items: CreateBillItemInput[]
   servicePct: number
-  serviceFixed: bigint
-  tip: bigint
+  serviceFixed: number
+  tip: number
   participantContactIds: string[]
 }
 
@@ -50,7 +50,7 @@ export async function createBill(input: CreateBillInput): Promise<Bill> {
   if (input.participantContactIds.length === 0) throw new Error('Bill must have at least one participant')
 
   const itemSpecs: ItemSpec[] = input.items.map((it) => ({
-    price: it.price * BigInt(it.quantity),
+    price: it.price * it.quantity,
     shareContactIds: it.shareContactIds,
   }))
 
@@ -171,7 +171,7 @@ export function getBillBreakdown(details: BillWithDetails): Map<string, Particip
   const { perContact } = computeBreakdown({
     items: details.items.map((it) => ({
       name: it.name,
-      price: it.price * BigInt(it.quantity),
+      price: it.price * it.quantity,
       shareContactIds: it.shares.map((s) => s.id),
     })),
     servicePct: Number(details.bill.service_pct),

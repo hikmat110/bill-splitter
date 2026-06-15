@@ -1,13 +1,13 @@
 // Zod request schemas for the Mini App API. Pure (no DB) — unit-tested.
-// Money fields arrive as JS numbers (whole som); the mappers convert to bigint.
+// Money fields arrive as JS numbers (real 2-decimal som); stored as numeric(14,2).
 
 import { z } from 'zod'
 
 export const createBillItemSchema = z.object({
   name: z.string().trim().max(200).default(''),
-  // Whole som, must be a positive integer (empty placeholder rows are filtered
-  // client-side before submit).
-  price: z.number().int().positive(),
+  // Positive som; decimals allowed (e.g. 10.33). Empty placeholder rows are
+  // filtered client-side before submit.
+  price: z.number().positive(),
   shareContactIds: z.array(z.uuid()).min(1),
 })
 
@@ -17,7 +17,7 @@ export const createBillSchema = z
     participantContactIds: z.array(z.uuid()).min(1),
     items: z.array(createBillItemSchema).min(1),
     servicePct: z.number().min(0).max(100).default(0),
-    tip: z.number().int().nonnegative().default(0),
+    tip: z.number().nonnegative().default(0),
   })
   .superRefine((data, ctx) => {
     // Every item's sharers must be among the bill's participants.
