@@ -59,6 +59,25 @@ describe('toCreateBillInput', () => {
     expect(input.items[0]!.shareContactIds).toEqual([P1])
   })
 
+  it('defaults tip payer to null (creator paid) when absent', () => {
+    expect(toCreateBillInput(body, CREATOR, P1).tipPaidByContactId).toBeNull()
+  })
+
+  it('normalizes the creator self-contact as tip payer to null', () => {
+    const withSelf: CreateBillBody = { ...body, tipPaidByContactId: P1 }
+    expect(toCreateBillInput(withSelf, CREATOR, P1).tipPaidByContactId).toBeNull()
+  })
+
+  it('keeps a non-creator participant as tip payer', () => {
+    const withPayer: CreateBillBody = { ...body, tipPaidByContactId: P2 }
+    expect(toCreateBillInput(withPayer, CREATOR, P1).tipPaidByContactId).toBe(P2)
+  })
+
+  it('drops a tip payer that is not a participant', () => {
+    const withOutsider: CreateBillBody = { ...body, tipPaidByContactId: 'not-a-participant' }
+    expect(toCreateBillInput(withOutsider, CREATOR, P1).tipPaidByContactId).toBeNull()
+  })
+
   it('round-trips through computeSettlement: sum(shares) ≤ total', () => {
     const input = toCreateBillInput(body, CREATOR)
     const items: ItemSpec[] = input.items.map((it) => ({

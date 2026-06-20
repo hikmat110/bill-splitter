@@ -15,6 +15,13 @@
       "when": 1781434212011,
       "tag": "0001_flaky_preak",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781954417729,
+      "tag": "0002_moaning_micromacro",
+      "breakpoints": true
     }
   ]
 }

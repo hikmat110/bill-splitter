@@ -38,6 +38,8 @@ export const ru: Dict = {
     service_tip: 'Сервис · Чаевые',
     service_charge: 'Сервисный сбор',
     tip: 'Чаевые',
+    tip_custom: 'Другая',
+    tip_paid_by: 'Чаевые оплатил',
     bill_total: 'Итого по счёту',
     send: 'Отправить',
     sending: 'Отправка…',
@@ -65,6 +67,7 @@ export const ru: Dict = {
     spent_label: 'потратил(а) {{amount}}',
     owes_label: 'должен(на) {{amount}}',
     spent_pill: 'Потрачено',
+    paid_tip_pill: 'Оплатил чаевые',
     reminder_sent: 'Напоминание отправлено: {{name}}',
     confirmed_payment: 'Оплата {{name}} подтверждена',
     disputed_payment: 'Оплата {{name}} оспорена',
@@ -104,6 +107,7 @@ export const ru: Dict = {
   breakdown: {
     service: 'Сервис',
     tip: 'Чаевые',
+    tip_paid: 'Оплачено чаевых',
   },
   status: {
     pending: 'Ожидает',

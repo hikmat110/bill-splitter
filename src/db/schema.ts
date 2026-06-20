@@ -95,6 +95,10 @@ export const bills = pgTable('bills', {
     .default(0)
     .notNull(),
   tip: numeric('tip', { precision: 14, scale: 2, mode: 'number' }).default(0).notNull(),
+  // Which participant fronted the tip. NULL = the creator paid it (default) —
+  // existing rows keep today's behaviour. A non-creator here is credited the
+  // full tip in settlement (their owed amount drops by it).
+  tip_paid_by_contact_id: uuid('tip_paid_by_contact_id').references(() => contacts.id),
   total: numeric('total', { precision: 14, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull().default('draft'),
   created_at: timestamp('created_at', { withTimezone: true })

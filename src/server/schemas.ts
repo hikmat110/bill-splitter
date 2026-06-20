@@ -18,6 +18,10 @@ export const createBillSchema = z
     items: z.array(createBillItemSchema).min(1),
     servicePct: z.number().min(0).max(100).default(0),
     tip: z.number().nonnegative().default(0),
+    // Who fronted the tip. Null/absent = the creator (default). When set it must
+    // be one of the participants. The creator's own contact is normalized back
+    // to null server-side (see mappers.toCreateBillInput).
+    tipPaidByContactId: z.uuid().nullish(),
   })
   .superRefine((data, ctx) => {
     // Every item's sharers must be among the bill's participants.
@@ -33,6 +37,13 @@ export const createBillSchema = z
         }
       })
     })
+    if (data.tipPaidByContactId && !participants.has(data.tipPaidByContactId)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'tip payer must be one of the participants',
+        path: ['tipPaidByContactId'],
+      })
+    }
   })
 
 export type CreateBillBody = z.infer<typeof createBillSchema>

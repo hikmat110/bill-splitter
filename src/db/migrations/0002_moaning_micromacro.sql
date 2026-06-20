@@ -1,0 +1,2 @@
+ALTER TABLE "bills" ADD COLUMN "tip_paid_by_contact_id" uuid;--> statement-breakpoint
+ALTER TABLE "bills" ADD CONSTRAINT "bills_tip_paid_by_contact_id_contacts_id_fk" FOREIGN KEY ("tip_paid_by_contact_id") REFERENCES "public"."contacts"("id") ON DELETE no action ON UPDATE no action;

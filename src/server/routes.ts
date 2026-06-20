@@ -55,12 +55,13 @@ function shapeItem(it: BillItemWithShares) {
 }
 
 function shapeBreakdown(b: ParticipantBreakdown | undefined) {
-  if (!b) return { items: [], base: 0, service: 0, tip: 0 }
+  if (!b) return { items: [], base: 0, service: 0, tip: 0, tipPaid: 0 }
   return {
     items: b.items.map((it) => ({ name: it.name, share: it.share })),
     base: b.base,
     service: b.service,
     tip: b.tip,
+    tipPaid: b.tipPaid,
   }
 }
 
@@ -85,6 +86,7 @@ function shapeBillDetail(d: BillWithDetails) {
     servicePct: Number(d.bill.service_pct),
     serviceFixed: d.bill.service_fixed,
     tip: d.bill.tip,
+    tipPaidByContactId: d.bill.tip_paid_by_contact_id,
     total: d.bill.total,
     status: d.bill.status,
     createdAt: d.bill.created_at,
@@ -259,7 +261,10 @@ async function getBill(user: User, billId: string): Promise<Response> {
 
 async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {
   const body = createBillSchema.parse(await req.json())
-  const bill = await createBill(toCreateBillInput(body, user.id))
+  // Resolve the creator's own contact so a tip-payer of "the creator" is
+  // normalized to null (default) rather than wrongly crediting their own share.
+  const self = await findOrCreateSelfContact(user.id, user.first_name)
+  const bill = await createBill(toCreateBillInput(body, user.id, self.id))
   await sendBillNotifications(bot, bill.id, user.card_number)
   const d = await getBillWithDetails(bill.id)
   return json(d ? shapeBillDetail(d) : { id: bill.id }, { status: 201 })

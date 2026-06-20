@@ -114,6 +114,10 @@ export function App() {
           })),
         servicePct: draft.servicePct,
         tip: draft.tip,
+        tipPaidByContactId:
+          draft.tip > 0 && draft.tipPaidBy && draft.tipPaidBy !== me.selfContactId
+            ? draft.tipPaidBy
+            : null,
       })
       await refresh()
       setCurrentBillId(created.id)
@@ -202,11 +206,12 @@ export function App() {
 
       {/* screens — boundary keeps a single screen's crash from blanking the whole app */}
       <ErrorBoundary resetKey={tab}>
-        {tab === 'split' && (
+        {tab === 'split' && me && (
           <SplitScreen
             draft={draft}
             setDraft={setDraft}
             people={people}
+            selfContactId={me.selfContactId}
             onAddPeople={() => setPeopleOpen(true)}
             onSend={send}
             sending={sending}

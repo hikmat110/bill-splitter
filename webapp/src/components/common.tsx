@@ -6,7 +6,7 @@ import type { Breakdown } from '../lib/types'
 /** Indented item-by-item cost lines for one participant (name … amount). */
 export function BreakdownLines({ b, style }: { b: Breakdown; style?: React.CSSProperties }) {
   const { t } = useT()
-  if (b.items.length === 0 && b.service <= 0 && b.tip <= 0) return null
+  if (b.items.length === 0 && b.service <= 0 && b.tip <= 0 && b.tipPaid <= 0) return null
   return (
     <div className="col" style={{ gap: 5, ...style }}>
       {b.items.map((it, idx) => (
@@ -14,11 +14,12 @@ export function BreakdownLines({ b, style }: { b: Breakdown; style?: React.CSSPr
       ))}
       {b.service > 0 && <Line label={t('breakdown.service')} amount={b.service} />}
       {b.tip > 0 && <Line label={t('breakdown.tip')} amount={b.tip} />}
+      {b.tipPaid > 0 && <Line label={t('breakdown.tip_paid')} amount={-b.tipPaid} credit />}
     </div>
   )
 }
 
-function Line({ label, amount }: { label: string; amount: number }) {
+function Line({ label, amount, credit }: { label: string; amount: number; credit?: boolean }) {
   return (
     <div className="row" style={{ justifyContent: 'space-between', gap: 12 }}>
       <span
@@ -33,8 +34,16 @@ function Line({ label, amount }: { label: string; amount: number }) {
       >
         {label}
       </span>
-      <span className="muted tnum" style={{ fontSize: 12.5, fontWeight: 600, flexShrink: 0 }}>
-        {money(amount)}
+      <span
+        className={credit ? 'tnum' : 'muted tnum'}
+        style={{
+          fontSize: 12.5,
+          fontWeight: 600,
+          flexShrink: 0,
+          ...(credit ? { color: 'var(--pos-text)' } : {}),
+        }}
+      >
+        {money(amount, { signed: credit })}
       </span>
     </div>
   )

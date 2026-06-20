@@ -29,6 +29,7 @@ export interface SessionData {
       | 'awaiting_service_custom'
       | 'awaiting_tip'
       | 'awaiting_tip_custom'
+      | 'awaiting_tip_payer'
       | 'review'
     wizardMessageId?: number
     title?: string
@@ -38,6 +39,8 @@ export interface SessionData {
     servicePct: number
     serviceFixed: number
     tip: number
+    /** Contact who paid the tip; undefined = creator (default). */
+    tipPaidByContactId?: string
   }
 
   dispute_wizard?: {

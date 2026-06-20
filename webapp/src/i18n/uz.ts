@@ -38,6 +38,8 @@ export const uz: Dict = {
     service_tip: 'Xizmat · Choy puli',
     service_charge: "Xizmat to'lovi",
     tip: 'Choy puli',
+    tip_custom: 'Boshqa',
+    tip_paid_by: "Choy pulini kim to'ladi",
     bill_total: 'Hisob jami',
     send: 'Yuborish',
     sending: 'Yuborilmoqda…',
@@ -65,6 +67,7 @@ export const uz: Dict = {
     spent_label: 'sarfladi {{amount}}',
     owes_label: 'qarzdor {{amount}}',
     spent_pill: 'Sarflandi',
+    paid_tip_pill: "Choy pulini to'ladi",
     reminder_sent: 'Eslatma yuborildi: {{name}}',
     confirmed_payment: "{{name}} to'lovi tasdiqlandi",
     disputed_payment: "{{name}} to'loviga e'tiroz bildirildi",
@@ -104,6 +107,7 @@ export const uz: Dict = {
   breakdown: {
     service: 'Xizmat',
     tip: 'Choy puli',
+    tip_paid: "To'langan choy puli",
   },
   status: {
     pending: 'Kutilmoqda',

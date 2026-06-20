@@ -32,6 +32,8 @@ export interface Breakdown {
   base: number
   service: number
   tip: number
+  /** Full tip this participant fronted (credit); 0 unless they paid the tip. */
+  tipPaid: number
 }
 
 export interface BillParticipant extends Breakdown {
@@ -59,6 +61,7 @@ export interface BillDetail {
   servicePct: number
   serviceFixed: number
   tip: number
+  tipPaidByContactId: string | null
   total: number
   status: BillStatus
   createdAt: string
@@ -91,4 +94,5 @@ export interface CreateBillPayload {
   items: { name: string; price: number; shareContactIds: string[] }[]
   servicePct: number
   tip: number
+  tipPaidByContactId?: string | null
 }

@@ -209,11 +209,18 @@ export function SettleScreen({
                       : t('settle.owes_label', { amount: money(p.amount) })}
                   </span>
                 </div>
-                {self ? (
-                  <span className="pill pill-mut">{t('settle.spent_pill')}</span>
-                ) : (
-                  <span className={'pill ' + pillClass(p.status)}>{statusLabel(t, p.status)}</span>
-                )}
+                <div className="row" style={{ gap: 6, flexShrink: 0 }}>
+                  {bill.tipPaidByContactId === p.contactId && (
+                    <span className="pill pill-pos">
+                      <i className="ti ti-coin" style={{ fontSize: 12 }} /> {t('settle.paid_tip_pill')}
+                    </span>
+                  )}
+                  {self ? (
+                    <span className="pill pill-mut">{t('settle.spent_pill')}</span>
+                  ) : (
+                    <span className={'pill ' + pillClass(p.status)}>{statusLabel(t, p.status)}</span>
+                  )}
+                </div>
               </div>
               <BreakdownLines b={p} style={{ marginTop: 11, paddingLeft: 49 }} />
             </div>

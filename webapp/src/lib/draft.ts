@@ -13,6 +13,8 @@ export interface DraftBill {
   items: DraftItem[]
   servicePct: number
   tip: number
+  /** Contact id of whoever paid the tip; null = the creator (default). */
+  tipPaidBy: string | null
 }
 
 export interface Person {
@@ -21,7 +23,7 @@ export interface Person {
 }
 
 export function emptyDraft(): DraftBill {
-  return { title: '', participantIds: [], items: [], servicePct: 0, tip: 0 }
+  return { title: '', participantIds: [], items: [], servicePct: 0, tip: 0, tipPaidBy: null }
 }
 
 export function uid(): string {

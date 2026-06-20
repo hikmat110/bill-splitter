@@ -9,6 +9,13 @@ export interface BillSpec {
   servicePct: number
   serviceFixed: number
   tip: number
+  /**
+   * Contact who fronted the tip. `null`/undefined = the creator paid it
+   * (default) — every participant owes their equal tip share as usual. A
+   * non-creator here is credited the full tip: their owed total drops by it,
+   * while the tip is still divided equally across everyone's breakdown.
+   */
+  tipPaidByContactId?: string | null
 }
 
 export interface SettlementResult {
@@ -29,7 +36,8 @@ export interface ParticipantBreakdown {
   base: number // sum of this participant's item shares
   service: number // proportional + equal service charge
   tip: number // equal tip share
-  total: number // to2(base + service + tip)
+  tipPaid: number // full tip this participant fronted (credit); 0 unless they paid the tip
+  total: number // to2(base + service + tip), less tipPaid if they fronted the tip
 }
 
 export interface BreakdownResult {
@@ -63,7 +71,7 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
   const ensure = (id: string): ParticipantBreakdown => {
     let p = perContact.get(id)
     if (!p) {
-      p = { items: [], base: 0, service: 0, tip: 0, total: 0 }
+      p = { items: [], base: 0, service: 0, tip: 0, tipPaid: 0, total: 0 }
       perContact.set(id, p)
     }
     return p
@@ -101,6 +109,21 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
   const total = to2(
     subtotal + to2((subtotal * spec.servicePct) / 100) + spec.serviceFixed + spec.tip
   )
+
+  // Credit the tip payer: the tip is still split equally above, but whoever
+  // fronted it owes the full amount less (their total may go negative — the
+  // group then owes them). No-op for the creator (caller passes null) or a
+  // payer with no item shares (absent from perContact). The bill `total` is
+  // unchanged — the credit only redistributes who owes what.
+  if (spec.tipPaidByContactId) {
+    const payer = perContact.get(spec.tipPaidByContactId)
+    if (payer) {
+      payer.tipPaid = spec.tip
+      // Both operands are exact 2-decimal values; round to the cent (not floor,
+      // which would mis-handle a negative credit) to clear float dust.
+      payer.total = Math.round((payer.total - spec.tip) * 100) / 100
+    }
+  }
 
   return { perContact, subtotal, total }
 }
