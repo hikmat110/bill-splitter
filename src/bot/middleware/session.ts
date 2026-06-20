@@ -30,6 +30,7 @@ export interface SessionData {
       | 'awaiting_tip'
       | 'awaiting_tip_custom'
       | 'awaiting_tip_payer'
+      | 'awaiting_receipt_photo'
       | 'review'
     wizardMessageId?: number
     title?: string
@@ -41,6 +42,15 @@ export interface SessionData {
     tip: number
     /** Contact who paid the tip; undefined = creator (default). */
     tipPaidByContactId?: string
+    /** Optional main receipt/cheque photo, set in the awaiting_receipt_photo step. */
+    receiptAttachmentId?: string
+    receiptMime?: string
+  }
+
+  mark_paid_wizard?: {
+    step: 'awaiting_proof'
+    participantId: string
+    promptMessageId?: number
   }
 
   dispute_wizard?: {

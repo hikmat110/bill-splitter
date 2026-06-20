@@ -2,9 +2,11 @@ import { getInitData } from './telegram'
 import type {
   Me,
   ApiContact,
+  AttachmentRef,
   BillDetail,
   BillsResponse,
   CreateBillPayload,
+  UpdateBillPayload,
 } from './types'
 
 const BASE = '/api'
@@ -46,7 +48,41 @@ async function request<T>(
   return (await res.json()) as T
 }
 
+/** Upload an image (multipart). Browser sets the multipart Content-Type/boundary,
+ *  so unlike request() we must NOT set it ourselves. */
+async function uploadAttachment(file: File): Promise<AttachmentRef> {
+  const form = new FormData()
+  form.append('file', file)
+  const res = await fetch(BASE + '/attachments', {
+    method: 'POST',
+    headers: { Authorization: `tma ${getInitData()}` },
+    body: form,
+  })
+  if (!res.ok) {
+    let message = `Upload failed (${res.status})`
+    try {
+      const data = (await res.json()) as { error?: string }
+      if (data?.error) message = data.error
+    } catch {
+      // keep generic message
+    }
+    throw new ApiError(message, res.status)
+  }
+  return (await res.json()) as AttachmentRef
+}
+
+/** Fetch a protected image and return an object URL. Caller must revoke it. */
+async function fileObjectUrl(id: string): Promise<string> {
+  const res = await fetch(BASE + `/files/${id}`, {
+    headers: { Authorization: `tma ${getInitData()}` },
+  })
+  if (!res.ok) throw new ApiError(`Image failed (${res.status})`, res.status)
+  return URL.createObjectURL(await res.blob())
+}
+
 export const api = {
+  uploadAttachment,
+  fileObjectUrl,
   me: () => request<Me>('/me'),
   contacts: () => request<ApiContact[]>('/contacts'),
   addContact: (body: { displayName: string; phone?: string }) =>
@@ -55,6 +91,8 @@ export const api = {
   bill: (id: string) => request<BillDetail>(`/bills/${id}`),
   createBill: (body: CreateBillPayload) =>
     request<BillDetail>('/bills', { method: 'POST', body }),
+  updateBill: (id: string, body: UpdateBillPayload) =>
+    request<BillDetail>(`/bills/${id}`, { method: 'PATCH', body }),
   remind: (billId: string, pid: string) =>
     request<{ ok: boolean }>(`/bills/${billId}/participants/${pid}/remind`, { method: 'POST' }),
   confirm: (billId: string, pid: string) =>
@@ -64,6 +102,9 @@ export const api = {
       method: 'POST',
       body: { reason },
     }),
-  markPaid: (pid: string) =>
-    request<{ ok: boolean }>(`/participants/${pid}/mark_paid`, { method: 'POST' }),
+  markPaid: (pid: string, proof?: { attachmentId: string; mime: string }) =>
+    request<{ ok: boolean }>(`/participants/${pid}/mark_paid`, {
+      method: 'POST',
+      ...(proof ? { body: proof } : {}),
+    }),
 }

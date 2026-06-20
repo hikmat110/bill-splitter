@@ -85,6 +85,7 @@ export const en = {
     review_participants: '\n<b>Breakdown:</b>',
     review_line: '  {{name}}: {{amount}}',
     edit_button: '✏️ Edit',
+    edit_in_app: '✏️ Edit in app',
     send_button: '📤 Send',
     cancel_button: '❌ Cancel',
     sent: '🎉 Bill sent!',
@@ -95,10 +96,17 @@ export const en = {
     select_all: '☑️ All',
     next_button: '➡️ Next',
   },
+  split: {
+    receipt_prompt: 'Optionally send a photo of the receipt, or skip.',
+    receipt_skip: 'Skip photo',
+  },
   incoming: {
     title: '📥 Incoming Bills',
     empty: 'No incoming bills.',
     mark_paid: '✅ Mark as Paid',
+    proof_prompt: 'Send a photo of your transfer receipt, or skip.',
+    proof_skip: 'Skip',
+    proof_received: 'Receipt received — awaiting confirmation.',
     awaiting_confirmation: '⏳ Awaiting creator confirmation',
     detail_title: '<b>📋 {{title}}</b>',
     your_share: 'Your share: <b>{{amount}}</b>',
@@ -169,5 +177,6 @@ export const en = {
     not_registered: 'Please start with /start.',
     not_found: 'Not found.',
     not_your_action: 'This action is not for you.',
+    upload_failed: "Couldn't save the photo. Try again or skip.",
   },
 }

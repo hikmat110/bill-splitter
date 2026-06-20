@@ -6,6 +6,7 @@ import {
   listBillsForParticipant,
   getBillWithDetails,
   getBillBreakdown,
+  isBillEditable,
 } from '../../services/bill.service'
 import { sendReminder } from '../../services/notification.service'
 import {
@@ -113,7 +114,13 @@ export async function historyDetailHandler(ctx: MyContext, billId: string): Prom
     .filter((p) => p.status === 'pending' || p.status === 'disputed')
     .map((p) => ({ id: p.id, contactName: p.contact.display_name }))
 
-  await editOrReply(ctx, lines.join('\n'), historyBillKeyboard(unpaid, ctx), 'HTML')
+  // "Edit in app" only for the creator, while the bill is still fully editable.
+  const editInApp =
+    bill.creator_id === ctx.user.id && isBillEditable(participants, bill.creator_id)
+      ? { billId: bill.id }
+      : undefined
+
+  await editOrReply(ctx, lines.join('\n'), historyBillKeyboard(unpaid, ctx, editInApp), 'HTML')
 }
 
 export async function remindHandler(

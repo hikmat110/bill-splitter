@@ -8,6 +8,11 @@ const schema = z.object({
   WEBAPP_URL: z.string().url().optional(),
   // HTTP port for the Mini App API / static server.
   PORT: z.coerce.number().int().positive().default(3000),
+  // Directory where uploaded receipt/proof images are stored. Must live on a
+  // persistent volume in prod (and be excluded from VCS).
+  UPLOAD_DIR: z.string().default('./uploads'),
+  // Hard cap on a single uploaded image, in bytes. Default 5 MB.
+  MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(5_000_000),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),

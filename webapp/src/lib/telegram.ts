@@ -36,6 +36,21 @@ export function getInitData(): string {
   return wa()?.initData ?? ''
 }
 
+/**
+ * Launch payload, from either source:
+ *  - `initDataUnsafe.start_param` for a true `t.me/<bot>/<app>?startapp=…` deep link
+ *  - the `?startapp=…` query the bot's web_app button preserves on the URL
+ */
+export function startParam(): string | null {
+  const fromSdk = wa()?.initDataUnsafe?.start_param
+  if (fromSdk) return fromSdk
+  try {
+    return new URLSearchParams(window.location.search).get('startapp')
+  } catch {
+    return null
+  }
+}
+
 export function isInTelegram(): boolean {
   return !!wa()?.initData
 }

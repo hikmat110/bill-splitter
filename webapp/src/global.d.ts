@@ -49,7 +49,7 @@ interface TelegramWebAppUser {
 
 interface TelegramWebApp {
   initData: string
-  initDataUnsafe: { user?: TelegramWebAppUser }
+  initDataUnsafe: { user?: TelegramWebAppUser; start_param?: string }
   colorScheme: 'light' | 'dark'
   themeParams: Record<string, string>
   isExpanded: boolean

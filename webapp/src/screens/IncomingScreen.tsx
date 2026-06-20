@@ -1,4 +1,6 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
+import { AuthImage } from '../components/AuthImage'
+import { PhotoModal } from '../components/PhotoModal'
 import { Money } from '../components/Money'
 import { SecTitle, Empty, BreakdownLines } from '../components/common'
 import { useToast } from '../components/Toast'
@@ -8,6 +10,11 @@ import { prettyDate } from '../lib/date'
 import { statusLabel, pillClass } from '../lib/status'
 import { useT } from '../i18n'
 import type { IncomingBill } from '../lib/types'
+
+// Matches the server's MAX_UPLOAD_BYTES default.
+const MAX_UPLOAD = 5_000_000
+
+type Proof = { id: string; mime: string; previewUrl: string }
 
 export function IncomingScreen({
   incoming,
@@ -19,6 +26,40 @@ export function IncomingScreen({
   const { t, lang } = useT()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<string | null>(null)
+  // Optional proof-of-transfer attached before marking paid, keyed by participant id.
+  const fileRef = useRef<HTMLInputElement>(null)
+  const pendingPid = useRef<string | null>(null)
+  const [uploadingId, setUploadingId] = useState<string | null>(null)
+  const [attached, setAttached] = useState<Record<string, Proof>>({})
+
+  const triggerAttach = (pid: string) => {
+    pendingPid.current = pid
+    fileRef.current?.click()
+  }
+
+  const onFile = async (file: File | undefined) => {
+    const pid = pendingPid.current
+    pendingPid.current = null
+    if (!file || !pid) return
+    if (file.size > MAX_UPLOAD) {
+      toast(t('common.photo_too_large'), 'ti-alert-circle')
+      return
+    }
+    setUploadingId(pid)
+    try {
+      const ref = await api.uploadAttachment(file)
+      setAttached((m) => {
+        if (m[pid]?.previewUrl) URL.revokeObjectURL(m[pid]!.previewUrl)
+        return { ...m, [pid]: { id: ref.id, mime: ref.mime, previewUrl: URL.createObjectURL(file) } }
+      })
+      haptic('success')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t('common.upload_failed'), 'ti-alert-circle')
+    } finally {
+      setUploadingId(null)
+    }
+  }
 
   // Be resilient to unexpected payloads: drop malformed rows and coerce amounts
   // to numbers so one bad record can't throw and blank the screen.
@@ -31,9 +72,17 @@ export function IncomingScreen({
     .reduce((s, x) => s + (Number(x.participant.amount) || 0), 0)
 
   const markPaid = async (x: IncomingBill) => {
-    setBusy(x.participant.id)
+    const pid = x.participant.id
+    setBusy(pid)
     try {
-      await api.markPaid(x.participant.id)
+      const proof = attached[pid]
+      await api.markPaid(pid, proof ? { attachmentId: proof.id, mime: proof.mime } : undefined)
+      if (proof?.previewUrl) URL.revokeObjectURL(proof.previewUrl)
+      setAttached((m) => {
+        const next = { ...m }
+        delete next[pid]
+        return next
+      })
       await refresh()
       haptic('success')
       toast(t('incoming.marked_paid'), 'ti-check')
@@ -46,6 +95,16 @@ export function IncomingScreen({
 
   return (
     <div className="tg-scroll" style={{ padding: '4px 16px 24px' }}>
+      <input
+        ref={fileRef}
+        type="file"
+        accept="image/*"
+        style={{ display: 'none' }}
+        onChange={(e) => {
+          onFile(e.target.files?.[0])
+          e.target.value = ''
+        }}
+      />
       <div
         className="card pop"
         style={{ marginBottom: 16, background: 'var(--neg-soft)', border: 'none', padding: 18 }}
@@ -86,20 +145,28 @@ export function IncomingScreen({
           {items.map((x) => (
             <div key={x.participant.id} className="card pop" style={{ padding: 'calc(14px * var(--dens))' }}>
               <div className="row" style={{ gap: 12 }}>
-                <div
-                  style={{
-                    width: 42,
-                    height: 42,
-                    borderRadius: 'var(--r)',
-                    background: 'var(--surface-2)',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    flexShrink: 0,
-                  }}
-                >
-                  <i className="ti ti-receipt-2" style={{ fontSize: 22, color: 'var(--accent)' }} />
-                </div>
+                {x.bill.receiptAttachmentId ? (
+                  <AuthImage
+                    attachmentId={x.bill.receiptAttachmentId}
+                    onClick={() => setViewing(x.bill.receiptAttachmentId)}
+                    style={{ width: 42, height: 42, borderRadius: 'var(--r)', flexShrink: 0 }}
+                  />
+                ) : (
+                  <div
+                    style={{
+                      width: 42,
+                      height: 42,
+                      borderRadius: 'var(--r)',
+                      background: 'var(--surface-2)',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                    }}
+                  >
+                    <i className="ti ti-receipt-2" style={{ fontSize: 22, color: 'var(--accent)' }} />
+                  </div>
+                )}
                 <div className="col" style={{ flex: 1, minWidth: 0 }}>
                   <span style={{ fontWeight: 700, fontSize: 14.5 }}>{x.bill.title}</span>
                   <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
@@ -115,13 +182,30 @@ export function IncomingScreen({
                   {statusLabel(t, x.participant.status)}
                 </span>
                 {x.participant.status === 'pending' || x.participant.status === 'disputed' ? (
-                  <button
-                    className="btn btn-sm btn-primary"
-                    disabled={busy === x.participant.id}
-                    onClick={() => markPaid(x)}
-                  >
-                    <i className="ti ti-check" /> {t('incoming.mark_paid')}
-                  </button>
+                  <div className="row" style={{ gap: 7, alignItems: 'center' }}>
+                    {attached[x.participant.id] && (
+                      <img
+                        src={attached[x.participant.id]!.previewUrl}
+                        alt=""
+                        style={{ width: 30, height: 30, borderRadius: 8, objectFit: 'cover' }}
+                      />
+                    )}
+                    <button
+                      className="btn btn-sm"
+                      disabled={uploadingId === x.participant.id}
+                      onClick={() => triggerAttach(x.participant.id)}
+                      title={t('incoming.attach_photo')}
+                    >
+                      <i className={'ti ' + (uploadingId === x.participant.id ? 'ti-loader-2' : 'ti-paperclip')} />
+                    </button>
+                    <button
+                      className="btn btn-sm btn-primary"
+                      disabled={busy === x.participant.id}
+                      onClick={() => markPaid(x)}
+                    >
+                      <i className="ti ti-check" /> {t('incoming.mark_paid')}
+                    </button>
+                  </div>
                 ) : x.participant.status === 'marked_paid' ? (
                   <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
                     {t('incoming.awaiting')}
@@ -136,6 +220,8 @@ export function IncomingScreen({
           ))}
         </div>
       )}
+
+      <PhotoModal attachmentId={viewing} onClose={() => setViewing(null)} />
     </div>
   )
 }

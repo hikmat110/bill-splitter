@@ -43,6 +43,8 @@ export interface BillParticipant extends Breakdown {
   linkedUserId: string | null
   amount: number
   status: ParticipantStatus
+  /** Proof-of-transfer photo the payer attached (creator-visible). */
+  paymentProofAttachmentId: string | null
 }
 
 export interface BillItem {
@@ -64,6 +66,9 @@ export interface BillDetail {
   tipPaidByContactId: string | null
   total: number
   status: BillStatus
+  /** Main receipt/cheque photo for the bill (participant-visible). */
+  receiptAttachmentId: string | null
+  receiptMime: string | null
   createdAt: string
   creator: { id: string; firstName: string; cardNumber: string | null }
   items: BillItem[]
@@ -76,6 +81,7 @@ export interface IncomingBill {
     title: string
     total: number
     status: BillStatus
+    receiptAttachmentId: string | null
     createdAt: string
     creatorName: string
   }
@@ -95,4 +101,15 @@ export interface CreateBillPayload {
   servicePct: number
   tip: number
   tipPaidByContactId?: string | null
+  receiptAttachmentId?: string | null
+  receiptMime?: string | null
+}
+
+// Editing replaces the whole bill, so the PATCH payload is the same shape.
+export type UpdateBillPayload = CreateBillPayload
+
+/** Response from POST /api/attachments. */
+export interface AttachmentRef {
+  id: string
+  mime: string
 }

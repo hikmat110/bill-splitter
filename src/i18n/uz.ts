@@ -85,6 +85,7 @@ export const uz = {
     review_participants: '\n<b>Taqsimot:</b>',
     review_line: '  {{name}}: {{amount}}',
     edit_button: '✏️ Tahrirlash',
+    edit_in_app: '✏️ Ilovada tahrirlash',
     send_button: '📤 Yuborish',
     cancel_button: '❌ Bekor qilish',
     sent: '🎉 Hisob yuborildi!',
@@ -95,10 +96,17 @@ export const uz = {
     select_all: '☑️ Hammasi',
     next_button: '➡️ Keyingi',
   },
+  split: {
+    receipt_prompt: "Xohlasangiz chek rasmini yuboring yoki o'tkazib yuboring.",
+    receipt_skip: "Rasmsiz o'tkazish",
+  },
   incoming: {
     title: '📥 Kiruvchi hisoblar',
     empty: "Kiruvchi hisoblar yo'q.",
     mark_paid: "✅ To'landi",
+    proof_prompt: "O'tkazma cheki rasmini yuboring yoki o'tkazib yuboring.",
+    proof_skip: "O'tkazib yuborish",
+    proof_received: "Chek qabul qilindi — tasdiqlash kutilmoqda.",
     awaiting_confirmation: "⏳ Yaratuvchi tasdig'ini kutmoqda",
     detail_title: '<b>📋 {{title}}</b>',
     your_share: 'Sizning ulushingiz: <b>{{amount}}</b>',
@@ -169,5 +177,6 @@ export const uz = {
     not_registered: "Iltimos, /start buyrug'idan boshlang.",
     not_found: 'Topilmadi.',
     not_your_action: 'Bu harakat siz uchun emas.',
+    upload_failed: "Rasmni saqlab bo'lmadi. Qayta urinib ko'ring yoki o'tkazib yuboring.",
   },
 }

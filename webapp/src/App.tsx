@@ -7,9 +7,9 @@ import { SettleScreen } from './screens/SettleScreen'
 import { IncomingScreen } from './screens/IncomingScreen'
 import { ActivityScreen } from './screens/ActivityScreen'
 import { api, ApiError } from './lib/api'
-import { emptyDraft } from './lib/draft'
+import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
-import { getColorScheme, onThemeChange, haptic } from './lib/telegram'
+import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegram'
 import { useT } from './i18n'
 import type { BillDetail, BillsResponse, Me } from './lib/types'
 
@@ -64,6 +64,8 @@ export function App() {
     setBills(billsRes)
   }, [])
 
+  const [deepLinkDone, setDeepLinkDone] = useState(false)
+
   const people: Person[] = useMemo(() => {
     const list: Person[] = []
     if (me) list.push({ id: me.selfContactId, name: t('common.you') })
@@ -98,11 +100,51 @@ export function App() {
     setTab('split')
   }
 
+  // Load an existing created bill into the Split form for editing (PATCH on send).
+  const editBill = useCallback((bill: BillDetail) => {
+    setDraft({
+      title: bill.title,
+      participantIds: bill.participants.map((p) => p.contactId),
+      items: bill.items.map((it) => ({
+        id: uid(),
+        name: it.name,
+        price: it.price,
+        who: it.shareContactIds,
+      })),
+      servicePct: bill.servicePct,
+      tip: bill.tip,
+      tipPaidBy: bill.tipPaidByContactId,
+      receiptAttachmentId: bill.receiptAttachmentId,
+      receiptMime: bill.receiptMime,
+      receiptPreviewUrl: null,
+      editingBillId: bill.id,
+    })
+    setTab('split')
+  }, [])
+
+  // Handle a `?startapp=edit_<billId>` deep link from the bot's "Edit in app"
+  // button — once, after the first load, if the bill exists and is still editable.
+  useEffect(() => {
+    if (loading || deepLinkDone || !me) return
+    setDeepLinkDone(true)
+    const param = startParam()
+    if (!param?.startsWith('edit_')) return
+    const bill = bills.created.find((b) => b.id === param.slice('edit_'.length))
+    const editable =
+      bill && bill.participants.every((p) => p.linkedUserId === me.id || p.status === 'pending')
+    if (bill && editable) editBill(bill)
+    else if (bill) {
+      setCurrentBillId(bill.id)
+      setTab('settle')
+      toast(t('app.bill_not_editable'), 'ti-alert-circle')
+    }
+  }, [loading, deepLinkDone, me, bills, editBill, t, toast])
+
   const send = async () => {
     if (!me) return
     setSending(true)
     try {
-      const created = await api.createBill({
+      const payload = {
         title: draft.title.trim(),
         participantContactIds: draft.participantIds,
         items: draft.items
@@ -118,12 +160,18 @@ export function App() {
           draft.tip > 0 && draft.tipPaidBy && draft.tipPaidBy !== me.selfContactId
             ? draft.tipPaidBy
             : null,
-      })
+        receiptAttachmentId: draft.receiptAttachmentId,
+        receiptMime: draft.receiptMime,
+      }
+      const editingId = draft.editingBillId
+      const saved = editingId
+        ? await api.updateBill(editingId, payload)
+        : await api.createBill(payload)
       await refresh()
-      setCurrentBillId(created.id)
+      setCurrentBillId(saved.id)
       setDraft(emptyDraft())
       haptic('success')
-      toast(t('app.bill_sent'), 'ti-send')
+      toast(t(editingId ? 'app.bill_updated' : 'app.bill_sent'), 'ti-send')
       setTab('settle')
     } catch (e) {
       haptic('error')
@@ -218,7 +266,13 @@ export function App() {
           />
         )}
         {tab === 'settle' && me && (
-          <SettleScreen bill={currentBill} me={me} refresh={refresh} goSplit={newBill} />
+          <SettleScreen
+            bill={currentBill}
+            me={me}
+            refresh={refresh}
+            goSplit={newBill}
+            onEdit={editBill}
+          />
         )}
         {tab === 'pay' && <IncomingScreen incoming={bills.incoming} refresh={refresh} />}
         {tab === 'activity' && me && (

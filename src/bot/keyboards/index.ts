@@ -156,6 +156,12 @@ export function billReviewKeyboard(ctx: MyContext): InlineKeyboard {
     .text(t(ctx, 'bill.cancel_button'), 'bill:cancel')
 }
 
+export function receiptSkipKeyboard(ctx: MyContext): InlineKeyboard {
+  // id segment is a throwaway ('x'); the decode util requires a non-empty 3rd part.
+  return new InlineKeyboard()
+    .text(t(ctx, 'split.receipt_skip'), encode('bill', 'receipt_skip', 'x'))
+}
+
 // ─── Payment / notification ───────────────────────────────────────────────────
 
 export function markPaidKeyboard(participantId: string, ctx: MyContext): InlineKeyboard {
@@ -167,6 +173,12 @@ export function confirmDisputeKeyboard(participantId: string, ctx: MyContext): I
   return new InlineKeyboard()
     .text(t(ctx, 'payment.confirm_button'), encode('bill', 'confirm', participantId))
     .text(t(ctx, 'payment.dispute_button'), encode('bill', 'dispute', participantId))
+}
+
+export function proofSkipKeyboard(participantId: string, ctx: MyContext): InlineKeyboard {
+  // Short action token 'mps' (mark-paid skip) keeps the callback under 64 bytes.
+  return new InlineKeyboard()
+    .text(t(ctx, 'incoming.proof_skip'), encode('bill', 'mps', participantId))
 }
 
 // ─── Incoming ────────────────────────────────────────────────────────────────
@@ -214,9 +226,18 @@ export function historyTabKeyboard(activeTab: 'created' | 'received', ctx: MyCon
 
 export function historyBillKeyboard(
   unpaidParticipants: Array<{ id: string; contactName: string }>,
-  ctx: MyContext
+  ctx: MyContext,
+  editInApp?: { billId: string }
 ): InlineKeyboard {
   const kb = new InlineKeyboard()
+  // "Edit in app" only when the Mini App is configured and the bill is still
+  // editable (decided by the caller). Deep-links the app to the edit view.
+  if (editInApp && config.WEBAPP_URL) {
+    kb.webApp(
+      t(ctx, 'bill.edit_in_app'),
+      `${config.WEBAPP_URL}?startapp=edit_${editInApp.billId}`
+    ).row()
+  }
   for (const p of unpaidParticipants) {
     kb.text(`🔔 ${p.contactName}`, encode('bill', 'remind', p.id)).row()
   }

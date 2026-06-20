@@ -11,6 +11,10 @@ export const createBillItemSchema = z.object({
   shareContactIds: z.array(z.uuid()).min(1),
 })
 
+// Image mimes accepted for receipt/proof photos. Mirrors storage.service
+// ALLOWED_MIME — keep the two in sync.
+export const imageMimeSchema = z.enum(['image/jpeg', 'image/png', 'image/webp'])
+
 export const createBillSchema = z
   .object({
     title: z.string().trim().min(1).max(200),
@@ -22,6 +26,10 @@ export const createBillSchema = z
     // be one of the participants. The creator's own contact is normalized back
     // to null server-side (see mappers.toCreateBillInput).
     tipPaidByContactId: z.uuid().nullish(),
+    // Optional main receipt photo: the opaque attachment id returned by
+    // POST /api/attachments, plus its mime. Both or neither.
+    receiptAttachmentId: z.uuid().nullish(),
+    receiptMime: imageMimeSchema.nullish(),
   })
   .superRefine((data, ctx) => {
     // Every item's sharers must be among the bill's participants.
@@ -44,9 +52,29 @@ export const createBillSchema = z
         path: ['tipPaidByContactId'],
       })
     }
+    // A receipt reference needs both id and mime (so the file path resolves).
+    if (Boolean(data.receiptAttachmentId) !== Boolean(data.receiptMime)) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'receiptAttachmentId and receiptMime must be provided together',
+        path: ['receiptAttachmentId'],
+      })
+    }
   })
 
 export type CreateBillBody = z.infer<typeof createBillSchema>
+
+// Editing replaces the whole bill, so the PATCH body is the same shape.
+export const updateBillSchema = createBillSchema
+export type UpdateBillBody = CreateBillBody
+
+// Optional proof-of-transfer attached to a mark-paid request. Both fields are
+// optional; a request with no body (or no attachment) just marks paid.
+export const markPaidSchema = z.object({
+  attachmentId: z.uuid().nullish(),
+  mime: imageMimeSchema.nullish(),
+})
+export type MarkPaidBody = z.infer<typeof markPaidSchema>
 
 export const createContactSchema = z.object({
   displayName: z.string().trim().min(1).max(100),

@@ -85,6 +85,7 @@ export const ru = {
     review_participants: '\n<b>Разбивка:</b>',
     review_line: '  {{name}}: {{amount}}',
     edit_button: '✏️ Изменить',
+    edit_in_app: '✏️ Изменить в приложении',
     send_button: '📤 Отправить',
     cancel_button: '❌ Отмена',
     sent: '🎉 Счёт отправлен!',
@@ -95,10 +96,17 @@ export const ru = {
     select_all: '☑️ Все',
     next_button: '➡️ Далее',
   },
+  split: {
+    receipt_prompt: 'По желанию отправьте фото чека или пропустите.',
+    receipt_skip: 'Пропустить фото',
+  },
   incoming: {
     title: '📥 Входящие счета',
     empty: 'Нет входящих счетов.',
     mark_paid: '✅ Оплачено',
+    proof_prompt: 'Отправьте фото чека о переводе или пропустите.',
+    proof_skip: 'Пропустить',
+    proof_received: 'Чек получен — ожидает подтверждения.',
     awaiting_confirmation: '⏳ Ожидает подтверждения от создателя',
     detail_title: '<b>📋 {{title}}</b>',
     your_share: 'Ваша доля: <b>{{amount}}</b>',
@@ -169,6 +177,7 @@ export const ru = {
     not_registered: 'Пожалуйста, начните с команды /start.',
     not_found: 'Не найдено.',
     not_your_action: 'Это действие не для вас.',
+    upload_failed: 'Не удалось сохранить фото. Попробуйте ещё раз или пропустите.',
   },
 }
 

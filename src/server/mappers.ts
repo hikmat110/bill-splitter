@@ -2,8 +2,8 @@
 // `CreateBillInput` shape consumed by `bill.service.createBill`. Unit-tested
 // (incl. a round-trip through `computeSettlement` for the money invariant).
 
-import type { CreateBillInput } from '../services/bill.service'
-import type { CreateBillBody } from './schemas'
+import type { CreateBillInput, UpdateBillInput } from '../services/bill.service'
+import type { CreateBillBody, UpdateBillBody } from './schemas'
 
 export function toCreateBillInput(
   body: CreateBillBody,
@@ -25,6 +25,8 @@ export function toCreateBillInput(
     tip: body.tip,
     tipPaidByContactId,
     participantContactIds: [...body.participantContactIds],
+    receiptAttachmentId: body.receiptAttachmentId ?? null,
+    receiptMime: body.receiptMime ?? null,
     items: body.items.map((item, index) => ({
       name: item.name,
       price: item.price,
@@ -34,4 +36,13 @@ export function toCreateBillInput(
       shareContactIds: item.shareContactIds.filter((id) => participants.has(id)),
     })),
   }
+}
+
+export function toUpdateBillInput(
+  body: UpdateBillBody,
+  billId: string,
+  creatorId: string,
+  creatorSelfContactId?: string
+): UpdateBillInput {
+  return { ...toCreateBillInput(body, creatorId, creatorSelfContactId), billId }
 }

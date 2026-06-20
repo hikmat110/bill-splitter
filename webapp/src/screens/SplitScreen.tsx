@@ -1,10 +1,13 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { Avatar } from '../components/Avatar'
+import { AuthImage } from '../components/AuthImage'
 import { Money } from '../components/Money'
 import { SecTitle } from '../components/common'
 import { SnapSlider } from '../components/SnapSlider'
+import { useToast } from '../components/Toast'
 import { previewTotals } from '../lib/calc'
 import { money } from '../lib/currency'
+import { api } from '../lib/api'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
 import { haptic } from '../lib/telegram'
@@ -14,6 +17,8 @@ const TIP_PRESETS = [0, 10_000, 20_000, 30_000]
 const SERVICE_PRESETS = [0, 5, 10, 15, 20]
 // Sentinel slider position that reveals a free-form tip input.
 const TIP_CUSTOM = -1
+// Matches the server's MAX_UPLOAD_BYTES default — checked client-side for fast feedback.
+const MAX_UPLOAD = 5_000_000
 
 export function SplitScreen({
   draft,
@@ -33,6 +38,10 @@ export function SplitScreen({
   sending: boolean
 }) {
   const { t } = useT()
+  const toast = useToast()
+  const fileRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const editing = !!draft.editingBillId
   const calc = previewTotals(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
@@ -60,6 +69,34 @@ export function SplitScreen({
       // If the removed person was paying the tip, fall back to the creator.
       ...(draft.tipPaidBy === id ? { tipPaidBy: null } : {}),
     })
+
+  const onPickReceipt = async (file: File | undefined) => {
+    if (!file) return
+    if (file.size > MAX_UPLOAD) {
+      toast(t('common.photo_too_large'), 'ti-alert-circle')
+      return
+    }
+    setUploading(true)
+    try {
+      const ref = await api.uploadAttachment(file)
+      if (draft.receiptPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(draft.receiptPreviewUrl)
+      patch({
+        receiptAttachmentId: ref.id,
+        receiptMime: ref.mime,
+        receiptPreviewUrl: URL.createObjectURL(file),
+      })
+      haptic('success')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t('common.upload_failed'), 'ti-alert-circle')
+    } finally {
+      setUploading(false)
+    }
+  }
+
+  const removeReceipt = () => {
+    if (draft.receiptPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(draft.receiptPreviewUrl)
+    patch({ receiptAttachmentId: null, receiptMime: null, receiptPreviewUrl: null })
+  }
 
   const canSend =
     draft.title.trim().length > 0 &&
@@ -278,6 +315,56 @@ export function SplitScreen({
         )}
       </div>
 
+      {/* receipt photo (optional) */}
+      <SecTitle>{t('split.receipt_photo')}</SecTitle>
+      <div className="card" style={{ padding: 'calc(14px * var(--dens))' }}>
+        <input
+          ref={fileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            onPickReceipt(e.target.files?.[0])
+            e.target.value = '' // allow re-picking the same file
+          }}
+        />
+        {draft.receiptAttachmentId ? (
+          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+            {draft.receiptPreviewUrl ? (
+              <img
+                src={draft.receiptPreviewUrl}
+                alt=""
+                onClick={() => fileRef.current?.click()}
+                style={{ width: 56, height: 56, borderRadius: 'var(--r)', objectFit: 'cover', cursor: 'pointer', flexShrink: 0 }}
+              />
+            ) : (
+              <AuthImage
+                attachmentId={draft.receiptAttachmentId}
+                onClick={() => fileRef.current?.click()}
+                style={{ width: 56, height: 56, borderRadius: 'var(--r)', flexShrink: 0 }}
+              />
+            )}
+            <span className="muted" style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>
+              {t('split.receipt_hint')}
+            </span>
+            <i
+              className="ti ti-trash"
+              onClick={removeReceipt}
+              style={{ fontSize: 18, color: 'var(--text-3)', cursor: 'pointer', flexShrink: 0 }}
+            />
+          </div>
+        ) : (
+          <button
+            className="btn btn-soft btn-block"
+            disabled={uploading}
+            onClick={() => fileRef.current?.click()}
+          >
+            <i className={'ti ' + (uploading ? 'ti-loader-2' : 'ti-camera')} />{' '}
+            {uploading ? t('split.sending') : t('split.add_photo')}
+          </button>
+        )}
+      </div>
+
       {/* total bar */}
       <div
         className="card pop"
@@ -304,10 +391,10 @@ export function SplitScreen({
             style={{ background: 'var(--accent)', color: 'var(--on-accent)', border: 'none', fontWeight: 700 }}
           >
             {sending ? (
-              t('split.sending')
+              editing ? t('split.updating') : t('split.sending')
             ) : (
               <>
-                {t('split.send')} <i className="ti ti-send" />
+                {editing ? t('split.update') : t('split.send')} <i className="ti ti-send" />
               </>
             )}
           </button>

@@ -101,6 +101,10 @@ export const bills = pgTable('bills', {
   tip_paid_by_contact_id: uuid('tip_paid_by_contact_id').references(() => contacts.id),
   total: numeric('total', { precision: 14, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull().default('draft'),
+  // Optional main receipt/cheque photo for the bill, shown to participants.
+  // Opaque attachment id (file lives on disk, see storage.service) + its mime.
+  receipt_attachment_id: text('receipt_attachment_id'),
+  receipt_mime: text('receipt_mime'),
   created_at: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -189,6 +193,10 @@ export const billParticipants = pgTable(
     notification_message_id: bigint('notification_message_id', {
       mode: 'bigint',
     }),
+    // Optional proof-of-transfer photo the payer attaches when marking paid,
+    // shown to the creator. Opaque attachment id (file on disk) + its mime.
+    payment_proof_attachment_id: text('payment_proof_attachment_id'),
+    payment_proof_mime: text('payment_proof_mime'),
   },
   (t) => [
     unique('bill_participants_bill_contact_unique').on(t.bill_id, t.contact_id),

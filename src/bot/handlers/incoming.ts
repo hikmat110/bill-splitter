@@ -12,6 +12,7 @@ import { notifyCreatorOfPaymentMark } from '../../services/notification.service'
 import {
   incomingListKeyboard,
   incomingDetailKeyboard,
+  proofSkipKeyboard,
 } from '../keyboards'
 import { formatMoney } from '../../utils/format'
 
@@ -76,6 +77,42 @@ export async function incomingDetailHandler(ctx: MyContext, participantId: strin
 export async function markPaidCallbackHandler(
   ctx: MyContext,
   participantId: string,
+  _bot: Bot<MyContext>
+): Promise<void> {
+  const participant = await getParticipantById(participantId)
+  if (!participant) {
+    await editOrReply(ctx, t(ctx, 'errors.not_found'))
+    return
+  }
+
+  if (participant.contact.linked_user_id !== ctx.user.id) {
+    await editOrReply(ctx, t(ctx, 'errors.not_your_action'))
+    return
+  }
+
+  if (participant.status !== 'pending') return
+
+  // Don't mark paid yet — first ask for an optional transfer-receipt photo.
+  // The actual markParticipantPaid happens once a photo arrives (photoHandler)
+  // or the user taps Skip (markPaidSkipHandler).
+  ctx.session.mark_paid_wizard = { step: 'awaiting_proof', participantId }
+  const promptMsgId = ctx.callbackQuery?.message?.message_id
+  if (promptMsgId) ctx.session.mark_paid_wizard.promptMessageId = promptMsgId
+
+  // The notification may have been sent as a photo (bill with a main receipt),
+  // which editMessageText can't edit — fall back to caption, then a fresh message.
+  const prompt = t(ctx, 'incoming.proof_prompt')
+  const kb = proofSkipKeyboard(participantId, ctx)
+  await ctx
+    .editMessageText(prompt, { reply_markup: kb })
+    .catch(() => ctx.editMessageCaption({ caption: prompt, reply_markup: kb }))
+    .catch(() => ctx.reply(prompt, { reply_markup: kb }))
+    .catch(() => undefined)
+}
+
+export async function markPaidSkipHandler(
+  ctx: MyContext,
+  participantId: string,
   bot: Bot<MyContext>
 ): Promise<void> {
   const participant = await getParticipantById(participantId)
@@ -88,6 +125,8 @@ export async function markPaidCallbackHandler(
     await editOrReply(ctx, t(ctx, 'errors.not_your_action'))
     return
   }
+
+  ctx.session.mark_paid_wizard = undefined
 
   if (participant.status !== 'pending') return
 

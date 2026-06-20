@@ -29,7 +29,9 @@ import {
   incomingHandler,
   incomingDetailHandler,
   markPaidCallbackHandler,
+  markPaidSkipHandler,
 } from './handlers/incoming'
+import { photoHandler } from './handlers/photo'
 import {
   historyHandler,
   historyTabHandler,
@@ -72,6 +74,7 @@ bot.command('cancel', async (ctx) => {
   ctx.session.contact_wizard = undefined
   ctx.session.dispute_wizard = undefined
   ctx.session.settings_wizard = undefined
+  ctx.session.mark_paid_wizard = undefined
   await showMainMenu(ctx)
 })
 
@@ -80,6 +83,9 @@ bot.on('message:contact', contactHandler)
 
 // Multi-select picker results (request_users) → batch-add contacts
 bot.on('message:users_shared', usersSharedHandler)
+
+// Receipt/proof photos — only acted on while a relevant wizard is awaiting one.
+bot.on('message:photo', (ctx) => photoHandler(ctx, bot))
 
 // ─── Text message dispatcher ─────────────────────────────────────────────────
 
@@ -135,6 +141,10 @@ bot.callbackQuery(/^bill:/, async (ctx) => {
   if (action === 'mark_paid') {
     await ctx.answerCallbackQuery()
     return markPaidCallbackHandler(ctx, id, bot)
+  }
+  if (action === 'mps') {
+    await ctx.answerCallbackQuery()
+    return markPaidSkipHandler(ctx, id, bot)
   }
   if (action === 'confirm') {
     await ctx.answerCallbackQuery()

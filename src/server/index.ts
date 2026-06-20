@@ -59,7 +59,7 @@ function cors(res: Response): Response {
   // these headers just make direct cross-origin calls (e.g. tunnel testing) work.
   res.headers.set('Access-Control-Allow-Origin', config.WEBAPP_URL ?? '*')
   res.headers.set('Access-Control-Allow-Headers', 'authorization, content-type')
-  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
+  res.headers.set('Access-Control-Allow-Methods', 'GET, POST, PATCH, OPTIONS')
   return res
 }
 

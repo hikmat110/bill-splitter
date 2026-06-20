@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
+import { AuthImage } from '../components/AuthImage'
+import { PhotoModal } from '../components/PhotoModal'
 import { Money } from '../components/Money'
 import { SecTitle, Empty, BreakdownLines } from '../components/common'
 import { useToast } from '../components/Toast'
@@ -16,15 +18,18 @@ export function SettleScreen({
   me,
   refresh,
   goSplit,
+  onEdit,
 }: {
   bill: BillDetail | null
   me: Me
   refresh: () => Promise<void>
   goSplit: () => void
+  onEdit: (bill: BillDetail) => void
 }) {
   const { t } = useT()
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
+  const [viewing, setViewing] = useState<string | null>(null)
 
   if (!bill) {
     return (
@@ -44,6 +49,8 @@ export function SettleScreen({
   const others = bill.participants.filter((p) => !isSelf(p, me))
   const outstanding = createdOutstanding(bill, me)
   const allSettled = others.length > 0 && others.every((p) => p.status === 'confirmed')
+  // Mirror the server LOCK: editable only while every non-creator is still pending.
+  const editable = bill.participants.every((p) => isSelf(p, me) || p.status === 'pending')
 
   const run = async (key: string, fn: () => Promise<unknown>, okMsg: string, icon: string) => {
     setBusy(key)
@@ -95,6 +102,7 @@ export function SettleScreen({
       <div
         className="card pop"
         style={{
+          position: 'relative',
           marginBottom: 16,
           textAlign: 'center',
           padding: '22px 18px',
@@ -102,6 +110,20 @@ export function SettleScreen({
           border: 'none',
         }}
       >
+        <div className="row" style={{ position: 'absolute', top: 12, right: 12, gap: 8 }}>
+          {bill.receiptAttachmentId && (
+            <AuthImage
+              attachmentId={bill.receiptAttachmentId}
+              onClick={() => setViewing(bill.receiptAttachmentId)}
+              style={{ width: 34, height: 34, borderRadius: 9 }}
+            />
+          )}
+          {editable && (
+            <button className="btn btn-sm btn-soft" onClick={() => onEdit(bill)}>
+              <i className="ti ti-pencil" /> {t('settle.edit')}
+            </button>
+          )}
+        </div>
         <div
           style={{
             fontSize: 13,
@@ -159,32 +181,44 @@ export function SettleScreen({
                 </div>
                 <Money amount={p.amount} style={{ fontSize: 16, fontWeight: 800 }} />
               </div>
-              {p.status === 'confirmed' ? (
-                <div className="row" style={{ marginTop: 12, justifyContent: 'flex-end' }}>
+              <div
+                className="row"
+                style={{ marginTop: 12, justifyContent: 'space-between', alignItems: 'center' }}
+              >
+                {p.paymentProofAttachmentId ? (
+                  <AuthImage
+                    attachmentId={p.paymentProofAttachmentId}
+                    onClick={() => setViewing(p.paymentProofAttachmentId)}
+                    style={{ width: 40, height: 40, borderRadius: 9 }}
+                  />
+                ) : (
+                  <span />
+                )}
+                {p.status === 'confirmed' ? (
                   <span className="pill pill-pos">
                     <i className="ti ti-check" style={{ fontSize: 13 }} /> {t('settle.settled')}
                   </span>
-                </div>
-              ) : (
-                <div className="row" style={{ gap: 7, marginTop: 12, justifyContent: 'flex-end' }}>
-                  {p.status === 'marked_paid' ? (
-                    <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onDispute(p)}>
-                      <i className="ti ti-x" /> {t('settle.dispute')}
+                ) : (
+                  <div className="row" style={{ gap: 7 }}>
+                    {p.status === 'marked_paid' ? (
+                      <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onDispute(p)}>
+                        <i className="ti ti-x" /> {t('settle.dispute')}
+                      </button>
+                    ) : (
+                      <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onRemind(p)}>
+                        <i className="ti ti-bell" /> {t('settle.remind')}
+                      </button>
+                    )}
+                    <button
+                      className="btn btn-sm btn-primary"
+                      disabled={busy === p.id}
+                      onClick={() => onConfirm(p)}
+                    >
+                      <i className="ti ti-check" /> {t('settle.confirm')}
                     </button>
-                  ) : (
-                    <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onRemind(p)}>
-                      <i className="ti ti-bell" /> {t('settle.remind')}
-                    </button>
-                  )}
-                  <button
-                    className="btn btn-sm btn-primary"
-                    disabled={busy === p.id}
-                    onClick={() => onConfirm(p)}
-                  >
-                    <i className="ti ti-check" /> {t('settle.confirm')}
-                  </button>
-                </div>
-              )}
+                  </div>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -227,6 +261,8 @@ export function SettleScreen({
           )
         })}
       </div>
+
+      <PhotoModal attachmentId={viewing} onClose={() => setViewing(null)} />
     </div>
   )
 }

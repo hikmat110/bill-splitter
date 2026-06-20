@@ -15,6 +15,13 @@ export interface DraftBill {
   tip: number
   /** Contact id of whoever paid the tip; null = the creator (default). */
   tipPaidBy: string | null
+  /** Main receipt photo: the uploaded attachment id + mime, null if none. */
+  receiptAttachmentId: string | null
+  receiptMime: string | null
+  /** Transient local preview (object URL or /api/files/:id); never submitted. */
+  receiptPreviewUrl?: string | null
+  /** When set, this draft edits an existing bill (PATCH) rather than creating. */
+  editingBillId?: string | null
 }
 
 export interface Person {
@@ -23,7 +30,18 @@ export interface Person {
 }
 
 export function emptyDraft(): DraftBill {
-  return { title: '', participantIds: [], items: [], servicePct: 0, tip: 0, tipPaidBy: null }
+  return {
+    title: '',
+    participantIds: [],
+    items: [],
+    servicePct: 0,
+    tip: 0,
+    tipPaidBy: null,
+    receiptAttachmentId: null,
+    receiptMime: null,
+    receiptPreviewUrl: null,
+    editingBillId: null,
+  }
 }
 
 export function uid(): string {

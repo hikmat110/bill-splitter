@@ -22,6 +22,13 @@
       "when": 1781954417729,
       "tag": "0002_moaning_micromacro",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781957732782,
+      "tag": "0003_fantastic_kitty_pryde",
+      "breakpoints": true
     }
   ]
 }

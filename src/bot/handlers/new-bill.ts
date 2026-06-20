@@ -13,6 +13,7 @@ import {
   tipKeyboard,
   tipPayerKeyboard,
   billReviewKeyboard,
+  receiptSkipKeyboard,
 } from '../keyboards'
 import { formatMoney } from '../../utils/format'
 import { computeSettlement } from '../../utils/settlement'
@@ -94,6 +95,8 @@ export async function billCallbackHandler(
       return tipStep(ctx, id)
     case 'tip_payer':
       return tipPayerStep(ctx, id)
+    case 'receipt_skip':
+      return receiptSkipStep(ctx)
     case 'send':
       return sendBillStep(ctx, bot)
     case 'edit':
@@ -307,7 +310,8 @@ async function saveTipCustomStep(ctx: MyContext, text: string): Promise<void> {
 
 /**
  * After the tip is set: if there's a tip and at least one non-creator
- * participant, ask who paid it (default = creator). Otherwise go to review.
+ * participant, ask who paid it (default = creator). Otherwise offer the
+ * optional receipt photo step.
  */
 async function proceedAfterTip(ctx: MyContext): Promise<void> {
   const wizard = ctx.session.bill_wizard!
@@ -325,19 +329,34 @@ async function proceedAfterTip(ctx: MyContext): Promise<void> {
     }
   }
   wizard.tipPaidByContactId = undefined
-  wizard.step = 'review'
-  await showReview(ctx)
+  await askReceiptPhoto(ctx)
 }
 
 async function tipPayerStep(ctx: MyContext, choice: string): Promise<void> {
   const wizard = ctx.session.bill_wizard!
   // "creator" is the default payer and is never credited.
   wizard.tipPaidByContactId = choice === 'creator' ? undefined : choice
+  await askReceiptPhoto(ctx)
+}
+
+/**
+ * Optional main-cheque photo step, shown right before review. The user can send
+ * a photo (handled by photoHandler, which advances to review) or tap Skip
+ * (receipt_skip callback → goes straight to review).
+ */
+async function askReceiptPhoto(ctx: MyContext): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
+  wizard.step = 'awaiting_receipt_photo'
+  await editWizardMessage(ctx, t(ctx, 'split.receipt_prompt'), receiptSkipKeyboard(ctx))
+}
+
+async function receiptSkipStep(ctx: MyContext): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
   wizard.step = 'review'
   await showReview(ctx)
 }
 
-async function showReview(ctx: MyContext): Promise<void> {
+export async function showReview(ctx: MyContext): Promise<void> {
   const wizard = ctx.session.bill_wizard!
   const participantContacts = await getParticipantContacts(wizard.participantContactIds)
   const contactMap = new Map(participantContacts.map((c) => [c.id, c]))
@@ -412,6 +431,8 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
       tip: wizard.tip,
       tipPaidByContactId: wizard.tipPaidByContactId ?? null,
       participantContactIds: wizard.participantContactIds,
+      receiptAttachmentId: wizard.receiptAttachmentId ?? null,
+      receiptMime: wizard.receiptMime ?? null,
     })
   } catch (err) {
     ctx.logger.error({ err }, 'createBill failed')
@@ -438,6 +459,8 @@ async function editBillStep(ctx: MyContext): Promise<void> {
   wizard.serviceFixed = 0
   wizard.tip = 0
   wizard.tipPaidByContactId = undefined
+  wizard.receiptAttachmentId = undefined
+  wizard.receiptMime = undefined
   await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
 }
 
