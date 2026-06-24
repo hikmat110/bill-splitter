@@ -76,6 +76,14 @@ export const markPaidSchema = z.object({
 })
 export type MarkPaidBody = z.infer<typeof markPaidSchema>
 
+// Scan an already-uploaded receipt image (the opaque id + mime returned by
+// POST /api/attachments) with Gemini. Mirrors the attachment reference shape.
+export const scanReceiptSchema = z.object({
+  attachmentId: z.uuid(),
+  mime: imageMimeSchema,
+})
+export type ScanReceiptBody = z.infer<typeof scanReceiptSchema>
+
 export const createContactSchema = z.object({
   displayName: z.string().trim().min(1).max(100),
   phone: z.string().trim().min(3).max(32).optional(),

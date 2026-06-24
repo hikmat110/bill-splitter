@@ -13,6 +13,12 @@ const schema = z.object({
   UPLOAD_DIR: z.string().default('./uploads'),
   // Hard cap on a single uploaded image, in bytes. Default 5 MB.
   MAX_UPLOAD_BYTES: z.coerce.number().int().positive().default(5_000_000),
+  // Google AI Studio API key for receipt scanning. Optional: the app boots
+  // without it and POST /api/receipts/scan returns 503 when unset (so a
+  // privacy-sensitive deploy can simply leave scanning disabled).
+  GEMINI_API_KEY: z.string().min(1).optional(),
+  // Gemini model used for receipt scanning (free-tier Flash-Lite by default).
+  GEMINI_MODEL: z.string().default('gemini-2.5-flash-lite'),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),

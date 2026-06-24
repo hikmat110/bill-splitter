@@ -6,6 +6,7 @@ import type {
   BillDetail,
   BillsResponse,
   CreateBillPayload,
+  ScannedReceipt,
   UpdateBillPayload,
 } from './types'
 
@@ -83,6 +84,8 @@ async function fileObjectUrl(id: string): Promise<string> {
 export const api = {
   uploadAttachment,
   fileObjectUrl,
+  scanReceipt: (attachmentId: string, mime: string) =>
+    request<ScannedReceipt>('/receipts/scan', { method: 'POST', body: { attachmentId, mime } }),
   me: () => request<Me>('/me'),
   contacts: () => request<ApiContact[]>('/contacts'),
   addContact: (body: { displayName: string; phone?: string }) =>

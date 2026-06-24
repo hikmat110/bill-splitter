@@ -5,9 +5,9 @@ import { Money } from '../components/Money'
 import { SecTitle } from '../components/common'
 import { SnapSlider } from '../components/SnapSlider'
 import { useToast } from '../components/Toast'
-import { previewTotals } from '../lib/calc'
+import { previewTotals, to2 } from '../lib/calc'
 import { money } from '../lib/currency'
-import { api } from '../lib/api'
+import { api, ApiError } from '../lib/api'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
 import { haptic } from '../lib/telegram'
@@ -40,7 +40,9 @@ export function SplitScreen({
   const { t } = useT()
   const toast = useToast()
   const fileRef = useRef<HTMLInputElement>(null)
+  const scanFileRef = useRef<HTMLInputElement>(null)
   const [uploading, setUploading] = useState(false)
+  const [scanning, setScanning] = useState(false)
   const editing = !!draft.editingBillId
   const calc = previewTotals(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
@@ -70,26 +72,87 @@ export function SplitScreen({
       ...(draft.tipPaidBy === id ? { tipPaidBy: null } : {}),
     })
 
-  const onPickReceipt = async (file: File | undefined) => {
-    if (!file) return
-    if (file.size > MAX_UPLOAD) {
-      toast(t('common.photo_too_large'), 'ti-alert-circle')
-      return
-    }
-    setUploading(true)
+  // Upload `file` as the receipt photo. Returns the stored ref + a fresh local
+  // preview URL, or null (after toasting) on failure. Does NOT patch the draft so
+  // callers fold the result into a single setDraft — patch() spreads a stale
+  // `draft`, so two patches in one handler would clobber each other.
+  const uploadReceipt = async (
+    file: File
+  ): Promise<{ id: string; mime: string; previewUrl: string } | null> => {
     try {
       const ref = await api.uploadAttachment(file)
       if (draft.receiptPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(draft.receiptPreviewUrl)
-      patch({
-        receiptAttachmentId: ref.id,
-        receiptMime: ref.mime,
-        receiptPreviewUrl: URL.createObjectURL(file),
-      })
-      haptic('success')
+      return { id: ref.id, mime: ref.mime, previewUrl: URL.createObjectURL(file) }
     } catch (e) {
       toast(e instanceof Error ? e.message : t('common.upload_failed'), 'ti-alert-circle')
+      return null
+    }
+  }
+
+  const tooLarge = (file: File) => {
+    if (file.size <= MAX_UPLOAD) return false
+    toast(t('common.photo_too_large'), 'ti-alert-circle')
+    return true
+  }
+
+  const onPickReceipt = async (file: File | undefined) => {
+    if (!file || tooLarge(file)) return
+    setUploading(true)
+    try {
+      const up = await uploadReceipt(file)
+      if (!up) return
+      patch({ receiptAttachmentId: up.id, receiptMime: up.mime, receiptPreviewUrl: up.previewUrl })
+      haptic('success')
     } finally {
       setUploading(false)
+    }
+  }
+
+  // Scan a photo: upload it (also attaches it as the receipt), send it to Gemini,
+  // then REPLACE the items with what was extracted and derive the service %.
+  const onScanReceipt = async (file: File | undefined) => {
+    if (!file || tooLarge(file)) return
+    setScanning(true)
+    try {
+      const up = await uploadReceipt(file)
+      if (!up) return
+      // Attach the photo right away so it's kept even if scanning then fails.
+      patch({ receiptAttachmentId: up.id, receiptMime: up.mime, receiptPreviewUrl: up.previewUrl })
+      const r = await api.scanReceipt(up.id, up.mime)
+      const items: DraftItem[] = r.items.map((it) => ({
+        id: uid(),
+        name: it.name || t('split.default_item_name'),
+        price: it.price,
+        who: [...participants], // empty until the user adds people
+      }))
+      const subtotal = items.reduce((s, it) => s + it.price, 0)
+      const servicePct =
+        r.serviceAmount > 0 && subtotal > 0
+          ? to2((r.serviceAmount / subtotal) * 100)
+          : (r.servicePct ?? 0)
+      // Re-include the receipt fields: patch() spreads a stale `draft`, so this
+      // single set must carry them or it would drop the photo attached above.
+      patch({
+        items,
+        servicePct,
+        receiptAttachmentId: up.id,
+        receiptMime: up.mime,
+        receiptPreviewUrl: up.previewUrl,
+      })
+      haptic('success')
+      const service = to2((subtotal * servicePct) / 100)
+      const computedTotal = to2(subtotal + service) + (draft.tip || 0)
+      const mismatch = r.total != null && Math.abs(computedTotal - r.total) > 1
+      toast(
+        mismatch ? t('split.scan_check_total') : t('split.scan_found', { n: items.length }),
+        mismatch ? 'ti-alert-triangle' : 'ti-sparkles'
+      )
+    } catch (e) {
+      haptic('error')
+      const status = e instanceof ApiError ? e.status : 0
+      toast(t(status === 503 ? 'split.scan_not_configured' : 'split.scan_failed'), 'ti-alert-circle')
+    } finally {
+      setScanning(false)
     }
   }
 
@@ -328,7 +391,27 @@ export function SplitScreen({
             e.target.value = '' // allow re-picking the same file
           }}
         />
-        {draft.receiptAttachmentId ? (
+        <input
+          ref={scanFileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            onScanReceipt(e.target.files?.[0])
+            e.target.value = ''
+          }}
+        />
+        {scanning ? (
+          <div
+            className="row"
+            style={{ gap: 10, alignItems: 'center', justifyContent: 'center', padding: '6px 0' }}
+          >
+            <i className="ti ti-loader-2 spin" style={{ fontSize: 18, color: 'var(--accent)' }} />
+            <span className="muted" style={{ fontSize: 13.5, fontWeight: 600 }}>
+              {t('split.scanning')}
+            </span>
+          </div>
+        ) : draft.receiptAttachmentId ? (
           <div className="row" style={{ gap: 12, alignItems: 'center' }}>
             {draft.receiptPreviewUrl ? (
               <img
@@ -354,14 +437,23 @@ export function SplitScreen({
             />
           </div>
         ) : (
-          <button
-            className="btn btn-soft btn-block"
-            disabled={uploading}
-            onClick={() => fileRef.current?.click()}
-          >
-            <i className={'ti ' + (uploading ? 'ti-loader-2' : 'ti-camera')} />{' '}
-            {uploading ? t('split.sending') : t('split.add_photo')}
-          </button>
+          <div className="col" style={{ gap: 8 }}>
+            <button
+              className="btn btn-block"
+              disabled={uploading}
+              onClick={() => scanFileRef.current?.click()}
+            >
+              <i className="ti ti-sparkles" /> {t('split.scan_receipt')}
+            </button>
+            <button
+              className="btn btn-soft btn-block"
+              disabled={uploading}
+              onClick={() => fileRef.current?.click()}
+            >
+              <i className={'ti ' + (uploading ? 'ti-loader-2 spin' : 'ti-camera')} />{' '}
+              {uploading ? t('split.sending') : t('split.add_photo')}
+            </button>
+          </div>
         )}
       </div>
 

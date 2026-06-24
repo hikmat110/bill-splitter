@@ -290,4 +290,8 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
   background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
   background-size: 200% 100%; animation: shimmer 1.3s infinite; border-radius: var(--r-xs);
 }
+/* spinner — used for upload/scan loading icons */
+@keyframes spin { to { transform: rotate(1turn); } }
+.spin { display: inline-block; animation: spin .8s linear infinite; }
+
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }

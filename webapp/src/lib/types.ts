@@ -113,3 +113,20 @@ export interface AttachmentRef {
   id: string
   mime: string
 }
+
+/** One line item extracted from a receipt photo. */
+export interface ScannedReceiptItem {
+  name: string
+  price: number
+}
+
+/** Response from POST /api/receipts/scan — extracted receipt data to prefill a draft. */
+export interface ScannedReceipt {
+  items: ScannedReceiptItem[]
+  /** Service charge as a money amount (UZS); 0 if none printed. */
+  serviceAmount: number
+  /** Printed service percentage if the receipt states one, else null. */
+  servicePct: number | null
+  /** Printed grand total — a soft sanity hint, not authoritative. */
+  total: number | null
+}

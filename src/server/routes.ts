@@ -43,6 +43,8 @@ import {
   deleteAttachment,
   StorageError,
 } from '../services/storage.service'
+import type { AllowedMime } from '../services/storage.service'
+import { scanReceipt, ReceiptScanError } from '../services/receipt-scan.service'
 import { config } from '../config'
 import { authenticate } from './auth'
 import { json, error } from './json'
@@ -52,6 +54,7 @@ import {
   createContactSchema,
   disputeSchema,
   markPaidSchema,
+  scanReceiptSchema,
 } from './schemas'
 import { toCreateBillInput, toUpdateBillInput } from './mappers'
 import { canManageBill, canMarkPaid } from './authz'
@@ -152,6 +155,11 @@ export async function handleApi(
     // POST /api/attachments — multipart image upload, returns { id, mime }
     if (seg[0] === 'attachments' && seg.length === 1 && method === 'POST') {
       return await postAttachment(req)
+    }
+
+    // POST /api/receipts/scan — extract items from an uploaded receipt via Gemini
+    if (seg[0] === 'receipts' && seg[1] === 'scan' && seg.length === 2 && method === 'POST') {
+      return await postReceiptScan(req)
     }
 
     // GET /api/files/:id — stream a stored image (auth + ownership enforced)
@@ -365,6 +373,30 @@ async function postAttachment(req: Request): Promise<Response> {
   } catch (e) {
     if (e instanceof StorageError) {
       return error(e.code === 'too_large' ? 413 : 400, e.message)
+    }
+    throw e
+  }
+}
+
+async function postReceiptScan(req: Request): Promise<Response> {
+  const { attachmentId, mime } = scanReceiptSchema.parse(await req.json())
+  // Read the image the caller just uploaded. Like postAttachment, this trusts the
+  // opaque server-generated uuid rather than binding files to a user — there is no
+  // referencing bill yet at scan time (matches the pre-save receipt flow).
+  const found = await readAttachment(attachmentId, mime)
+  if (!found) return error(404, 'Receipt image not found')
+  const bytes = new Uint8Array(await found.file.arrayBuffer())
+  try {
+    return json(await scanReceipt(bytes, mime as AllowedMime))
+  } catch (e) {
+    if (e instanceof ReceiptScanError) {
+      if (e.code === 'not_configured') return error(503, 'Receipt scanning is not configured')
+      return error(
+        502,
+        e.code === 'parse'
+          ? 'Could not read the receipt — try a clearer photo'
+          : 'Receipt scanning is temporarily unavailable'
+      )
     }
     throw e
   }
