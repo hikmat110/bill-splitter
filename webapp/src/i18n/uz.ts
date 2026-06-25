@@ -51,7 +51,6 @@ export const uz: Dict = {
     updating: 'Yangilanmoqda…',
     receipt_photo: 'Chek rasmi',
     receipt_hint: 'Ixtiyoriy — ishtirokchilar koʻradi',
-    add_photo: 'Rasm qoʻshish',
     scan_receipt: 'Chekni skanlash',
     scanning: 'Skanlanmoqda…',
     scan_found: '{{n}} ta pozitsiya topildi',

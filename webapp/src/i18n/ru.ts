@@ -51,7 +51,6 @@ export const ru: Dict = {
     updating: 'Обновление…',
     receipt_photo: 'Фото чека',
     receipt_hint: 'Необязательно — увидят участники',
-    add_photo: 'Добавить фото',
     scan_receipt: 'Сканировать чек',
     scanning: 'Сканирование…',
     scan_found: 'Найдено позиций: {{n}}',

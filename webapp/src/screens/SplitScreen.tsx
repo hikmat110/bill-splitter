@@ -39,9 +39,7 @@ export function SplitScreen({
 }) {
   const { t } = useT()
   const toast = useToast()
-  const fileRef = useRef<HTMLInputElement>(null)
   const scanFileRef = useRef<HTMLInputElement>(null)
-  const [uploading, setUploading] = useState(false)
   const [scanning, setScanning] = useState(false)
   const editing = !!draft.editingBillId
   const calc = previewTotals(draft)
@@ -93,19 +91,6 @@ export function SplitScreen({
     if (file.size <= MAX_UPLOAD) return false
     toast(t('common.photo_too_large'), 'ti-alert-circle')
     return true
-  }
-
-  const onPickReceipt = async (file: File | undefined) => {
-    if (!file || tooLarge(file)) return
-    setUploading(true)
-    try {
-      const up = await uploadReceipt(file)
-      if (!up) return
-      patch({ receiptAttachmentId: up.id, receiptMime: up.mime, receiptPreviewUrl: up.previewUrl })
-      haptic('success')
-    } finally {
-      setUploading(false)
-    }
   }
 
   // Scan a photo: upload it (also attaches it as the receipt), send it to Gemini,
@@ -382,23 +367,13 @@ export function SplitScreen({
       <SecTitle>{t('split.receipt_photo')}</SecTitle>
       <div className="card" style={{ padding: 'calc(14px * var(--dens))' }}>
         <input
-          ref={fileRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            onPickReceipt(e.target.files?.[0])
-            e.target.value = '' // allow re-picking the same file
-          }}
-        />
-        <input
           ref={scanFileRef}
           type="file"
           accept="image/*"
           style={{ display: 'none' }}
           onChange={(e) => {
             onScanReceipt(e.target.files?.[0])
-            e.target.value = ''
+            e.target.value = '' // allow re-picking the same file
           }}
         />
         {scanning ? (
@@ -417,13 +392,11 @@ export function SplitScreen({
               <img
                 src={draft.receiptPreviewUrl}
                 alt=""
-                onClick={() => fileRef.current?.click()}
-                style={{ width: 56, height: 56, borderRadius: 'var(--r)', objectFit: 'cover', cursor: 'pointer', flexShrink: 0 }}
+                style={{ width: 56, height: 56, borderRadius: 'var(--r)', objectFit: 'cover', flexShrink: 0 }}
               />
             ) : (
               <AuthImage
                 attachmentId={draft.receiptAttachmentId}
-                onClick={() => fileRef.current?.click()}
                 style={{ width: 56, height: 56, borderRadius: 'var(--r)', flexShrink: 0 }}
               />
             )}
@@ -437,23 +410,9 @@ export function SplitScreen({
             />
           </div>
         ) : (
-          <div className="col" style={{ gap: 8 }}>
-            <button
-              className="btn btn-block"
-              disabled={uploading}
-              onClick={() => scanFileRef.current?.click()}
-            >
-              <i className="ti ti-sparkles" /> {t('split.scan_receipt')}
-            </button>
-            <button
-              className="btn btn-soft btn-block"
-              disabled={uploading}
-              onClick={() => fileRef.current?.click()}
-            >
-              <i className={'ti ' + (uploading ? 'ti-loader-2 spin' : 'ti-camera')} />{' '}
-              {uploading ? t('split.sending') : t('split.add_photo')}
-            </button>
-          </div>
+          <button className="btn btn-block" onClick={() => scanFileRef.current?.click()}>
+            <i className="ti ti-sparkles" /> {t('split.scan_receipt')}
+          </button>
         )}
       </div>
 

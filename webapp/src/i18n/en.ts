@@ -53,7 +53,6 @@ export const en = {
     updating: 'Updating…',
     receipt_photo: 'Receipt photo',
     receipt_hint: 'Optional — participants can see it',
-    add_photo: 'Add photo',
     scan_receipt: 'Scan receipt',
     scanning: 'Scanning…',
     scan_found: 'Found {{n}} items',
