@@ -55,6 +55,14 @@ export function isInTelegram(): boolean {
   return !!wa()?.initData
 }
 
+/** Native Telegram modal alert (always renders in the webview, unlike the CSS
+ *  toast). Falls back to window.alert in a plain browser. */
+export function showAlert(message: string): void {
+  const app = wa()
+  if (app?.showAlert) app.showAlert(message)
+  else window.alert(message)
+}
+
 type Haptic = 'light' | 'medium' | 'heavy' | 'success' | 'warning' | 'error'
 
 export function haptic(type: Haptic = 'light'): void {

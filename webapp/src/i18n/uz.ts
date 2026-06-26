@@ -56,6 +56,7 @@ export const uz: Dict = {
     scan_found: '{{n}} ta pozitsiya topildi',
     scan_check_total: 'Pozitsiyalar qoʻshildi — yakunni tekshiring',
     scan_failed: 'Chekni oʻqib boʻlmadi',
+    scan_empty: 'Bu rasmda pozitsiyalar topilmadi — aniqroq suratga oling',
     scan_not_configured: 'Skanlash hozircha mavjud emas',
     subtotal: 'Taomlar {{amount}}',
     service: 'Xizmat {{amount}}',

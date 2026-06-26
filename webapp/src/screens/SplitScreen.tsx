@@ -6,11 +6,11 @@ import { SecTitle } from '../components/common'
 import { SnapSlider } from '../components/SnapSlider'
 import { useToast } from '../components/Toast'
 import { previewTotals, to2 } from '../lib/calc'
-import { money } from '../lib/currency'
+import { amount, money } from '../lib/currency'
 import { api, ApiError } from '../lib/api'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
-import { haptic } from '../lib/telegram'
+import { haptic, showAlert } from '../lib/telegram'
 import { useT } from '../i18n'
 
 const TIP_PRESETS = [0, 10_000, 20_000, 30_000]
@@ -49,7 +49,7 @@ export function SplitScreen({
   // Custom mode: the tip isn't one of the presets, or the user picked "Custom".
   const [tipCustom, setTipCustom] = useState(() => draft.tip > 0 && !TIP_PRESETS.includes(draft.tip))
   const tipOptions = [
-    ...TIP_PRESETS.map((tp) => ({ value: tp, label: tp === 0 ? t('common.none') : money(tp) })),
+    ...TIP_PRESETS.map((tp) => ({ value: tp, label: tp === 0 ? t('common.none') : amount(tp) })),
     { value: TIP_CUSTOM, label: t('split.tip_custom') },
   ]
   // Tip payer always includes the creator ("You", default) plus the participants.
@@ -110,6 +110,13 @@ export function SplitScreen({
         price: it.price,
         who: [...participants], // empty until the user adds people
       }))
+      // The scan ran but extracted nothing — tell the user instead of silently
+      // pasting an empty list (which looks like "nothing happened").
+      if (items.length === 0) {
+        haptic('warning')
+        showAlert(t('split.scan_empty'))
+        return
+      }
       const subtotal = items.reduce((s, it) => s + it.price, 0)
       const servicePct =
         r.serviceAmount > 0 && subtotal > 0
@@ -135,7 +142,11 @@ export function SplitScreen({
     } catch (e) {
       haptic('error')
       const status = e instanceof ApiError ? e.status : 0
-      toast(t(status === 503 ? 'split.scan_not_configured' : 'split.scan_failed'), 'ti-alert-circle')
+      const friendly = t(status === 503 ? 'split.scan_not_configured' : 'split.scan_failed')
+      // Surface the real reason via a native alert (the toast wasn't showing for
+      // some users). Append the status + server message so failures are diagnosable.
+      const detail = e instanceof Error && e.message ? e.message : String(e)
+      showAlert(`${friendly}\n\n[${status || 'no response'}] ${detail}`)
     } finally {
       setScanning(false)
     }

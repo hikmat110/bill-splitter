@@ -56,6 +56,7 @@ export const ru: Dict = {
     scan_found: 'Найдено позиций: {{n}}',
     scan_check_total: 'Позиции добавлены — проверьте итог',
     scan_failed: 'Не удалось распознать чек',
+    scan_empty: 'На фото не найдено позиций — попробуйте снимок чётче',
     scan_not_configured: 'Сканирование сейчас недоступно',
     subtotal: 'Блюда {{amount}}',
     service: 'Сервис {{amount}}',

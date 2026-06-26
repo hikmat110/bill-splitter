@@ -58,6 +58,7 @@ export const en = {
     scan_found: 'Found {{n}} items',
     scan_check_total: 'Items added — double-check the total',
     scan_failed: "Couldn't read the receipt",
+    scan_empty: 'No items found on this photo — try a clearer shot',
     scan_not_configured: "Scanning isn't available right now",
     subtotal: 'Subtotal {{amount}}',
     service: 'Service {{amount}}',
