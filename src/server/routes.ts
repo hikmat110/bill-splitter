@@ -27,7 +27,12 @@ import {
 } from '../services/bill.service'
 import type { BillWithDetails, BillItemWithShares, BillParticipantWithContact } from '../services/bill.service'
 import type { ParticipantBreakdown } from '../utils/settlement'
-import { listContacts, addContact, findOrCreateSelfContact } from '../services/contact.service'
+import {
+  listContacts,
+  addContact,
+  addContactsByUsernames,
+  findOrCreateSelfContact,
+} from '../services/contact.service'
 import { findById } from '../services/user.service'
 import {
   sendBillNotifications,
@@ -52,10 +57,12 @@ import {
   createBillSchema,
   updateBillSchema,
   createContactSchema,
+  addContactsByUsernameSchema,
   disputeSchema,
   markPaidSchema,
   scanReceiptSchema,
 } from './schemas'
+import { parseUsernameList } from '../utils/username'
 import { toCreateBillInput, toUpdateBillInput } from './mappers'
 import { canManageBill, canMarkPaid } from './authz'
 
@@ -143,13 +150,23 @@ export async function handleApi(
   try {
     // GET /api/me
     if (method === 'GET' && seg[0] === 'me' && seg.length === 1) {
-      return await getMe(user)
+      return await getMe(user, bot)
     }
 
     // /api/contacts
     if (seg[0] === 'contacts' && seg.length === 1) {
       if (method === 'GET') return await getContacts(user)
       if (method === 'POST') return await postContact(req, user)
+    }
+
+    // POST /api/contacts/by-username — batch-add registered users by @handle
+    if (
+      seg[0] === 'contacts' &&
+      seg.length === 2 &&
+      seg[1] === 'by-username' &&
+      method === 'POST'
+    ) {
+      return await postContactsByUsername(req, user)
     }
 
     // POST /api/attachments — multipart image upload, returns { id, mime }
@@ -210,7 +227,7 @@ export async function handleApi(
 
 // ─── handlers ─────────────────────────────────────────────────────────────────
 
-async function getMe(user: User): Promise<Response> {
+async function getMe(user: User, bot: Bot<MyContext>): Promise<Response> {
   // Lazily ensure a self-contact exists so "You" can be a bill participant.
   const self = await findOrCreateSelfContact(user.id, user.first_name)
   return json({
@@ -221,6 +238,9 @@ async function getMe(user: User): Promise<Response> {
     languageCode: user.language_code,
     cardNumber: user.card_number,
     selfContactId: self.id,
+    // Used by the Mini App to deep-link into the bot's native contact picker.
+    // `botInfo` throws until the bot is initialized, so guard with isInited().
+    botUsername: bot.isInited() ? bot.botInfo.username : null,
   })
 }
 
@@ -237,6 +257,20 @@ async function postContact(req: Request, user: User): Promise<Response> {
   } catch {
     return error(409, 'Could not add contact — the name may already be in use')
   }
+}
+
+async function postContactsByUsername(req: Request, user: User): Promise<Response> {
+  const body = addContactsByUsernameSchema.parse(await req.json())
+  const handles = parseUsernameList(body.usernames)
+  if (handles.length === 0) return error(400, 'Enter at least one username')
+  const r = await addContactsByUsernames(user.id, handles)
+  return json({
+    // Newly created contacts (linked + name-only) — names, for a summary toast.
+    added: [...r.linked, ...r.added],
+    skipped: r.skipped,
+    notFound: r.notFound,
+    selfSkipped: r.selfSkipped,
+  })
 }
 
 async function getBills(user: User): Promise<Response> {

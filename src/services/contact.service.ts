@@ -3,6 +3,7 @@ import { db } from '../db/client'
 import { contacts, users, billParticipants, billItemShares } from '../db/schema'
 import type { Contact } from '../db/schema'
 import { normalizePhone } from '../utils/phone'
+import { findUserByUsername } from './user.service'
 
 export async function listContacts(ownerId: string): Promise<Contact[]> {
   return db
@@ -195,6 +196,49 @@ export async function addLinkedContactsBatch(
   }
 
   return result
+}
+
+export interface UsernameAddResult extends BatchResult {
+  /** Handles with no matching registered user (without the leading `@`). */
+  notFound: string[]
+  /** Whether the owner's own username was among the handles (skipped). */
+  selfSkipped: boolean
+}
+
+/**
+ * Add contacts from a list of already-normalized Telegram handles. Resolves each
+ * to a registered user (username lookup is local-only), skips the owner, and
+ * batch-adds the rest. Shared by the bot's @username flow and the Mini App API.
+ */
+export async function addContactsByUsernames(
+  ownerId: string,
+  handles: string[],
+): Promise<UsernameAddResult> {
+  const people: BatchPerson[] = []
+  const notFound: string[] = []
+  let selfSkipped = false
+
+  for (const handle of handles) {
+    const found = await findUserByUsername(handle)
+    if (!found) {
+      notFound.push(handle)
+      continue
+    }
+    if (found.id === ownerId) {
+      selfSkipped = true
+      continue
+    }
+    const displayName =
+      [found.first_name, found.last_name].filter(Boolean).join(' ') || `@${handle}`
+    people.push({ userId: found.id, phone: found.phone, displayName })
+  }
+
+  const batch =
+    people.length > 0
+      ? await addLinkedContactsBatch(ownerId, people)
+      : { linked: [], added: [], skipped: [] }
+
+  return { ...batch, notFound, selfSkipped }
 }
 
 export async function findOrCreateSelfContact(userId: string, firstName: string): Promise<Contact> {

@@ -90,6 +90,13 @@ export const createContactSchema = z.object({
 })
 export type CreateContactBody = z.infer<typeof createContactSchema>
 
+// Free-text list of Telegram @usernames (comma/space/newline separated), parsed
+// server-side with parseUsernameList. Mirrors the bot's paste-multiple flow.
+export const addContactsByUsernameSchema = z.object({
+  usernames: z.string().trim().min(1).max(500),
+})
+export type AddContactsByUsernameBody = z.infer<typeof addContactsByUsernameSchema>
+
 export const disputeSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 })

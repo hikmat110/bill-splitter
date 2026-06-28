@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'bun:test'
-import { createBillSchema, createContactSchema } from './schemas'
+import {
+  createBillSchema,
+  createContactSchema,
+  addContactsByUsernameSchema,
+} from './schemas'
 
 const P1 = '11111111-1111-4111-8111-111111111111'
 const P2 = '22222222-2222-4222-8222-222222222222'
@@ -73,5 +77,20 @@ describe('createContactSchema', () => {
 
   it('rejects an empty name', () => {
     expect(createContactSchema.safeParse({ displayName: '   ' }).success).toBe(false)
+  })
+})
+
+describe('addContactsByUsernameSchema', () => {
+  it('accepts a free-text usernames string', () => {
+    expect(addContactsByUsernameSchema.safeParse({ usernames: '@alice, @bob' }).success).toBe(true)
+  })
+
+  it('rejects an empty/whitespace string', () => {
+    expect(addContactsByUsernameSchema.safeParse({ usernames: '   ' }).success).toBe(false)
+    expect(addContactsByUsernameSchema.safeParse({ usernames: '' }).success).toBe(false)
+  })
+
+  it('rejects an overly long string', () => {
+    expect(addContactsByUsernameSchema.safeParse({ usernames: 'a'.repeat(501) }).success).toBe(false)
   })
 })

@@ -8,6 +8,8 @@ export interface Me {
   languageCode: string
   cardNumber: string | null
   selfContactId: string
+  /** Bot handle (no `@`) for the native-contact-picker deep link; null if unknown. */
+  botUsername: string | null
 }
 
 export interface ApiContact {
@@ -15,6 +17,14 @@ export interface ApiContact {
   displayName: string
   phone: string | null
   linkedUserId: string | null
+}
+
+/** Response from POST /api/contacts/by-username — name arrays for a summary toast. */
+export interface UsernameAddResult {
+  added: string[]
+  skipped: string[]
+  notFound: string[]
+  selfSkipped: boolean
 }
 
 export type ParticipantStatus = 'pending' | 'marked_paid' | 'confirmed' | 'disputed'

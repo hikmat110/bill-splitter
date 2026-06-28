@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PeopleSheet } from './components/PeopleSheet'
+import { AddContactSheet } from './components/AddContactSheet'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useToast } from './components/Toast'
 import { SplitScreen } from './screens/SplitScreen'
@@ -36,6 +37,7 @@ export function App() {
   const [currentBillId, setCurrentBillId] = useState<string | null>(null)
 
   const [peopleOpen, setPeopleOpen] = useState(false)
+  const [addOpen, setAddOpen] = useState(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [fatal, setFatal] = useState<'unauthorized' | string | null>(null)
@@ -88,10 +90,17 @@ export function App() {
         : { ...d, participantIds: [...d.participantIds, id] }
     )
 
-  const addContact = async (name: string) => {
-    const c = await api.addContact({ displayName: name })
+  const addContactByName = async (name: string, phone?: string) => {
+    const c = await api.addContact({ displayName: name, phone })
     setContacts((prev) => [...prev, { id: c.id, name: c.displayName }])
     setDraft((d) => ({ ...d, participantIds: [...d.participantIds, c.id] }))
+  }
+
+  // Batch-add registered users by @handle, then reload contacts from the server.
+  const addContactsByUsername = async (usernames: string) => {
+    const result = await api.addContactsByUsername(usernames)
+    await refresh()
+    return result
   }
 
   const newBill = () => {
@@ -312,7 +321,15 @@ export function App() {
         people={people}
         selected={draft.participantIds}
         onToggle={toggleParticipant}
-        onAddContact={addContact}
+        onOpenAdd={() => setAddOpen(true)}
+      />
+
+      <AddContactSheet
+        open={addOpen}
+        onClose={() => setAddOpen(false)}
+        botUsername={me?.botUsername ?? null}
+        onAddByName={addContactByName}
+        onAddByUsername={addContactsByUsername}
       />
     </div>
   )

@@ -120,8 +120,32 @@ export const ru: Dict = {
   people: {
     title: 'Кто участвует?',
     add_placeholder: 'Добавить по имени…',
-    no_contacts: 'Пока нет контактов — добавьте кого-нибудь по имени выше.',
+    no_contacts: 'Пока нет контактов — нажмите «Добавить контакт».',
     done: 'Готово · {{n}}',
+    add_contact: 'Добавить контакт',
+  },
+  add: {
+    title: 'Добавить контакт',
+    tab_name: 'Имя',
+    tab_username: 'Юзернейм',
+    tab_telegram: 'Контакты',
+    name_placeholder: 'Имя',
+    phone_placeholder: 'Телефон (необязательно)',
+    add_button: 'Добавить',
+    adding: 'Добавление…',
+    username_placeholder: '@username, @username2…',
+    username_hint:
+      'Добавляйте тех, кто пользуется ботом, по их Telegram @username. Несколько — через пробел или запятую.',
+    telegram_explain:
+      'Выберите людей из контактов Telegram в чате бота, затем вернитесь сюда.',
+    telegram_button: 'Открыть в Telegram',
+    telegram_unavailable: 'Откройте приложение из бота, чтобы воспользоваться этим.',
+    added: 'Добавлено: {{names}}',
+    skipped: 'Уже добавлены: {{names}}',
+    not_found: 'Нет в боте: {{names}}',
+    none_found: 'Никого не найдено',
+    self_skipped: 'Это вы — выберите кого-то другого',
+    name_taken: 'Такое имя уже есть в контактах',
   },
   breakdown: {
     service: 'Сервис',

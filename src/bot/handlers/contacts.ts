@@ -6,12 +6,14 @@ import {
   findContactById,
   addContact,
   addLinkedContactsBatch,
+  addContactsByUsernames,
   isContactReferencedInBills,
   deleteContact,
   type BatchPerson,
   type BatchResult,
+  type UsernameAddResult,
 } from '../../services/contact.service'
-import { findUserByUsername, findByTelegramIds } from '../../services/user.service'
+import { findByTelegramIds } from '../../services/user.service'
 import { parseUsernameList } from '../../utils/username'
 
 /** Fixed request_id for the multi-select user picker (only one active at a time). */
@@ -182,28 +184,11 @@ export async function contactTextHandler(ctx: MyContext): Promise<void> {
 
     ctx.session.contact_wizard = undefined
 
-    const people: BatchPerson[] = []
-    const notFound: string[] = []
-    let selfPicked = false
-    for (const handle of handles) {
-      const found = await findUserByUsername(handle)
-      if (!found) {
-        notFound.push(handle)
-        continue
-      }
-      if (found.id === ctx.user.id) {
-        selfPicked = true
-        continue
-      }
-      const displayName = [found.first_name, found.last_name].filter(Boolean).join(' ') || `@${handle}`
-      people.push({ userId: found.id, phone: found.phone, displayName })
-    }
-
-    let result: BatchResult = { linked: [], added: [], skipped: [] }
+    let result: UsernameAddResult
     try {
-      if (people.length > 0) result = await addLinkedContactsBatch(ctx.user.id, people)
+      result = await addContactsByUsernames(ctx.user.id, handles)
     } catch (err) {
-      ctx.logger.error({ err }, 'addLinkedContactsBatch (username) failed')
+      ctx.logger.error({ err }, 'addContactsByUsernames failed')
       await editContactWizardMessageById(ctx, msgId, t(ctx, 'errors.generic'))
       return
     }
@@ -212,11 +197,11 @@ export async function contactTextHandler(ctx: MyContext): Promise<void> {
     const added = [...result.linked, ...result.added]
     if (added.length) lines.push(t(ctx, 'contacts.batch_added', { names: added.join(', ') }))
     if (result.skipped.length) lines.push(t(ctx, 'contacts.batch_skipped', { names: result.skipped.join(', ') }))
-    if (notFound.length) {
-      lines.push(t(ctx, 'contacts.batch_not_found', { names: notFound.map((h) => `@${h}`).join(', ') }))
+    if (result.notFound.length) {
+      lines.push(t(ctx, 'contacts.batch_not_found', { names: result.notFound.map((h) => `@${h}`).join(', ') }))
     }
     if (lines.length === 0) {
-      lines.push(selfPicked ? t(ctx, 'contacts.share_yourself') : t(ctx, 'contacts.pick_none'))
+      lines.push(result.selfSkipped ? t(ctx, 'contacts.share_yourself') : t(ctx, 'contacts.pick_none'))
     }
 
     await editContactWizardMessageById(ctx, msgId, lines.join('\n'))

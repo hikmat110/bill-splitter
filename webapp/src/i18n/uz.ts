@@ -120,8 +120,32 @@ export const uz: Dict = {
   people: {
     title: "Kim bo'lishadi?",
     add_placeholder: "Ism bilan qo'shish…",
-    no_contacts: "Hozircha kontakt yo'q — yuqorida ism bilan qo'shing.",
+    no_contacts: "Hozircha kontakt yo'q — «Kontakt qo'shish» tugmasini bosing.",
     done: 'Tayyor · {{n}}',
+    add_contact: "Kontakt qo'shish",
+  },
+  add: {
+    title: "Kontakt qo'shish",
+    tab_name: 'Ism',
+    tab_username: 'Username',
+    tab_telegram: 'Kontaktlar',
+    name_placeholder: 'Ism',
+    phone_placeholder: 'Telefon (ixtiyoriy)',
+    add_button: "Qo'shish",
+    adding: "Qo'shilmoqda…",
+    username_placeholder: '@username, @username2…',
+    username_hint:
+      "Botdan foydalanadiganlarni Telegram @username orqali qo'shing. Bir nechtasini probel yoki vergul bilan ajrating.",
+    telegram_explain:
+      "Bot chatida Telegram kontaktlaringizdan odamlarni tanlang, so'ng shu yerga qayting.",
+    telegram_button: 'Telegramda ochish',
+    telegram_unavailable: 'Buni ishlatish uchun ilovani botdan oching.',
+    added: "Qo'shildi: {{names}}",
+    skipped: "Allaqachon qo'shilgan: {{names}}",
+    not_found: "Botda yo'q: {{names}}",
+    none_found: 'Hech kim topilmadi',
+    self_skipped: 'Bu siz — boshqasini tanlang',
+    name_taken: "Bu ism kontaktlaringizda allaqachon bor",
   },
   breakdown: {
     service: 'Xizmat',

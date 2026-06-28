@@ -122,8 +122,32 @@ export const en = {
   people: {
     title: "Who's splitting?",
     add_placeholder: 'Add someone by name…',
-    no_contacts: 'No contacts yet — add someone by name above.',
+    no_contacts: 'No contacts yet — tap “Add contact”.',
     done: 'Done · {{n}} people',
+    add_contact: 'Add contact',
+  },
+  add: {
+    title: 'Add contact',
+    tab_name: 'Name',
+    tab_username: 'Username',
+    tab_telegram: 'Contacts',
+    name_placeholder: 'Name',
+    phone_placeholder: 'Phone (optional)',
+    add_button: 'Add',
+    adding: 'Adding…',
+    username_placeholder: '@username, @username2…',
+    username_hint:
+      'Add people who use the bot by their Telegram @username. Separate several with spaces or commas.',
+    telegram_explain:
+      'Pick people from your Telegram contacts in the bot chat, then come back here.',
+    telegram_button: 'Open in Telegram',
+    telegram_unavailable: 'Open the app from the bot to use this.',
+    added: 'Added {{names}}',
+    skipped: 'Already added: {{names}}',
+    not_found: 'Not on the bot: {{names}}',
+    none_found: 'No one found',
+    self_skipped: "That's you — pick someone else",
+    name_taken: 'That name is already in your contacts',
   },
   breakdown: {
     service: 'Service',

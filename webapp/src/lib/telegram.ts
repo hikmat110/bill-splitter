@@ -55,6 +55,11 @@ export function isInTelegram(): boolean {
   return !!wa()?.initData
 }
 
+/** Open a t.me link inside Telegram (e.g. a bot deep link). No-op in a browser. */
+export function openTelegramLink(url: string): void {
+  wa()?.openTelegramLink(url)
+}
+
 /** Native Telegram modal alert (always renders in the webview, unlike the CSS
  *  toast). Falls back to window.alert in a plain browser. */
 export function showAlert(message: string): void {

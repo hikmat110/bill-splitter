@@ -1,4 +1,3 @@
-import { useState } from 'react'
 import { Avatar } from './Avatar'
 import { Sheet } from './Sheet'
 import { useT } from '../i18n'
@@ -10,51 +9,24 @@ export function PeopleSheet({
   people,
   selected,
   onToggle,
-  onAddContact,
+  onOpenAdd,
 }: {
   open: boolean
   onClose: () => void
   people: Person[]
   selected: string[]
   onToggle: (id: string) => void
-  onAddContact: (name: string) => Promise<void>
+  onOpenAdd: () => void
 }) {
   const { t } = useT()
-  const [name, setName] = useState('')
-  const [adding, setAdding] = useState(false)
-
-  const add = async () => {
-    const n = name.trim()
-    if (!n || adding) return
-    setAdding(true)
-    try {
-      await onAddContact(n)
-      setName('')
-    } finally {
-      setAdding(false)
-    }
-  }
 
   return (
     <Sheet open={open} onClose={onClose} title={t('people.title')}>
       <div className="col" style={{ gap: 14, paddingBottom: 6 }}>
-        <div className="row" style={{ gap: 8 }}>
-          <input
-            className="inp"
-            value={name}
-            placeholder={t('people.add_placeholder')}
-            onChange={(e) => setName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && add()}
-          />
-          <button
-            className="btn btn-primary"
-            onClick={add}
-            disabled={adding || !name.trim()}
-            style={{ flexShrink: 0 }}
-          >
-            <i className="ti ti-plus" />
-          </button>
-        </div>
+        <button className="btn btn-soft btn-block" onClick={onOpenAdd}>
+          <i className="ti ti-plus" style={{ marginRight: 8 }} />
+          {t('people.add_contact')}
+        </button>
 
         <div className="col" style={{ gap: 4 }}>
           {people.map((p) => {
