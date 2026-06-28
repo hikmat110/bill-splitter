@@ -43,6 +43,7 @@ export const en = {
     no_items: 'No items yet — add people, then add an item.',
     service_tip: 'Service · Tip',
     service_charge: 'Service charge',
+    service_custom: 'Custom',
     tip: 'Tip',
     tip_custom: 'Custom',
     tip_paid_by: 'Tip paid by',

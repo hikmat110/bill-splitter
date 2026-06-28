@@ -15,8 +15,9 @@ import { useT } from '../i18n'
 
 const TIP_PRESETS = [0, 10_000, 20_000, 30_000]
 const SERVICE_PRESETS = [0, 5, 10, 15, 20]
-// Sentinel slider position that reveals a free-form tip input.
+// Sentinel slider positions that reveal a free-form input.
 const TIP_CUSTOM = -1
+const SERVICE_CUSTOM = -1
 // Matches the server's MAX_UPLOAD_BYTES default — checked client-side for fast feedback.
 const MAX_UPLOAD = 5_000_000
 
@@ -45,7 +46,15 @@ export function SplitScreen({
   const calc = previewTotals(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
-  const serviceOptions = SERVICE_PRESETS.map((p) => ({ value: p, label: p ? p + '%' : t('common.off') }))
+  const serviceOptions = [
+    ...SERVICE_PRESETS.map((p) => ({ value: p, label: p ? p + '%' : t('common.off') })),
+    { value: SERVICE_CUSTOM, label: t('split.service_custom') },
+  ]
+  // Custom mode: the user tapped "Custom", or the value isn't one of the presets
+  // (e.g. a fractional % derived from a receipt scan, or an edited bill).
+  const [serviceCustomTap, setServiceCustomTap] = useState(false)
+  const serviceCustom =
+    serviceCustomTap || (draft.servicePct > 0 && !SERVICE_PRESETS.includes(draft.servicePct))
   // Custom mode: the tip isn't one of the presets, or the user picked "Custom".
   const [tipCustom, setTipCustom] = useState(() => draft.tip > 0 && !TIP_PRESETS.includes(draft.tip))
   const tipOptions = [
@@ -294,9 +303,30 @@ export function SplitScreen({
           </div>
           <SnapSlider
             options={serviceOptions}
-            value={draft.servicePct}
-            onChange={(v) => patch({ servicePct: v })}
+            value={serviceCustom ? SERVICE_CUSTOM : draft.servicePct}
+            onChange={(v) => {
+              if (v === SERVICE_CUSTOM) {
+                setServiceCustomTap(true)
+              } else {
+                setServiceCustomTap(false)
+                patch({ servicePct: v })
+              }
+            }}
           />
+          {serviceCustom && (
+            <input
+              className="inp"
+              type="number"
+              inputMode="decimal"
+              value={draft.servicePct || ''}
+              placeholder="0"
+              autoFocus
+              onChange={(e) =>
+                patch({ servicePct: to2(Math.min(100, Math.max(0, Number(e.target.value) || 0))) })
+              }
+              style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
+            />
+          )}
         </div>
         <div style={{ height: 1, background: 'var(--border)', margin: '14px -2px' }} />
         <div className="col" style={{ gap: 10 }}>

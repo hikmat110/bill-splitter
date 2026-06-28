@@ -41,6 +41,7 @@ export const uz: Dict = {
     no_items: "Hozircha mahsulot yo'q — avval odamlarni, keyin mahsulot qo'shing.",
     service_tip: 'Xizmat · Choy puli',
     service_charge: "Xizmat to'lovi",
+    service_custom: 'Boshqa',
     tip: 'Choy puli',
     tip_custom: 'Boshqa',
     tip_paid_by: "Choy pulini kim to'ladi",

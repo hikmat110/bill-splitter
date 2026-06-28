@@ -41,6 +41,7 @@ export const ru: Dict = {
     no_items: 'Пока нет позиций — добавьте людей, затем позицию.',
     service_tip: 'Сервис · Чаевые',
     service_charge: 'Сервисный сбор',
+    service_custom: 'Другая',
     tip: 'Чаевые',
     tip_custom: 'Другая',
     tip_paid_by: 'Чаевые оплатил',
