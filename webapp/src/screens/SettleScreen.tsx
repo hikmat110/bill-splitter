@@ -2,10 +2,12 @@ import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { AuthImage } from '../components/AuthImage'
 import { PhotoModal } from '../components/PhotoModal'
+import { TextShareModal } from '../components/TextShareModal'
 import { Money } from '../components/Money'
 import { SecTitle, Empty, BreakdownLines } from '../components/common'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/currency'
+import { buildParticipantText } from '../lib/billText'
 import { api, ApiError } from '../lib/api'
 import { haptic } from '../lib/telegram'
 import { statusLabel, pillClass } from '../lib/status'
@@ -30,6 +32,7 @@ export function SettleScreen({
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
   const [viewing, setViewing] = useState<string | null>(null)
+  const [share, setShare] = useState<{ name: string; text: string; hasCard: boolean } | null>(null)
 
   if (!bill) {
     return (
@@ -76,6 +79,26 @@ export function SettleScreen({
       t('settle.reminder_sent', { name: p.displayName }),
       'ti-bell'
     )
+
+  // Unregistered participants get no Telegram notification — let the creator copy
+  // a plain-text summary to send them by hand.
+  const onShare = (p: BillParticipant) =>
+    setShare({
+      name: p.displayName,
+      text: buildParticipantText(bill, p, me, t),
+      hasCard: !!me.cardNumber,
+    })
+
+  const handleCopy = async (text: string, name: string) => {
+    try {
+      await navigator.clipboard.writeText(text)
+      haptic('success')
+      toast(t('share.copied', { name }), 'ti-copy')
+      setShare(null)
+    } catch {
+      toast(t('share.copy_failed'), 'ti-alert-circle')
+    }
+  }
 
   const onConfirm = (p: BillParticipant) =>
     run(
@@ -204,6 +227,10 @@ export function SettleScreen({
                       <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onDispute(p)}>
                         <i className="ti ti-x" /> {t('settle.dispute')}
                       </button>
+                    ) : p.linkedUserId === null ? (
+                      <button className="btn btn-sm" onClick={() => onShare(p)}>
+                        <i className="ti ti-copy" /> {t('share.button')}
+                      </button>
                     ) : (
                       <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onRemind(p)}>
                         <i className="ti ti-bell" /> {t('settle.remind')}
@@ -263,6 +290,7 @@ export function SettleScreen({
       </div>
 
       <PhotoModal attachmentId={viewing} onClose={() => setViewing(null)} />
+      <TextShareModal data={share} onClose={() => setShare(null)} onCopy={handleCopy} />
     </div>
   )
 }
