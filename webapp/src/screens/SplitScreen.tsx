@@ -5,7 +5,7 @@ import { Money } from '../components/Money'
 import { SecTitle } from '../components/common'
 import { SnapSlider } from '../components/SnapSlider'
 import { useToast } from '../components/Toast'
-import { previewTotals, to2 } from '../lib/calc'
+import { previewTotals, previewShares, to2 } from '../lib/calc'
 import { amount, money } from '../lib/currency'
 import { api, ApiError } from '../lib/api'
 import { uid } from '../lib/draft'
@@ -44,6 +44,7 @@ export function SplitScreen({
   const [scanning, setScanning] = useState(false)
   const editing = !!draft.editingBillId
   const calc = previewTotals(draft)
+  const shares = previewShares(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
   const serviceOptions = [
@@ -456,6 +457,26 @@ export function SplitScreen({
           </button>
         )}
       </div>
+
+      {/* per-person preview — how much each person owes so far */}
+      {shares.length > 0 && (
+        <>
+          <SecTitle>{t('split.per_person')}</SecTitle>
+          <div className="card" style={{ padding: 'calc(13px * var(--dens))' }}>
+            <div className="col" style={{ gap: 10 }}>
+              {shares.map((s) => (
+                <div key={s.id} className="row" style={{ gap: 11, alignItems: 'center' }}>
+                  <Avatar id={s.id} name={nameById(s.id)} size={30} />
+                  <span style={{ flex: 1, minWidth: 0, fontWeight: 600, fontSize: 14 }}>
+                    {nameById(s.id)}
+                  </span>
+                  <Money amount={s.amount} style={{ fontWeight: 800, fontSize: 15.5 }} />
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
 
       {/* total bar */}
       <div

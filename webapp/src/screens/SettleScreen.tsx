@@ -7,7 +7,7 @@ import { Money } from '../components/Money'
 import { SecTitle, Empty, BreakdownLines } from '../components/common'
 import { useToast } from '../components/Toast'
 import { money } from '../lib/currency'
-import { buildParticipantText } from '../lib/billText'
+import { buildBillText } from '../lib/billText'
 import { api, ApiError } from '../lib/api'
 import { haptic } from '../lib/telegram'
 import { statusLabel, pillClass } from '../lib/status'
@@ -32,7 +32,7 @@ export function SettleScreen({
   const toast = useToast()
   const [busy, setBusy] = useState<string | null>(null)
   const [viewing, setViewing] = useState<string | null>(null)
-  const [share, setShare] = useState<{ name: string; text: string; hasCard: boolean } | null>(null)
+  const [share, setShare] = useState<{ text: string; hasCard: boolean } | null>(null)
 
   if (!bill) {
     return (
@@ -80,20 +80,16 @@ export function SettleScreen({
       'ti-bell'
     )
 
-  // Unregistered participants get no Telegram notification — let the creator copy
-  // a plain-text summary to send them by hand.
-  const onShare = (p: BillParticipant) =>
-    setShare({
-      name: p.displayName,
-      text: buildParticipantText(bill, p, me, t),
-      hasCard: !!me.cardNumber,
-    })
+  // People who aren't on the bot get no Telegram notification — let the creator copy
+  // the whole bill as plain text and send it to them by hand.
+  const onShareBill = () =>
+    setShare({ text: buildBillText(bill, me, t), hasCard: !!me.cardNumber })
 
-  const handleCopy = async (text: string, name: string) => {
+  const handleCopy = async (text: string) => {
     try {
       await navigator.clipboard.writeText(text)
       haptic('success')
-      toast(t('share.copied', { name }), 'ti-copy')
+      toast(t('share.copied'), 'ti-copy')
       setShare(null)
     } catch {
       toast(t('share.copy_failed'), 'ti-alert-circle')
@@ -174,6 +170,17 @@ export function SettleScreen({
         </div>
       </div>
 
+      {/* one-tap whole-bill text to hand to anyone not on the bot */}
+      {others.length > 0 && (
+        <button
+          className="btn btn-block btn-soft"
+          style={{ marginBottom: 16 }}
+          onClick={onShareBill}
+        >
+          <i className="ti ti-copy" /> {t('share.button')}
+        </button>
+      )}
+
       {/* who owes you */}
       <SecTitle>{t('settle.who_owes_you')}</SecTitle>
       {others.length === 0 ? (
@@ -227,10 +234,6 @@ export function SettleScreen({
                       <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onDispute(p)}>
                         <i className="ti ti-x" /> {t('settle.dispute')}
                       </button>
-                    ) : p.linkedUserId === null ? (
-                      <button className="btn btn-sm" onClick={() => onShare(p)}>
-                        <i className="ti ti-copy" /> {t('share.button')}
-                      </button>
                     ) : (
                       <button className="btn btn-sm" disabled={busy === p.id} onClick={() => onRemind(p)}>
                         <i className="ti ti-bell" /> {t('settle.remind')}
@@ -260,27 +263,23 @@ export function SettleScreen({
             <div key={p.id} className="card pop" style={{ padding: 'calc(13px * var(--dens))' }}>
               <div className="row" style={{ gap: 11 }}>
                 <Avatar id={p.contactId} name={self ? t('common.you') : p.displayName} size={38} />
-                <div className="col" style={{ flex: 1, minWidth: 0 }}>
-                  <span style={{ fontWeight: 700, fontSize: 14.5 }}>
-                    {self ? t('common.you') : p.displayName}
-                  </span>
-                  <span className="muted tnum" style={{ fontSize: 12.5, fontWeight: 600 }}>
-                    {self
-                      ? t('settle.spent_label', { amount: money(p.amount) })
-                      : t('settle.owes_label', { amount: money(p.amount) })}
-                  </span>
-                </div>
-                <div className="row" style={{ gap: 6, flexShrink: 0 }}>
-                  {bill.tipPaidByContactId === p.contactId && (
-                    <span className="pill pill-pos">
-                      <i className="ti ti-coin" style={{ fontSize: 12 }} /> {t('settle.paid_tip_pill')}
-                    </span>
-                  )}
-                  {self ? (
-                    <span className="pill pill-mut">{t('settle.spent_pill')}</span>
-                  ) : (
-                    <span className={'pill ' + pillClass(p.status)}>{statusLabel(t, p.status)}</span>
-                  )}
+                <span style={{ flex: 1, minWidth: 0, fontWeight: 700, fontSize: 14.5 }}>
+                  {self ? t('common.you') : p.displayName}
+                </span>
+                <div className="col" style={{ alignItems: 'flex-end', gap: 6, flexShrink: 0 }}>
+                  <Money amount={p.amount} style={{ fontWeight: 800, fontSize: 16 }} />
+                  <div className="row" style={{ gap: 6 }}>
+                    {bill.tipPaidByContactId === p.contactId && (
+                      <span className="pill pill-pos">
+                        <i className="ti ti-coin" style={{ fontSize: 12 }} /> {t('settle.paid_tip_pill')}
+                      </span>
+                    )}
+                    {self ? (
+                      <span className="pill pill-mut">{t('settle.spent_pill')}</span>
+                    ) : (
+                      <span className={'pill ' + pillClass(p.status)}>{statusLabel(t, p.status)}</span>
+                    )}
+                  </div>
                 </div>
               </div>
               <BreakdownLines b={p} style={{ marginTop: 11, paddingLeft: 49 }} />

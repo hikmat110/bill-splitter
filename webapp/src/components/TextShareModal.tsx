@@ -1,16 +1,16 @@
 import { useT } from '../i18n'
 
-/** Bottom-sheet showing one participant's share as plain text in a monospace
- *  block, with a Copy button. Renders nothing when `data` is null. Copying is
- *  delegated to the parent (which owns the toast + haptic). */
+/** Bottom-sheet showing the whole bill as plain text in a monospace block, with a
+ *  Copy button. Renders nothing when `data` is null. Copying is delegated to the
+ *  parent (which owns the toast + haptic). */
 export function TextShareModal({
   data,
   onClose,
   onCopy,
 }: {
-  data: { name: string; text: string; hasCard: boolean } | null
+  data: { text: string; hasCard: boolean } | null
   onClose: () => void
-  onCopy: (text: string, name: string) => void
+  onCopy: (text: string) => void
 }) {
   const { t } = useT()
   if (!data) return null
@@ -42,16 +42,14 @@ export function TextShareModal({
         }}
       >
         <div className="between" style={{ alignItems: 'center' }}>
-          <span style={{ fontWeight: 700, fontSize: 15.5 }}>
-            {t('share.title', { name: data.name })}
-          </span>
+          <span style={{ fontWeight: 700, fontSize: 15.5 }}>{t('share.title')}</span>
           <button className="icon-btn" onClick={onClose}>
             <i className="ti ti-x" />
           </button>
         </div>
 
         <div className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
-          {t('share.hint', { name: data.name })}
+          {t('share.hint')}
         </div>
 
         <pre
@@ -79,10 +77,7 @@ export function TextShareModal({
           </div>
         )}
 
-        <button
-          className="btn btn-block btn-primary btn-lg"
-          onClick={() => onCopy(data.text, data.name)}
-        >
+        <button className="btn btn-block btn-primary btn-lg" onClick={() => onCopy(data.text)}>
           <i className="ti ti-copy" /> {t('share.copy_button')}
         </button>
       </div>
