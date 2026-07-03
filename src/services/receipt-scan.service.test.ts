@@ -49,12 +49,33 @@ describe('scanReceipt', () => {
 
     const result = await scanReceipt(IMG, 'image/jpeg')
     expect(result.items).toEqual([
-      { name: 'Plov', price: 45000 },
-      { name: 'Tea', price: 12345.68 }, // rounded to 2 decimals
+      { name: 'Plov', price: 45000, quantity: 1 },
+      { name: 'Tea', price: 12345.68, quantity: 1 }, // rounded to 2 decimals
     ])
     expect(result.serviceAmount).toBe(9000)
     expect(result.servicePct).toBe(10)
     expect(result.total).toBe(99000)
+  })
+
+  test('extracts printed quantities and clamps degenerate values', async () => {
+    mockFetch(async () =>
+      geminiResponse(
+        JSON.stringify({
+          items: [
+            { name: 'Kebab', price: 70000, quantity: 7 },
+            { name: 'Bread', price: 6000, quantity: 0 }, // clamped up to 1
+            { name: 'Tea', price: 9000, quantity: 2.6 }, // rounded to 3
+          ],
+          serviceAmount: 0,
+        })
+      )
+    )
+    const result = await scanReceipt(IMG, 'image/jpeg')
+    expect(result.items).toEqual([
+      { name: 'Kebab', price: 70000, quantity: 7 },
+      { name: 'Bread', price: 6000, quantity: 1 },
+      { name: 'Tea', price: 9000, quantity: 3 },
+    ])
   })
 
   test('defaults missing optional fields (service/total absent)', async () => {
@@ -81,7 +102,7 @@ describe('scanReceipt', () => {
       )
     )
     const result = await scanReceipt(IMG, 'image/jpeg')
-    expect(result.items).toEqual([{ name: 'Plov', price: 45000 }])
+    expect(result.items).toEqual([{ name: 'Plov', price: 45000, quantity: 1 }])
     expect(result.serviceAmount).toBe(8550) // service fee preserved, not double-counted
     expect(result.servicePct).toBe(15)
   })
@@ -102,7 +123,7 @@ describe('scanReceipt', () => {
       )
     )
     const result = await scanReceipt(IMG, 'image/jpeg')
-    expect(result.items).toEqual([{ name: 'Lagman', price: 40000 }])
+    expect(result.items).toEqual([{ name: 'Lagman', price: 40000, quantity: 1 }])
   })
 
   test('drops an unnamed percent-only service line via the price guard', async () => {
@@ -119,7 +140,7 @@ describe('scanReceipt', () => {
       )
     )
     const result = await scanReceipt(IMG, 'image/jpeg')
-    expect(result.items).toEqual([{ name: 'Steak', price: 90000 }])
+    expect(result.items).toEqual([{ name: 'Steak', price: 90000, quantity: 1 }])
   })
 
   test('keeps a real dish that happens to equal the service amount', async () => {
@@ -137,8 +158,8 @@ describe('scanReceipt', () => {
     )
     const result = await scanReceipt(IMG, 'image/jpeg')
     expect(result.items).toEqual([
-      { name: 'Plov', price: 45000 },
-      { name: 'Cola', price: 8550 },
+      { name: 'Plov', price: 45000, quantity: 1 },
+      { name: 'Cola', price: 8550, quantity: 1 },
     ])
   })
 
@@ -156,8 +177,8 @@ describe('scanReceipt', () => {
     )
     const result = await scanReceipt(IMG, 'image/jpeg')
     expect(result.items).toEqual([
-      { name: 'Tea', price: 12000 },
-      { name: 'Cake', price: 23000 },
+      { name: 'Tea', price: 12000, quantity: 1 },
+      { name: 'Cake', price: 23000, quantity: 1 },
     ])
   })
 

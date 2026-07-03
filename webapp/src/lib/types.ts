@@ -151,7 +151,10 @@ export interface AttachmentRef {
 /** One line item extracted from a receipt photo. */
 export interface ScannedReceiptItem {
   name: string
+  /** LINE total (quantity × unit price), not the unit price. */
   price: number
+  /** Item count printed on the receipt, else 1. */
+  quantity: number
 }
 
 /** Response from POST /api/receipts/scan — extracted receipt data to prefill a draft. */

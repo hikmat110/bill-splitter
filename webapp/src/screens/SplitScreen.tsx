@@ -124,13 +124,19 @@ export function SplitScreen({
       // Attach the photo right away so it's kept even if scanning then fails.
       patch({ receiptAttachmentId: up.id, receiptMime: up.mime, receiptPreviewUrl: up.previewUrl })
       const r = await api.scanReceipt(up.id, up.mime)
-      const items: DraftItem[] = r.items.map((it) => ({
-        id: uid(),
-        name: it.name || t('split.default_item_name'),
-        price: it.price,
-        qty: 1, // the scan folds quantity into the line total
-        who: participants.map((id) => ({ id, units: null })), // empty until people are added
-      }))
+      // The scan returns LINE totals plus the printed quantity; the editor's
+      // price is per-unit, so divide it back out (floor-to-cent — sub-som dust
+      // stays under the mismatch check's 1-som tolerance).
+      const items: DraftItem[] = r.items.map((it) => {
+        const qty = Math.min(999, Math.max(1, Math.round(it.quantity || 1)))
+        return {
+          id: uid(),
+          name: it.name || t('split.default_item_name'),
+          price: qty > 1 ? to2(it.price / qty) : it.price,
+          qty,
+          who: participants.map((id) => ({ id, units: null })), // empty until people are added
+        }
+      })
       // The scan ran but extracted nothing — tell the user instead of silently
       // pasting an empty list (which looks like "nothing happened").
       if (items.length === 0) {
@@ -138,7 +144,7 @@ export function SplitScreen({
         showAlert(t('split.scan_empty'))
         return
       }
-      const subtotal = items.reduce((s, it) => s + it.price, 0)
+      const subtotal = items.reduce((s, it) => s + it.price * it.qty, 0)
       const servicePct =
         r.serviceAmount > 0 && subtotal > 0
           ? to2((r.serviceAmount / subtotal) * 100)

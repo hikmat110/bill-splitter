@@ -21,7 +21,11 @@ const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
 
 export interface ScannedItem {
   name: string
+  /** LINE total (quantity × unit price) — not the unit price. A missed
+   *  quantity therefore still yields correct money, just no unit split. */
   price: number
+  /** Item count when the receipt prints one (e.g. "7 x 10 000"), else 1. */
+  quantity: number
 }
 
 export interface ScannedReceipt {
@@ -51,9 +55,23 @@ const num2 = z
   .nonnegative()
   .transform((n) => Math.round(n * 100) / 100)
 
+// The model may emit 0 or a fractional count for an unreadable line — clamp to a
+// sane integer instead of failing the whole scan.
+const qtyNum = z
+  .number()
+  .finite()
+  .nonnegative()
+  .transform((n) => Math.min(999, Math.max(1, Math.round(n))))
+
 const scannedReceiptSchema = z.object({
   items: z
-    .array(z.object({ name: z.string().trim().max(200).default(''), price: num2 }))
+    .array(
+      z.object({
+        name: z.string().trim().max(200).default(''),
+        price: num2,
+        quantity: qtyNum.default(1),
+      })
+    )
     .default([]),
   serviceAmount: num2.default(0),
   servicePct: z.number().min(0).max(100).nullable().default(null),
@@ -110,6 +128,7 @@ const RESPONSE_SCHEMA = {
         properties: {
           name: { type: 'STRING' },
           price: { type: 'NUMBER' },
+          quantity: { type: 'NUMBER' },
         },
         required: ['name', 'price'],
       },
@@ -124,8 +143,10 @@ const RESPONSE_SCHEMA = {
 const PROMPT = [
   'You are reading a restaurant bill/receipt photo. Extract the data as JSON.',
   'Rules:',
-  '- "items": each ordered line item with its "name" and its line "price" as a bare number.',
-  '  If a line shows quantity × unit price, use the line total for that item.',
+  '- "items": each ordered line item with its "name", its line "price", and its "quantity".',
+  '  "price" is ALWAYS the line TOTAL as a bare number. If a line shows quantity × unit',
+  '  price (e.g. "2 x 15 000 = 30 000"), set "quantity" to the count and "price" to the',
+  '  line total (30000). If no quantity is printed, use quantity 1.',
   '- "serviceAmount": the service charge amount (service / обслуживание / xizmat haqi) if printed, else 0.',
   '- "servicePct": the service charge percentage if the receipt prints one (e.g. 10), else null.',
   '- "total": the printed grand total if present, else null.',
