@@ -31,6 +31,8 @@ export const uz: Dict = {
     bill_send_failed: "Hisobni yuborib bo'lmadi",
     bill_updated: 'Hisob yangilandi',
     bill_not_editable: 'Bu hisobni endi tahrirlab boʻlmaydi',
+    draft_restored: 'Qoralama tiklandi',
+    draft_discard: "Bu qoralama o'chirilsinmi?",
   },
   split: {
     untitled: 'Nomsiz hisob',

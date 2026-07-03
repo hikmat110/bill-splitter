@@ -33,6 +33,8 @@ export const en = {
     bill_send_failed: 'Could not send bill',
     bill_updated: 'Bill updated',
     bill_not_editable: 'This bill can no longer be edited',
+    draft_restored: 'Draft restored',
+    draft_discard: 'Discard this draft?',
   },
   split: {
     untitled: 'Untitled bill',

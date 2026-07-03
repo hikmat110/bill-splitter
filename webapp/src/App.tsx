@@ -10,6 +10,7 @@ import { BillDetailScreen } from './screens/BillDetailScreen'
 import { api, ApiError } from './lib/api'
 import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
+import { loadDraft, saveDraft, clearDraft, isDraftEmpty } from './lib/draftStorage'
 import { inboxCount } from './lib/billCalc'
 import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegram'
 import { useT } from './i18n'
@@ -137,7 +138,8 @@ export function App() {
   // Handle `?startapp=` deep links once, after the first load: `edit_<billId>`
   // (the bot's "Edit in app" button) opens the editor while the bill is still
   // editable, else falls back to the detail overlay; `bill_<billId>` opens the
-  // detail overlay directly.
+  // detail overlay directly. When no edit deep link claims the Split form, a
+  // previously stored draft is restored — the deep link wins over the draft.
   useEffect(() => {
     if (loading || deepLinkDone || !me) return
     setDeepLinkDone(true)
@@ -153,7 +155,9 @@ export function App() {
         openBill(bill.id)
         toast(t('app.bill_not_editable'), 'ti-alert-circle')
       }
-    } else if (param?.startsWith('bill_')) {
+      return
+    }
+    if (param?.startsWith('bill_')) {
       const id = param.slice('bill_'.length)
       const known =
         bills.created.some((b) => b.id === id) ||
@@ -163,7 +167,35 @@ export function App() {
         openBill(id)
       }
     }
-  }, [loading, deepLinkDone, me, bills, editBill, openBill, t, toast])
+    const stored = loadDraft(me.id)
+    if (stored && !isDraftEmpty(stored)) {
+      // Contacts may have been deleted since the draft was written — prune.
+      const known = new Set([me.selfContactId, ...contacts.map((c) => c.id)])
+      setDraft({
+        ...stored,
+        participantIds: stored.participantIds.filter((id) => known.has(id)),
+        items: stored.items.map((i) => ({ ...i, who: i.who.filter((w) => known.has(w.id)) })),
+        tipPaidBy: stored.tipPaidBy && known.has(stored.tipPaidBy) ? stored.tipPaidBy : null,
+      })
+      toast(t('app.draft_restored'), 'ti-file-check')
+    }
+  }, [loading, deepLinkDone, me, bills, contacts, editBill, openBill, t, toast])
+
+  // Persist the working draft (debounced). Edit sessions are never persisted —
+  // restoring a stale edit later could clobber a bill someone responded to.
+  useEffect(() => {
+    if (!me || draft.editingBillId) return
+    const timer = setTimeout(() => {
+      if (isDraftEmpty(draft)) clearDraft(me.id)
+      else saveDraft(me.id, draft)
+    }, 400)
+    return () => clearTimeout(timer)
+  }, [draft, me])
+
+  const discardDraft = useCallback(() => {
+    setDraft(emptyDraft())
+    if (me) clearDraft(me.id)
+  }, [me])
 
   // A contact was deleted: refresh lists and drop them from the working draft.
   const onContactDeleted = useCallback(async (contactId: string) => {
@@ -212,6 +244,7 @@ export function App() {
         : await api.createBill(payload)
       await refresh()
       setDraft(emptyDraft())
+      clearDraft(me.id)
       haptic('success')
       toast(t(editingId ? 'app.bill_updated' : 'app.bill_sent'), 'ti-send')
       setTab('bills')
@@ -306,6 +339,7 @@ export function App() {
             onAddPeople={() => setPeopleOpen(true)}
             onSend={send}
             sending={sending}
+            onDiscard={discardDraft}
           />
         )}
         {tab === 'bills' && me && (

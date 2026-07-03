@@ -29,6 +29,7 @@ export function SplitScreen({
   onAddPeople,
   onSend,
   sending,
+  onDiscard,
 }: {
   draft: DraftBill
   setDraft: (d: DraftBill) => void
@@ -37,6 +38,7 @@ export function SplitScreen({
   onAddPeople: () => void
   onSend: () => void
   sending: boolean
+  onDiscard: () => void
 }) {
   const { t } = useT()
   const toast = useToast()
@@ -178,6 +180,18 @@ export function SplitScreen({
     participants.length > 0 &&
     draft.items.some((i) => i.price > 0 && i.who.length > 0)
 
+  const hasContent =
+    draft.title.trim().length > 0 ||
+    participants.length > 0 ||
+    draft.items.length > 0 ||
+    !!draft.receiptAttachmentId
+
+  const discard = () => {
+    if (!window.confirm(t('app.draft_discard'))) return
+    haptic('light')
+    onDiscard()
+  }
+
   return (
     <div className="tg-scroll" style={{ padding: '4px 16px 24px' }}>
       {/* identity */}
@@ -217,6 +231,16 @@ export function SplitScreen({
               <span>{t('split.people', { n: participants.length })}</span>
             </div>
           </div>
+          {hasContent && !editing && (
+            <button
+              className="icon-btn"
+              onClick={discard}
+              title={t('app.draft_discard')}
+              style={{ color: 'var(--text-3)', flexShrink: 0 }}
+            >
+              <i className="ti ti-trash" style={{ fontSize: 17 }} />
+            </button>
+          )}
         </div>
 
         {/* people */}

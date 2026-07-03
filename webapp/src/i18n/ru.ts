@@ -31,6 +31,8 @@ export const ru: Dict = {
     bill_send_failed: 'Не удалось отправить счёт',
     bill_updated: 'Счёт обновлён',
     bill_not_editable: 'Этот счёт больше нельзя редактировать',
+    draft_restored: 'Черновик восстановлен',
+    draft_discard: 'Удалить этот черновик?',
   },
   split: {
     untitled: 'Счёт без названия',
