@@ -5,9 +5,16 @@ const wa = () => window.Telegram?.WebApp
 
 export function initTelegram(): void {
   const app = wa()
-  if (app) {
-    app.ready()
-    app.expand()
+  if (!app) return
+  app.ready()
+  app.expand()
+  // Swipe-down must not close/minimize the app — closing is only via the
+  // explicit X control (Bot API 7.7+; older clients keep the default).
+  if (app.isVersionAtLeast?.('7.7')) app.disableVerticalSwipes?.()
+  // Always open truly fullscreen on phones (Bot API 8.0+). Desktop/web keep
+  // the normal windowed layout — fullscreen there takes over the monitor.
+  if ((app.platform === 'android' || app.platform === 'ios') && app.isVersionAtLeast?.('8.0')) {
+    app.requestFullscreen?.()
   }
 }
 

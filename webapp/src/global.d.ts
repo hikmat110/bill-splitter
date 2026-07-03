@@ -53,8 +53,19 @@ interface TelegramWebApp {
   colorScheme: 'light' | 'dark'
   themeParams: Record<string, string>
   isExpanded: boolean
+  /** 'android' | 'ios' | 'tdesktop' | 'macos' | 'web' | 'weba' | 'unknown' */
+  platform: string
+  version: string
+  isVersionAtLeast?(version: string): boolean
   ready(): void
   expand(): void
+  /** Bot API 7.7+ — stop vertical swipes from closing/minimizing the app. */
+  disableVerticalSwipes?(): void
+  enableVerticalSwipes?(): void
+  /** Bot API 8.0+ — true fullscreen (hides Telegram's header). */
+  requestFullscreen?(): void
+  exitFullscreen?(): void
+  isFullscreen?: boolean
   setHeaderColor(color: string): void
   setBackgroundColor(color: string): void
   onEvent(event: string, cb: () => void): void
