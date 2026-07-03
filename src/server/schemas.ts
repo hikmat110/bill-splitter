@@ -5,10 +5,15 @@ import { z } from 'zod'
 
 export const createBillItemSchema = z.object({
   name: z.string().trim().max(200).default(''),
-  // Positive som; decimals allowed (e.g. 10.33). Empty placeholder rows are
-  // filtered client-side before submit.
+  // Positive som PER UNIT; decimals allowed (e.g. 10.33). The line total is
+  // price × quantity. Empty placeholder rows are filtered client-side.
   price: z.number().positive(),
+  quantity: z.number().int().min(1).max(999).default(1),
   shareContactIds: z.array(z.uuid()).min(1),
+  // Explicit per-person unit counts, keyed by contact id. Sharers absent from
+  // the record split the unassigned remainder equally. Omitted/empty = the
+  // whole line splits equally (legacy behaviour).
+  unitsByContactId: z.record(z.uuid(), z.number().int().min(1)).optional(),
 })
 
 // Image mimes accepted for receipt/proof photos. Mirrors storage.service
@@ -44,6 +49,28 @@ export const createBillSchema = z
           })
         }
       })
+      // Explicit units must belong to sharers and can't exceed the quantity.
+      if (item.unitsByContactId) {
+        const sharers = new Set(item.shareContactIds)
+        let unitsTotal = 0
+        for (const [id, units] of Object.entries(item.unitsByContactId)) {
+          unitsTotal += units
+          if (!sharers.has(id)) {
+            ctx.addIssue({
+              code: 'custom',
+              message: 'units assigned to a contact that does not share the item',
+              path: ['items', i, 'unitsByContactId'],
+            })
+          }
+        }
+        if (unitsTotal > item.quantity) {
+          ctx.addIssue({
+            code: 'custom',
+            message: 'assigned units exceed the item quantity',
+            path: ['items', i, 'unitsByContactId'],
+          })
+        }
+      }
     })
     if (data.tipPaidByContactId && !participants.has(data.tipPaidByContactId)) {
       ctx.addIssue({

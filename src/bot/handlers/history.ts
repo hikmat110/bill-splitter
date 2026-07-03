@@ -103,7 +103,8 @@ export async function historyDetailHandler(ctx: MyContext, billId: string): Prom
     const b = breakdown.get(p.contact_id)
     if (b) {
       for (const it of b.items) {
-        lines.push(t(ctx, 'history.detail_item_share', { name: it.name, amount: formatMoney(it.share) }))
+        const name = it.units ? `${it.name} ×${it.units}` : it.name
+        lines.push(t(ctx, 'history.detail_item_share', { name, amount: formatMoney(it.share) }))
       }
       if (b.service > 0) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(b.service) }))
       if (b.tip > 0) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(b.tip) }))

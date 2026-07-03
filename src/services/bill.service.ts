@@ -10,14 +10,16 @@ import {
 } from '../db/schema'
 import type { Bill, BillItem, BillParticipant, Contact, User } from '../db/schema'
 import { computeSettlement, computeBreakdown } from '../utils/settlement'
-import type { ItemSpec, ParticipantBreakdown } from '../utils/settlement'
+import type { ItemSpec, ItemShare, ParticipantBreakdown } from '../utils/settlement'
 
 export interface CreateBillItemInput {
   name: string
+  /** Per-unit price; the line total is `price × quantity`. */
   price: number
   quantity: number
   position: number
-  shareContactIds: string[]
+  /** Sharers with optional explicit unit counts (null = equal split). */
+  shares: ItemShare[]
 }
 
 export interface CreateBillInput {
@@ -67,7 +69,7 @@ export interface BillParticipantWithContact extends BillParticipant {
 }
 
 export interface BillItemWithShares extends BillItem {
-  shares: Contact[]
+  shares: { contact: Contact; units: number | null }[]
 }
 
 export interface BillWithDetails {
@@ -82,8 +84,9 @@ type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0]
 
 function settlementFor(input: CreateBillInput) {
   const itemSpecs: ItemSpec[] = input.items.map((it) => ({
-    price: it.price * it.quantity,
-    shareContactIds: it.shareContactIds,
+    price: it.price,
+    quantity: it.quantity,
+    shares: it.shares,
   }))
   return computeSettlement({
     items: itemSpecs,
@@ -119,11 +122,12 @@ async function writeBillChildren(
 
     if (!insertedItem) throw new Error('Failed to insert bill item')
 
-    if (item.shareContactIds.length > 0) {
+    if (item.shares.length > 0) {
       await tx.insert(billItemShares).values(
-        item.shareContactIds.map((contactId) => ({
+        item.shares.map((s) => ({
           bill_item_id: insertedItem.id,
-          contact_id: contactId,
+          contact_id: s.contactId,
+          units: s.units,
         }))
       )
     }
@@ -252,11 +256,11 @@ export async function getBillWithDetails(billId: string): Promise<BillWithDetail
   const itemsWithShares: BillItemWithShares[] = []
   for (const item of itemRows) {
     const shareRows = await db
-      .select({ contact: contacts })
+      .select({ contact: contacts, units: billItemShares.units })
       .from(billItemShares)
       .innerJoin(contacts, eq(billItemShares.contact_id, contacts.id))
       .where(eq(billItemShares.bill_item_id, item.id))
-    itemsWithShares.push({ ...item, shares: shareRows.map((r) => r.contact) })
+    itemsWithShares.push({ ...item, shares: shareRows })
   }
 
   const participantRows = await db
@@ -282,8 +286,9 @@ export function getBillBreakdown(details: BillWithDetails): Map<string, Particip
   const { perContact } = computeBreakdown({
     items: details.items.map((it) => ({
       name: it.name,
-      price: it.price * it.quantity,
-      shareContactIds: it.shares.map((s) => s.id),
+      price: it.price,
+      quantity: it.quantity,
+      shares: it.shares.map((s) => ({ contactId: s.contact.id, units: s.units })),
     })),
     servicePct: Number(details.bill.service_pct),
     serviceFixed: details.bill.service_fixed,

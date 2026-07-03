@@ -7,6 +7,7 @@ import {
   integer,
   timestamp,
   unique,
+  uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core'
 import { relations, sql } from 'drizzle-orm'
@@ -55,11 +56,20 @@ export const contacts = pgTable(
     linked_telegram_id: bigint('linked_telegram_id', { mode: 'bigint' }),
     display_name: text('display_name').notNull(),
     phone: text('phone'),
+    // Soft-delete marker: a contact referenced by bills is never hard-deleted —
+    // it is hidden from the owner's list but keeps rendering inside old bills.
+    deleted_at: timestamp('deleted_at', { withTimezone: true }),
     created_at: timestamp('created_at', { withTimezone: true })
       .defaultNow()
       .notNull(),
   },
-  (t) => [unique('contacts_owner_name_unique').on(t.owner_id, t.display_name)]
+  // Partial: only live contacts contend for a name, so a soft-deleted "Aziz"
+  // doesn't block re-adding "Aziz".
+  (t) => [
+    uniqueIndex('contacts_owner_name_unique')
+      .on(t.owner_id, t.display_name)
+      .where(sql`${t.deleted_at} IS NULL`),
+  ]
 )
 
 export const contactsRelations = relations(contacts, ({ one, many }) => ({
@@ -105,6 +115,8 @@ export const bills = pgTable('bills', {
   // Opaque attachment id (file lives on disk, see storage.service) + its mime.
   receipt_attachment_id: text('receipt_attachment_id'),
   receipt_mime: text('receipt_mime'),
+  // Creator-side archive: hidden from default lists, reversible (NULL = live).
+  archived_at: timestamp('archived_at', { withTimezone: true }),
   created_at: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -156,6 +168,9 @@ export const billItemShares = pgTable(
     contact_id: uuid('contact_id')
       .notNull()
       .references(() => contacts.id, { onDelete: 'cascade' }),
+    // How many of the item's units this person took. NULL = no explicit
+    // assignment — the item (or the unassigned remainder) splits equally.
+    units: integer('units'),
   },
   (t) => [primaryKey({ columns: [t.bill_item_id, t.contact_id] })]
 )

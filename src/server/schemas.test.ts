@@ -67,6 +67,73 @@ describe('createBillSchema', () => {
     }
     expect(createBillSchema.safeParse(bad).success).toBe(false)
   })
+
+  it('defaults quantity to 1 for legacy item payloads', () => {
+    const parsed = createBillSchema.parse(validBill)
+    expect(parsed.items[0]!.quantity).toBe(1)
+    expect(parsed.items[0]!.unitsByContactId).toBeUndefined()
+  })
+
+  it('accepts quantity with per-person units summing within it', () => {
+    const withUnits = {
+      ...validBill,
+      items: [
+        {
+          name: 'Kebab',
+          price: 10000,
+          quantity: 7,
+          shareContactIds: [P1, P2],
+          unitsByContactId: { [P1]: 3, [P2]: 4 },
+        },
+      ],
+    }
+    expect(createBillSchema.safeParse(withUnits).success).toBe(true)
+  })
+
+  it('rejects units assigned to a non-sharer', () => {
+    const bad = {
+      ...validBill,
+      items: [
+        {
+          name: 'Kebab',
+          price: 10000,
+          quantity: 7,
+          shareContactIds: [P1],
+          unitsByContactId: { [P2]: 2 },
+        },
+      ],
+    }
+    expect(createBillSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('rejects units summing above the quantity', () => {
+    const bad = {
+      ...validBill,
+      items: [
+        {
+          name: 'Kebab',
+          price: 10000,
+          quantity: 3,
+          shareContactIds: [P1, P2],
+          unitsByContactId: { [P1]: 2, [P2]: 2 },
+        },
+      ],
+    }
+    expect(createBillSchema.safeParse(bad).success).toBe(false)
+  })
+
+  it('rejects a non-integer or zero quantity', () => {
+    const zero = {
+      ...validBill,
+      items: [{ name: 'X', price: 1000, quantity: 0, shareContactIds: [P1] }],
+    }
+    const frac = {
+      ...validBill,
+      items: [{ name: 'X', price: 1000, quantity: 1.5, shareContactIds: [P1] }],
+    }
+    expect(createBillSchema.safeParse(zero).success).toBe(false)
+    expect(createBillSchema.safeParse(frac).success).toBe(false)
+  })
 })
 
 describe('createContactSchema', () => {

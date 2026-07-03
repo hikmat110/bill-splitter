@@ -30,10 +30,12 @@ export function toCreateBillInput(
     items: body.items.map((item, index) => ({
       name: item.name,
       price: item.price,
-      quantity: 1,
+      quantity: item.quantity,
       position: index,
       // Defensive: keep only sharers that are participants (schema enforces this too).
-      shareContactIds: item.shareContactIds.filter((id) => participants.has(id)),
+      shares: item.shareContactIds
+        .filter((id) => participants.has(id))
+        .map((id) => ({ contactId: id, units: item.unitsByContactId?.[id] ?? null })),
     })),
   }
 }

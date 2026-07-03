@@ -29,6 +29,13 @@
       "when": 1781957732782,
       "tag": "0003_fantastic_kitty_pryde",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783074828424,
+      "tag": "0004_salty_vin_gonzales",
+      "breakpoints": true
     }
   ]
 }

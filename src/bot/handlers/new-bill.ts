@@ -363,7 +363,7 @@ export async function showReview(ctx: MyContext): Promise<void> {
 
   const itemSpecs = wizard.items.map((it) => ({
     price: it.price,
-    shareContactIds: it.shareContactIds,
+    shares: it.shareContactIds.map((id) => ({ contactId: id, units: null })),
   }))
 
   const settlement = computeSettlement({
@@ -424,7 +424,7 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
         price: it.price,
         quantity: 1,
         position: i,
-        shareContactIds: it.shareContactIds,
+        shares: it.shareContactIds.map((id) => ({ contactId: id, units: null })),
       })),
       servicePct: wizard.servicePct,
       serviceFixed: wizard.serviceFixed,

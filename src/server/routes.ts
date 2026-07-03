@@ -73,20 +73,25 @@ function shapeContact(c: Contact) {
 }
 
 function shapeItem(it: BillItemWithShares) {
+  const unitsByContactId: Record<string, number> = {}
+  for (const s of it.shares) {
+    if (s.units != null) unitsByContactId[s.contact.id] = s.units
+  }
   return {
     id: it.id,
     name: it.name,
     price: it.price,
     quantity: it.quantity,
     position: it.position,
-    shareContactIds: it.shares.map((s) => s.id),
+    shareContactIds: it.shares.map((s) => s.contact.id),
+    ...(Object.keys(unitsByContactId).length > 0 ? { unitsByContactId } : {}),
   }
 }
 
 function shapeBreakdown(b: ParticipantBreakdown | undefined) {
   if (!b) return { items: [], base: 0, service: 0, tip: 0, tipPaid: 0 }
   return {
-    items: b.items.map((it) => ({ name: it.name, share: it.share })),
+    items: b.items.map((it) => ({ name: it.name, share: it.share, units: it.units })),
     base: b.base,
     service: b.service,
     tip: b.tip,
@@ -102,6 +107,7 @@ function shapeParticipant(p: BillParticipantWithContact, breakdown?: Participant
     linkedUserId: p.contact.linked_user_id,
     amount: p.amount,
     status: p.status,
+    markedPaidAt: p.marked_paid_at,
     paymentProofAttachmentId: p.payment_proof_attachment_id,
     ...shapeBreakdown(breakdown),
   }
@@ -121,6 +127,7 @@ function shapeBillDetail(d: BillWithDetails) {
     status: d.bill.status,
     receiptAttachmentId: d.bill.receipt_attachment_id,
     receiptMime: d.bill.receipt_mime,
+    archivedAt: d.bill.archived_at,
     createdAt: d.bill.created_at,
     creator: {
       id: d.creator.id,

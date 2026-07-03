@@ -1,7 +1,17 @@
+/** One sharer of an item. `units: null` = no explicit unit assignment — the
+ *  item (or whatever remainder others didn't claim) splits equally. */
+export interface ItemShare {
+  contactId: string
+  units: number | null
+}
+
 export interface ItemSpec {
   name?: string
+  /** PER-UNIT price; the line total is `price × quantity`. */
   price: number
-  shareContactIds: string[]
+  /** Integer ≥ 1; omitted = 1. */
+  quantity?: number
+  shares: ItemShare[]
 }
 
 export interface BillSpec {
@@ -28,6 +38,9 @@ export interface SettlementResult {
 export interface BreakdownItem {
   name: string
   share: number
+  /** Explicit unit count this person took; set only for multi-unit items with
+   *  an explicit assignment (used for "Kebab ×3" rendering). */
+  units?: number
 }
 
 /** Full cost breakdown for one participant. */
@@ -77,18 +90,31 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
     return p
   }
 
-  // Phase 1: split each item equally among its sharers, truncated to 2 decimals.
-  // `subtotal` is the true sum of item prices (not the truncated per-shares).
+  // Phase 1: split each item across its sharers, truncated to 2 decimals.
+  // Explicitly assigned units cost `units × price`; the unassigned remainder
+  // (all of it, when nobody has explicit units) splits equally among sharers —
+  // so all-null units reproduces the legacy equal split exactly.
+  // `subtotal` is the true sum of line totals (not the truncated per-shares).
   let subtotal = 0
   for (const item of spec.items) {
-    const count = item.shareContactIds.length
+    const count = item.shares.length
     if (count === 0) continue
-    subtotal = to2(subtotal + item.price)
-    const perShare = to2(item.price / count)
-    for (const contactId of item.shareContactIds) {
-      const p = ensure(contactId)
-      p.items.push({ name: item.name ?? '', share: perShare })
-      p.base = to2(p.base + perShare)
+    const qty = Math.max(1, Math.floor(item.quantity ?? 1))
+    const lineTotal = item.price * qty
+    subtotal = to2(subtotal + lineTotal)
+    const assigned = item.shares.reduce((sum, s) => sum + (s.units ?? 0), 0)
+    const remainder = Math.max(0, qty - assigned) // defensive: callers validate Σunits ≤ qty
+    const remainderPerHead = (remainder * item.price) / count
+    for (const s of item.shares) {
+      const units = s.units ?? 0
+      const share = to2(units * item.price + remainderPerHead)
+      const p = ensure(s.contactId)
+      p.items.push(
+        qty > 1 && units > 0
+          ? { name: item.name ?? '', share, units }
+          : { name: item.name ?? '', share }
+      )
+      p.base = to2(p.base + share)
     }
   }
 
