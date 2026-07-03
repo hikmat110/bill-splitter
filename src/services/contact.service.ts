@@ -1,7 +1,7 @@
 import { and, eq, or, isNull, ne, exists } from 'drizzle-orm'
 import { db } from '../db/client'
-import { contacts, users, billParticipants, billItemShares } from '../db/schema'
-import type { Contact } from '../db/schema'
+import { contacts, users, billParticipants, billItemShares, billItems, bills } from '../db/schema'
+import type { Bill, Contact } from '../db/schema'
 import { normalizePhone } from '../utils/phone'
 import { findUserByUsername } from './user.service'
 
@@ -11,6 +11,7 @@ export async function listContacts(ownerId: string): Promise<Contact[]> {
     .from(contacts)
     .where(and(
       eq(contacts.owner_id, ownerId),
+      isNull(contacts.deleted_at),
       // Exclude self-contact (where the contact links back to the owner)
       or(
         isNull(contacts.linked_user_id),
@@ -133,13 +134,15 @@ export async function addLinkedContactsBatch(
   ownerId: string,
   people: BatchPerson[],
 ): Promise<BatchResult> {
+  // Soft-deleted contacts don't count as existing — deleting someone and then
+  // re-adding them must work.
   const existing = await db
     .select({
       linked_user_id: contacts.linked_user_id,
       linked_telegram_id: contacts.linked_telegram_id,
     })
     .from(contacts)
-    .where(eq(contacts.owner_id, ownerId))
+    .where(and(eq(contacts.owner_id, ownerId), isNull(contacts.deleted_at)))
 
   const seenUserIds = new Set<string>(
     existing.map((c) => c.linked_user_id).filter((v): v is string => v != null)
@@ -267,33 +270,53 @@ export async function findOrCreateSelfContact(userId: string, firstName: string)
   throw new Error('Could not create self-contact')
 }
 
-export async function isContactReferencedInBills(contactId: string): Promise<boolean> {
-  const inParticipants = db
-    .select({ id: billParticipants.id })
+export interface ContactBillRef {
+  id: string
+  title: string
+  status: string
+  created_at: Date
+}
+
+/** All bills that reference a contact (as participant or item sharer), newest
+ *  first — shown when a delete request needs the "used in these bills" list. */
+export async function getBillsReferencingContact(contactId: string): Promise<ContactBillRef[]> {
+  const viaParticipants = await db
+    .select({ bill: bills })
     .from(billParticipants)
+    .innerJoin(bills, eq(billParticipants.bill_id, bills.id))
     .where(eq(billParticipants.contact_id, contactId))
-    .limit(1)
 
-  const inShares = db
-    .select({ contact_id: billItemShares.contact_id })
+  const viaShares = await db
+    .select({ bill: bills })
     .from(billItemShares)
+    .innerJoin(billItems, eq(billItemShares.bill_item_id, billItems.id))
+    .innerJoin(bills, eq(billItems.bill_id, bills.id))
     .where(eq(billItemShares.contact_id, contactId))
-    .limit(1)
 
-  const [participantHit] = await inParticipants
-  if (participantHit) return true
-  const [shareHit] = await inShares
-  return !!shareHit
+  const byId = new Map<string, Bill>()
+  for (const r of [...viaParticipants, ...viaShares]) byId.set(r.bill.id, r.bill)
+  return [...byId.values()]
+    .sort((a, b) => b.created_at.getTime() - a.created_at.getTime())
+    .map((b) => ({ id: b.id, title: b.title, status: b.status, created_at: b.created_at }))
 }
 
 export async function deleteContact(contactId: string): Promise<void> {
   await db.delete(contacts).where(eq(contacts.id, contactId))
 }
 
+/** Hide a bill-referenced contact from the owner's list; old bills keep
+ *  rendering its name. Hard delete is reserved for unreferenced contacts. */
+export async function softDeleteContact(contactId: string): Promise<void> {
+  await db
+    .update(contacts)
+    .set({ deleted_at: new Date() })
+    .where(eq(contacts.id, contactId))
+}
+
 export async function getContactCount(ownerId: string): Promise<number> {
   const result = await db
     .select({ id: contacts.id })
     .from(contacts)
-    .where(eq(contacts.owner_id, ownerId))
+    .where(and(eq(contacts.owner_id, ownerId), isNull(contacts.deleted_at)))
   return result.length
 }

@@ -1,20 +1,22 @@
 import { InlineKeyboard, Keyboard } from 'grammy'
 import type { MyContext } from '../index'
-import { t } from '../../i18n'
+import { t, statusLabel } from '../../i18n'
 import {
   listContacts,
   findContactById,
   addContact,
   addLinkedContactsBatch,
   addContactsByUsernames,
-  isContactReferencedInBills,
+  getBillsReferencingContact,
   deleteContact,
+  softDeleteContact,
   type BatchPerson,
   type BatchResult,
   type UsernameAddResult,
 } from '../../services/contact.service'
 import { findByTelegramIds } from '../../services/user.service'
 import { parseUsernameList } from '../../utils/username'
+import { formatDate } from '../../utils/format'
 
 /** Fixed request_id for the multi-select user picker (only one active at a time). */
 const PICK_REQUEST_ID = 1
@@ -272,13 +274,41 @@ export async function contactDeleteHandler(ctx: MyContext, contactId: string): P
     return
   }
 
-  const referenced = await isContactReferencedInBills(contactId)
-  if (referenced) {
-    await editContactMessage(ctx, t(ctx, 'contacts.cannot_delete'))
+  const blocking = await getBillsReferencingContact(contactId)
+  if (blocking.length > 0) {
+    // Show which bills reference them, then offer a soft-delete: the contact
+    // disappears from the list but keeps rendering inside those bills.
+    const MAX_LISTED = 10
+    const lines = [t(ctx, 'contacts.delete_blocked_title', { name: contact.display_name })]
+    for (const b of blocking.slice(0, MAX_LISTED)) {
+      lines.push(`• ${b.title} — ${formatDate(b.created_at)} [${statusLabel(ctx, b.status)}]`)
+    }
+    if (blocking.length > MAX_LISTED) {
+      lines.push(t(ctx, 'contacts.delete_blocked_more', { count: String(blocking.length - MAX_LISTED) }))
+    }
+    lines.push('')
+    lines.push(t(ctx, 'contacts.delete_blocked_hint'))
+
+    const kb = new InlineKeyboard()
+      .text(t(ctx, 'contacts.delete_anyway'), encode('contact', 'forcedel', contactId))
+      .row()
+      .text(t(ctx, 'contacts.back_button'), encode('contact', 'view', contactId))
+    await editContactMessage(ctx, lines.join('\n'), kb)
     return
   }
 
   await deleteContact(contactId)
+  await showContactList(ctx)
+}
+
+/** Soft-delete confirmed from the blocked-delete screen. */
+export async function contactForceDeleteHandler(ctx: MyContext, contactId: string): Promise<void> {
+  const contact = await findContactById(contactId)
+  if (!contact || contact.owner_id !== ctx.user.id) {
+    await editContactMessage(ctx, t(ctx, 'errors.not_found'))
+    return
+  }
+  await softDeleteContact(contactId)
   await showContactList(ctx)
 }
 

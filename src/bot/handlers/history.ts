@@ -31,7 +31,8 @@ async function showHistoryTab(
   let lines: string[]
 
   if (tab === 'created') {
-    const billsList = await listBillsCreatedBy(ctx.user.id)
+    // Archived bills stay reachable in the mini-app's Archived filter only.
+    const billsList = (await listBillsCreatedBy(ctx.user.id)).filter((b) => !b.archived_at)
     if (billsList.length === 0) {
       lines = [t(ctx, 'history.empty')]
     } else {

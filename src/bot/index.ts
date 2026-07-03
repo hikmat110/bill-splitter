@@ -17,6 +17,7 @@ import {
   contactTextHandler,
   contactViewHandler,
   contactDeleteHandler,
+  contactForceDeleteHandler,
   contactSkipPhoneHandler,
   contactCancelHandler,
 } from './handlers/contacts'
@@ -170,6 +171,7 @@ bot.callbackQuery(/^contact:/, async (ctx) => {
   const { action, id } = decode(ctx.callbackQuery.data)
   if (action === 'view') return contactViewHandler(ctx, id)
   if (action === 'delete') return contactDeleteHandler(ctx, id)
+  if (action === 'forcedel') return contactForceDeleteHandler(ctx, id)
   if (action === 'add') return contactAddStartHandler(ctx)
   if (action === 'add_manual') return contactStartManualHandler(ctx)
   if (action === 'add_telegram') return contactStartTelegramHandler(ctx)

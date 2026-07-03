@@ -12,6 +12,8 @@ import type {
 import {
   createBill,
   updateBill,
+  deleteBill,
+  setBillArchived,
   getBillWithDetails,
   getBillBreakdown,
   listBillsCreatedBy,
@@ -32,11 +34,16 @@ import {
   addContact,
   addContactsByUsernames,
   findOrCreateSelfContact,
+  findContactById,
+  getBillsReferencingContact,
+  softDeleteContact,
+  deleteContact,
 } from '../services/contact.service'
 import { findById } from '../services/user.service'
 import {
   sendBillNotifications,
   resendBillNotifications,
+  notifyBillDeleted,
   notifyCreatorOfPaymentMark,
   notifyParticipantConfirmed,
   notifyParticipantDisputed,
@@ -176,6 +183,11 @@ export async function handleApi(
       return await postContactsByUsername(req, user)
     }
 
+    // DELETE /api/contacts/:id[?force=1] — 409 with blocking bills unless forced
+    if (seg[0] === 'contacts' && seg.length === 2 && method === 'DELETE') {
+      return await deleteContactRoute(user, seg[1]!, url.searchParams.get('force') === '1')
+    }
+
     // POST /api/attachments — multipart image upload, returns { id, mime }
     if (seg[0] === 'attachments' && seg.length === 1 && method === 'POST') {
       return await postAttachment(req)
@@ -202,6 +214,17 @@ export async function handleApi(
       }
       if (seg.length === 2 && method === 'PATCH') {
         return await patchBill(req, user, seg[1]!, bot)
+      }
+      if (seg.length === 2 && method === 'DELETE') {
+        return await deleteBillRoute(user, seg[1]!, bot)
+      }
+      // POST /api/bills/:id/archive | /unarchive
+      if (
+        seg.length === 3 &&
+        method === 'POST' &&
+        (seg[2] === 'archive' || seg[2] === 'unarchive')
+      ) {
+        return await setArchivedRoute(user, seg[1]!, seg[2] === 'archive')
       }
       // /api/bills/:id/participants/:pid/<action>
       if (seg.length === 5 && seg[2] === 'participants' && method === 'POST') {
@@ -264,6 +287,40 @@ async function postContact(req: Request, user: User): Promise<Response> {
   } catch {
     return error(409, 'Could not add contact — the name may already be in use')
   }
+}
+
+async function deleteContactRoute(
+  user: User,
+  contactId: string,
+  force: boolean
+): Promise<Response> {
+  const contact = await findContactById(contactId)
+  if (!contact || contact.owner_id !== user.id || contact.deleted_at) {
+    return error(404, 'Contact not found')
+  }
+  // The self-contact backs "You" on every bill — never deletable.
+  if (contact.linked_user_id === user.id) return error(400, 'Cannot delete yourself')
+
+  const blocking = await getBillsReferencingContact(contactId)
+  if (blocking.length > 0 && !force) {
+    return json(
+      {
+        error: 'Contact is used in bills',
+        blockingBills: blocking.map((b) => ({
+          id: b.id,
+          title: b.title,
+          status: b.status,
+          createdAt: b.created_at,
+        })),
+      },
+      { status: 409 }
+    )
+  }
+
+  // Referenced contacts are only hidden (old bills keep the name); clean ones go.
+  if (blocking.length > 0) await softDeleteContact(contactId)
+  else await deleteContact(contactId)
+  return json({ ok: true })
 }
 
 async function postContactsByUsername(req: Request, user: User): Promise<Response> {
@@ -399,6 +456,49 @@ async function patchBill(
 
   const updated = await getBillWithDetails(billId)
   return json(updated ? shapeBillDetail(updated) : { id: billId })
+}
+
+async function deleteBillRoute(
+  user: User,
+  billId: string,
+  bot: Bot<MyContext>
+): Promise<Response> {
+  const d = await getBillWithDetails(billId)
+  if (!d) return error(404, 'Bill not found')
+  if (!canManageBill(user, d.bill)) return error(403, 'Forbidden')
+
+  // Rewrite participants' Telegram notifications while the rows still exist.
+  await notifyBillDeleted(bot, d)
+
+  // Capture attachment refs; the files are cleaned up after the delete.
+  const attachments: { id: string; mime: string }[] = []
+  if (d.bill.receipt_attachment_id && d.bill.receipt_mime) {
+    attachments.push({ id: d.bill.receipt_attachment_id, mime: d.bill.receipt_mime })
+  }
+  for (const p of d.participants) {
+    if (p.payment_proof_attachment_id && p.payment_proof_mime) {
+      attachments.push({ id: p.payment_proof_attachment_id, mime: p.payment_proof_mime })
+    }
+  }
+
+  await deleteBill(billId)
+  for (const a of attachments) {
+    await deleteAttachment(a.id, a.mime)
+  }
+  return json({ ok: true })
+}
+
+async function setArchivedRoute(
+  user: User,
+  billId: string,
+  archived: boolean
+): Promise<Response> {
+  const d = await getBillWithDetails(billId)
+  if (!d) return error(404, 'Bill not found')
+  if (!canManageBill(user, d.bill)) return error(403, 'Forbidden')
+  await setBillArchived(billId, archived)
+  const updated = await getBillWithDetails(billId)
+  return json(updated ? shapeBillDetail(updated) : { ok: true })
 }
 
 // ─── attachments ────────────────────────────────────────────────────────────

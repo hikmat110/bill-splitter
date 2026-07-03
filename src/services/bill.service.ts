@@ -230,6 +230,22 @@ export async function updateBill(input: UpdateBillInput): Promise<Bill> {
   })
 }
 
+/** Hard-delete a bill. Items, shares and participants cascade via FK. */
+export async function deleteBill(billId: string): Promise<void> {
+  await db.delete(bills).where(eq(bills.id, billId))
+}
+
+/** Archive (hide from default lists) or unarchive a bill. Creator-side only. */
+export async function setBillArchived(billId: string, archived: boolean): Promise<Bill> {
+  const [updated] = await db
+    .update(bills)
+    .set({ archived_at: archived ? new Date() : null, updated_at: new Date() })
+    .where(eq(bills.id, billId))
+    .returning()
+  if (!updated) throw new Error('Bill not found')
+  return updated
+}
+
 export async function getBillWithDetails(billId: string): Promise<BillWithDetails | null> {
   const billResult = await db
     .select()

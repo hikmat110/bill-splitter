@@ -125,6 +125,33 @@ export async function resendBillNotifications(
   }
 }
 
+/**
+ * Rewrite every participant's bill notification to "this bill was deleted",
+ * clearing the stale Mark-paid button. Must run BEFORE the DB delete (it needs
+ * the message ids and telegram ids). Best-effort per participant.
+ */
+export async function notifyBillDeleted(
+  bot: Bot<MyContext>,
+  details: BillWithDetails
+): Promise<void> {
+  for (const participant of details.participants) {
+    if (!participant.contact.linked_user_id) continue
+    if (participant.contact.linked_user_id === details.bill.creator_id) continue
+    if (!participant.notification_message_id) continue
+
+    const participantUser = await findById(participant.contact.linked_user_id)
+    if (!participantUser) continue
+
+    const ctx = langCtx(participantUser.language_code)
+    await editNotification(
+      bot,
+      Number(participantUser.telegram_id),
+      Number(participant.notification_message_id),
+      t(ctx, 'payment.bill_deleted', { title: details.bill.title })
+    )
+  }
+}
+
 export async function notifyCreatorOfPaymentMark(
   bot: Bot<MyContext>,
   participantId: string
