@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'bun:test'
 import {
   createBillSchema,
+  createCardSchema,
   createContactSchema,
   addContactsByUsernameSchema,
 } from './schemas'
@@ -122,6 +123,15 @@ describe('createBillSchema', () => {
     expect(createBillSchema.safeParse(bad).success).toBe(false)
   })
 
+  it('accepts cardId as uuid, null, or absent; rejects a non-uuid', () => {
+    expect(createBillSchema.safeParse({ ...validBill, cardId: P1 }).success).toBe(true)
+    expect(createBillSchema.safeParse({ ...validBill, cardId: null }).success).toBe(true)
+    expect(createBillSchema.safeParse(validBill).success).toBe(true)
+    expect(createBillSchema.safeParse({ ...validBill, cardId: 'not-a-uuid' }).success).toBe(false)
+    // Absent stays undefined — the server resolves it to the default card.
+    expect(createBillSchema.parse(validBill).cardId).toBeUndefined()
+  })
+
   it('rejects a non-integer or zero quantity', () => {
     const zero = {
       ...validBill,
@@ -133,6 +143,27 @@ describe('createBillSchema', () => {
     }
     expect(createBillSchema.safeParse(zero).success).toBe(false)
     expect(createBillSchema.safeParse(frac).success).toBe(false)
+  })
+})
+
+describe('createCardSchema', () => {
+  it('accepts a 16-digit number, including spaced or dashed input', () => {
+    expect(createCardSchema.safeParse({ number: '8600123412341234' }).success).toBe(true)
+    expect(createCardSchema.safeParse({ number: '8600 1234 1234 1234' }).success).toBe(true)
+    expect(createCardSchema.safeParse({ number: '8600-1234-1234-1234' }).success).toBe(true)
+  })
+
+  it('rejects 15 or 17 digits', () => {
+    expect(createCardSchema.safeParse({ number: '860012341234123' }).success).toBe(false)
+    expect(createCardSchema.safeParse({ number: '86001234123412345' }).success).toBe(false)
+  })
+
+  it('bounds the optional label to 1–50 characters', () => {
+    expect(createCardSchema.safeParse({ number: '8600123412341234', label: 'Ish' }).success).toBe(true)
+    expect(createCardSchema.safeParse({ number: '8600123412341234', label: '   ' }).success).toBe(false)
+    expect(
+      createCardSchema.safeParse({ number: '8600123412341234', label: 'x'.repeat(51) }).success
+    ).toBe(false)
   })
 })
 

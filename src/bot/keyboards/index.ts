@@ -3,7 +3,8 @@ import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { encode } from '../../utils/callback'
 import { config } from '../../config'
-import type { Contact } from '../../db/schema'
+import { cardDisplayLabel } from '../../utils/format'
+import type { Card, Contact } from '../../db/schema'
 
 export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
   const kb = new InlineKeyboard()
@@ -247,14 +248,36 @@ export function historyBillKeyboard(
 
 // ─── Settings ────────────────────────────────────────────────────────────────
 
-export function settingsKeyboard(ctx: MyContext, currentLang: string): InlineKeyboard {
+export function settingsKeyboard(
+  ctx: MyContext,
+  currentLang: string,
+  cards: Card[]
+): InlineKeyboard {
   const mark = (lang: string) => currentLang === lang ? '✅ ' : ''
-  return new InlineKeyboard()
-    .text(t(ctx, 'settings.set_card'), 'settings:set_card:x')
-    .row()
+  const kb = new InlineKeyboard()
+  for (const card of cards) {
+    kb.text(
+      `💳 ${cardDisplayLabel(card)}${card.is_default ? ' ⭐' : ''}`,
+      encode('settings', 'card', card.id)
+    ).row()
+  }
+  kb.text(t(ctx, 'settings.add_card'), 'settings:card_add:x').row()
+  return kb
     .text(`${mark('uz')}🇺🇿 O'zbek`, 'settings:lang:uz')
     .text(`${mark('ru')}🇷🇺 Русский`, 'settings:lang:ru')
     .text(`${mark('en')}🇺🇸 English`, 'settings:lang:en')
     .row()
     .text(t(ctx, 'menu.back'), 'menu:back')
+}
+
+export function cardDetailKeyboard(ctx: MyContext, card: Card): InlineKeyboard {
+  const kb = new InlineKeyboard()
+  if (!card.is_default) {
+    kb.text(t(ctx, 'settings.set_default'), encode('settings', 'card_default', card.id)).row()
+  }
+  return kb
+    .text(t(ctx, 'settings.rename_card'), encode('settings', 'card_rename', card.id))
+    .text(t(ctx, 'settings.delete_card'), encode('settings', 'card_del', card.id))
+    .row()
+    .text(t(ctx, 'contacts.back_button'), 'menu:settings')
 }

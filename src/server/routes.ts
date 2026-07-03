@@ -6,6 +6,7 @@ import { ZodError } from 'zod'
 import type { Bot } from 'grammy'
 import type { MyContext } from '../bot/index'
 import type {
+  Card,
   Contact,
   User,
 } from '../db/schema'
@@ -41,6 +42,14 @@ import {
 } from '../services/contact.service'
 import { findById } from '../services/user.service'
 import {
+  listCards,
+  findCardById,
+  getDefaultCard,
+  addCard,
+  CardLimitError,
+} from '../services/card.service'
+import { cardNetwork } from '../utils/format'
+import {
   sendBillNotifications,
   resendBillNotifications,
   notifyBillDeleted,
@@ -63,12 +72,14 @@ import { json, error } from './json'
 import {
   createBillSchema,
   updateBillSchema,
+  createCardSchema,
   createContactSchema,
   addContactsByUsernameSchema,
   disputeSchema,
   markPaidSchema,
   scanReceiptSchema,
 } from './schemas'
+import { parseCardNumber } from '../utils/format'
 import { parseUsernameList } from '../utils/username'
 import { toCreateBillInput, toUpdateBillInput } from './mappers'
 import { canManageBill, canMarkPaid } from './authz'
@@ -77,6 +88,17 @@ import { canManageBill, canMarkPaid } from './authz'
 
 function shapeContact(c: Contact) {
   return { id: c.id, displayName: c.display_name, phone: c.phone, linkedUserId: c.linked_user_id }
+}
+
+function shapeCard(c: Card) {
+  return {
+    id: c.id,
+    number: c.number,
+    label: c.label,
+    network: cardNetwork(c.number),
+    last4: c.number.slice(-4),
+    isDefault: c.is_default,
+  }
 }
 
 function shapeItem(it: BillItemWithShares) {
@@ -136,10 +158,12 @@ function shapeBillDetail(d: BillWithDetails) {
     receiptMime: d.bill.receipt_mime,
     archivedAt: d.bill.archived_at,
     createdAt: d.bill.created_at,
+    // The card attached to THIS bill (not whatever the creator's default is now).
+    cardId: d.bill.card_id,
+    cardNumber: d.card?.number ?? null,
     creator: {
       id: d.creator.id,
       firstName: d.creator.first_name,
-      cardNumber: d.creator.card_number,
     },
     items: d.items.map(shapeItem),
     participants: d.participants.map((p) => shapeParticipant(p, breakdown.get(p.contact_id))),
@@ -186,6 +210,11 @@ export async function handleApi(
     // DELETE /api/contacts/:id[?force=1] — 409 with blocking bills unless forced
     if (seg[0] === 'contacts' && seg.length === 2 && method === 'DELETE') {
       return await deleteContactRoute(user, seg[1]!, url.searchParams.get('force') === '1')
+    }
+
+    // POST /api/cards — add a payment card (first one becomes the default)
+    if (seg[0] === 'cards' && seg.length === 1 && method === 'POST') {
+      return await postCard(req, user)
     }
 
     // POST /api/attachments — multipart image upload, returns { id, mime }
@@ -266,7 +295,7 @@ async function getMe(user: User, bot: Bot<MyContext>): Promise<Response> {
     lastName: user.last_name,
     username: user.username,
     languageCode: user.language_code,
-    cardNumber: user.card_number,
+    cards: (await listCards(user.id)).map(shapeCard),
     selfContactId: self.id,
     // Used by the Mini App to deep-link into the bot's native contact picker.
     // `botInfo` throws until the bot is initialized, so guard with isInited().
@@ -394,13 +423,45 @@ async function getBill(user: User, billId: string): Promise<Response> {
   return json(shapeBillDetail(d))
 }
 
+/**
+ * Resolve a bill payload's card reference: `undefined` = the creator's default
+ * card (old clients that don't send the field keep today's behavior), `null` =
+ * explicitly none, a uuid = that card — if it's really theirs. Not-found and
+ * not-owned are indistinguishable (single 400, no existence leak).
+ */
+async function resolveBillCardId(
+  user: User,
+  bodyCardId: string | null | undefined
+): Promise<{ cardId: string | null } | { response: Response }> {
+  if (bodyCardId === undefined) return { cardId: (await getDefaultCard(user.id))?.id ?? null }
+  if (bodyCardId === null) return { cardId: null }
+  const card = await findCardById(bodyCardId)
+  if (!card || card.user_id !== user.id) return { response: error(400, 'Invalid card') }
+  return { cardId: card.id }
+}
+
+async function postCard(req: Request, user: User): Promise<Response> {
+  const body = createCardSchema.parse(await req.json())
+  const digits = parseCardNumber(body.number)
+  if (!digits) return error(400, 'Card number must be 16 digits')
+  try {
+    const card = await addCard(user.id, digits, body.label ?? null)
+    return json(shapeCard(card), { status: 201 })
+  } catch (e) {
+    if (e instanceof CardLimitError) return error(400, e.message)
+    throw e
+  }
+}
+
 async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {
   const body = createBillSchema.parse(await req.json())
+  const resolved = await resolveBillCardId(user, body.cardId)
+  if ('response' in resolved) return resolved.response
   // Resolve the creator's own contact so a tip-payer of "the creator" is
   // normalized to null (default) rather than wrongly crediting their own share.
   const self = await findOrCreateSelfContact(user.id, user.first_name)
-  const bill = await createBill(toCreateBillInput(body, user.id, self.id))
-  await sendBillNotifications(bot, bill.id, user.card_number)
+  const bill = await createBill(toCreateBillInput(body, user.id, self.id, resolved.cardId))
+  await sendBillNotifications(bot, bill.id)
   const d = await getBillWithDetails(bill.id)
   return json(d ? shapeBillDetail(d) : { id: bill.id }, { status: 201 })
 }
@@ -420,6 +481,8 @@ async function patchBill(
   }
 
   const body = updateBillSchema.parse(await req.json())
+  const resolved = await resolveBillCardId(user, body.cardId)
+  if ('response' in resolved) return resolved.response
   const self = await findOrCreateSelfContact(user.id, user.first_name)
 
   // updateBill wipes participant rows (and their notification_message_id), so
@@ -432,7 +495,7 @@ async function patchBill(
   const oldReceiptMime = d.bill.receipt_mime
 
   try {
-    await updateBill(toUpdateBillInput(body, billId, user.id, self.id))
+    await updateBill(toUpdateBillInput(body, billId, user.id, self.id, resolved.cardId))
   } catch (e) {
     if (e instanceof BillNotEditableError) {
       return error(409, 'Bill can no longer be edited — someone has already responded')
@@ -440,7 +503,7 @@ async function patchBill(
     throw e
   }
 
-  await resendBillNotifications(bot, billId, user.card_number, oldMessageIds)
+  await resendBillNotifications(bot, billId, oldMessageIds)
 
   // Best-effort cleanup of a replaced main photo.
   if (oldReceiptId && oldReceiptId !== body.receiptAttachmentId && oldReceiptMime) {

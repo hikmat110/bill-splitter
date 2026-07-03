@@ -1,4 +1,4 @@
-import { Keyboard } from 'grammy'
+import { Keyboard, InlineKeyboard } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { showMainMenu } from './menu'
@@ -9,6 +9,7 @@ import {
   backfillLinkedUser,
   backfillLinkedUserByTelegramId,
 } from '../../services/user.service'
+import { listCards } from '../../services/card.service'
 
 /** Deep-link param the Mini App uses to hand off to the native contact picker. */
 const ADD_CONTACTS_PARAM = 'add_contacts'
@@ -83,5 +84,22 @@ export async function contactHandler(ctx: MyContext): Promise<void> {
     t(ctx, 'start.registered', { name: user.first_name }),
     { reply_markup: { remove_keyboard: true } }
   )
-  await showMainMenu(ctx)
+
+  // Onboarding: ask for a card for receiving transfers (skippable). Gated on
+  // "has no cards" — contactHandler also fires when an existing user re-shares
+  // their contact, and they shouldn't be re-prompted.
+  const cards = await listCards(user.id)
+  if (cards.length > 0) {
+    await showMainMenu(ctx)
+    return
+  }
+
+  const prompt = await ctx.reply(t(ctx, 'start.card_prompt'), {
+    reply_markup: new InlineKeyboard().text(t(ctx, 'start.card_skip'), 'settings:card_skip:x'),
+  })
+  ctx.session.settings_wizard = {
+    step: 'awaiting_card_number',
+    wizardMessageId: prompt.message_id,
+    afterRegistration: true,
+  }
 }

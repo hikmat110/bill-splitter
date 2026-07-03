@@ -5,6 +5,7 @@ import {
   text,
   numeric,
   integer,
+  boolean,
   timestamp,
   unique,
   uniqueIndex,
@@ -24,7 +25,6 @@ export const users = pgTable('users', {
   last_name: text('last_name'),
   username: text('username'),
   language_code: text('language_code').default('uz').notNull(),
-  card_number: text('card_number'),
   created_at: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
@@ -34,6 +34,44 @@ export const usersRelations = relations(users, ({ many }) => ({
   ownedContacts: many(contacts, { relationName: 'owner' }),
   linkedContacts: many(contacts, { relationName: 'linked' }),
   bills: many(bills),
+  cards: many(cards),
+}))
+
+// ─── cards ───────────────────────────────────────────────────────────────────
+
+// Payment cards a user receives transfers on. One is the default, attached to
+// new bills unless the creator picks another (or none).
+export const cards = pgTable(
+  'cards',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    // 16 digits, validated upstream (parseCardNumber).
+    number: text('number').notNull(),
+    // Optional custom name; display falls back to "<network> ••<last4>".
+    label: text('label'),
+    is_default: boolean('is_default').default(false).notNull(),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  // At most one default card per user.
+  (t) => [
+    uniqueIndex('cards_user_default_unique')
+      .on(t.user_id)
+      .where(sql`${t.is_default}`),
+  ]
+)
+
+export const cardsRelations = relations(cards, ({ one }) => ({
+  user: one(users, {
+    fields: [cards.user_id],
+    references: [users.id],
+  }),
 }))
 
 // ─── contacts ────────────────────────────────────────────────────────────────
@@ -109,6 +147,9 @@ export const bills = pgTable('bills', {
   // existing rows keep today's behaviour. A non-creator here is credited the
   // full tip in settlement (their owed amount drops by it).
   tip_paid_by_contact_id: uuid('tip_paid_by_contact_id').references(() => contacts.id),
+  // Card shown to participants for paying this bill. NULL = none attached
+  // (also what a later card deletion leaves behind).
+  card_id: uuid('card_id').references(() => cards.id, { onDelete: 'set null' }),
   total: numeric('total', { precision: 14, scale: 2, mode: 'number' }).notNull(),
   status: text('status').notNull().default('draft'),
   // Optional main receipt/cheque photo for the bill, shown to participants.
@@ -129,6 +170,10 @@ export const billsRelations = relations(bills, ({ one, many }) => ({
   creator: one(users, {
     fields: [bills.creator_id],
     references: [users.id],
+  }),
+  card: one(cards, {
+    fields: [bills.card_id],
+    references: [cards.id],
   }),
   items: many(billItems),
   participants: many(billParticipants),
@@ -236,6 +281,7 @@ export const billParticipantsRelations = relations(
 
 export type User = typeof users.$inferSelect
 export type NewUser = typeof users.$inferInsert
+export type Card = typeof cards.$inferSelect
 export type Contact = typeof contacts.$inferSelect
 export type Bill = typeof bills.$inferSelect
 export type BillItem = typeof billItems.$inferSelect

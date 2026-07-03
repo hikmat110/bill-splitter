@@ -40,6 +40,22 @@ export function parseCardNumber(input: string): string | null {
   return digits.length === 16 ? digits : null
 }
 
+export type CardNetwork = 'Uzcard' | 'Humo' | 'Visa' | 'Mastercard' | 'Card'
+
+/** Detect the card network from the number prefix ('Card' when unknown). */
+export function cardNetwork(digits: string): CardNetwork {
+  if (digits.startsWith('8600')) return 'Uzcard'
+  if (digits.startsWith('9860')) return 'Humo'
+  if (digits.startsWith('4')) return 'Visa'
+  if (digits.startsWith('5')) return 'Mastercard'
+  return 'Card'
+}
+
+/** "Kapital ish karta" (custom label) or a composed "Uzcard ••6789". */
+export function cardDisplayLabel(card: { number: string; label: string | null }): string {
+  return card.label ?? `${cardNetwork(card.number)} ••${card.number.slice(-4)}`
+}
+
 /** @deprecated Use i18n history.paid_summary instead */
 export function formatParticipantSummary(paid: number, total: number): string {
   return `${paid}/${total} оплачено`

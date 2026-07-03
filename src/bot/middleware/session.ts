@@ -59,8 +59,12 @@ export interface SessionData {
   }
 
   settings_wizard?: {
-    step: 'awaiting_card_number'
+    step: 'awaiting_card_number' | 'awaiting_card_label'
     wizardMessageId?: number
+    /** Card being renamed (awaiting_card_label). */
+    editingCardId?: string
+    /** Registration onboarding: after save/skip, go to main menu, not settings. */
+    afterRegistration?: boolean
   }
 }
 

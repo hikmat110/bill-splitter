@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { formatMoney, formatDate, formatParticipantSummary } from './format'
+import {
+  formatMoney,
+  formatDate,
+  formatParticipantSummary,
+  cardNetwork,
+  cardDisplayLabel,
+} from './format'
 
 describe('formatMoney', () => {
   test('formats 12500 with space thousands separator', () => {
@@ -57,5 +63,30 @@ describe('formatParticipantSummary', () => {
 
   test('"1/1 оплачено"', () => {
     expect(formatParticipantSummary(1, 1)).toBe('1/1 оплачено')
+  })
+})
+
+describe('cardNetwork', () => {
+  test('detects local and international networks by prefix', () => {
+    expect(cardNetwork('8600123412341234')).toBe('Uzcard')
+    expect(cardNetwork('9860123412341234')).toBe('Humo')
+    expect(cardNetwork('4111111111111111')).toBe('Visa')
+    expect(cardNetwork('5500123412341234')).toBe('Mastercard')
+  })
+
+  test('falls back to a generic label for unknown prefixes', () => {
+    expect(cardNetwork('6262123412341234')).toBe('Card')
+    expect(cardNetwork('1234123412341234')).toBe('Card')
+  })
+})
+
+describe('cardDisplayLabel', () => {
+  test('a custom label wins over the composed one', () => {
+    expect(cardDisplayLabel({ number: '8600123412346789', label: 'Ish karta' })).toBe('Ish karta')
+  })
+
+  test('composes network + last 4 when unnamed', () => {
+    expect(cardDisplayLabel({ number: '8600123412346789', label: null })).toBe('Uzcard ••6789')
+    expect(cardDisplayLabel({ number: '9860000011112222', label: null })).toBe('Humo ••2222')
   })
 })

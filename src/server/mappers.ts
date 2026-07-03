@@ -8,7 +8,10 @@ import type { CreateBillBody, UpdateBillBody } from './schemas'
 export function toCreateBillInput(
   body: CreateBillBody,
   creatorId: string,
-  creatorSelfContactId?: string
+  creatorSelfContactId?: string,
+  // Already resolved + ownership-checked by the route (undefined→default card
+  // needs the DB, so it can't happen in this pure mapper).
+  resolvedCardId?: string | null
 ): CreateBillInput {
   const participants = new Set(body.participantContactIds)
   // Normalize the tip payer to "non-creator participant or null": the creator
@@ -24,6 +27,7 @@ export function toCreateBillInput(
     serviceFixed: 0,
     tip: body.tip,
     tipPaidByContactId,
+    cardId: resolvedCardId ?? null,
     participantContactIds: [...body.participantContactIds],
     receiptAttachmentId: body.receiptAttachmentId ?? null,
     receiptMime: body.receiptMime ?? null,
@@ -44,7 +48,8 @@ export function toUpdateBillInput(
   body: UpdateBillBody,
   billId: string,
   creatorId: string,
-  creatorSelfContactId?: string
+  creatorSelfContactId?: string,
+  resolvedCardId?: string | null
 ): UpdateBillInput {
-  return { ...toCreateBillInput(body, creatorId, creatorSelfContactId), billId }
+  return { ...toCreateBillInput(body, creatorId, creatorSelfContactId, resolvedCardId), billId }
 }

@@ -37,8 +37,7 @@ async function editNotification(
 async function notifyParticipantOfBill(
   bot: Bot<MyContext>,
   details: BillWithDetails,
-  participant: BillParticipantWithContact,
-  creatorCardNumber?: string | null
+  participant: BillParticipantWithContact
 ): Promise<void> {
   if (!participant.contact.linked_user_id) return
   // Skip notifying the creator about their own share
@@ -53,8 +52,8 @@ async function notifyParticipantOfBill(
     amount: formatMoney(participant.amount),
     creator: details.creator.first_name,
   })
-  if (creatorCardNumber) {
-    text += '\n\n' + t(ctx, 'payment.card_line', { card: formatCard(creatorCardNumber) })
+  if (details.card) {
+    text += '\n\n' + t(ctx, 'payment.card_line', { card: formatCard(details.card.number) })
   }
 
   const kb = new InlineKeyboard().text(
@@ -81,14 +80,13 @@ async function notifyParticipantOfBill(
 
 export async function sendBillNotifications(
   bot: Bot<MyContext>,
-  billId: string,
-  creatorCardNumber?: string | null
+  billId: string
 ): Promise<void> {
   const details = await getBillWithDetails(billId)
   if (!details) return
 
   for (const participant of details.participants) {
-    await notifyParticipantOfBill(bot, details, participant, creatorCardNumber)
+    await notifyParticipantOfBill(bot, details, participant)
   }
 }
 
@@ -102,7 +100,6 @@ export async function sendBillNotifications(
 export async function resendBillNotifications(
   bot: Bot<MyContext>,
   billId: string,
-  creatorCardNumber: string | null | undefined,
   oldMessageIds: Map<string, bigint>
 ): Promise<void> {
   const details = await getBillWithDetails(billId)
@@ -121,7 +118,7 @@ export async function resendBillNotifications(
           .catch(() => undefined)
       }
     }
-    await notifyParticipantOfBill(bot, details, participant, creatorCardNumber)
+    await notifyParticipantOfBill(bot, details, participant)
   }
 }
 

@@ -4,6 +4,7 @@ import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { listContacts, findContactById, findOrCreateSelfContact } from '../../services/contact.service'
 import { createBill } from '../../services/bill.service'
+import { getDefaultCard } from '../../services/card.service'
 import { sendBillNotifications } from '../../services/notification.service'
 import {
   participantSelectKeyboard,
@@ -414,6 +415,10 @@ export async function showReview(ctx: MyContext): Promise<void> {
 async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> {
   const wizard = ctx.session.bill_wizard!
 
+  // The bot wizard has no card step — the default card is attached automatically
+  // (the mini-app has the per-bill picker).
+  const defaultCard = await getDefaultCard(ctx.user.id)
+
   let bill
   try {
     bill = await createBill({
@@ -430,6 +435,7 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
       serviceFixed: wizard.serviceFixed,
       tip: wizard.tip,
       tipPaidByContactId: wizard.tipPaidByContactId ?? null,
+      cardId: defaultCard?.id ?? null,
       participantContactIds: wizard.participantContactIds,
       receiptAttachmentId: wizard.receiptAttachmentId ?? null,
       receiptMime: wizard.receiptMime ?? null,
@@ -443,8 +449,8 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
   ctx.session.bill_wizard = undefined
   await showMainMenu(ctx)
 
-  // Send notifications non-blocking; pass creator's card number so recipients can copy it
-  await sendBillNotifications(bot, bill.id, ctx.user.card_number).catch((err) =>
+  // Notifications read the bill's attached card themselves.
+  await sendBillNotifications(bot, bill.id).catch((err) =>
     ctx.logger.error({ err, billId: bill.id }, 'sendBillNotifications failed')
   )
 }

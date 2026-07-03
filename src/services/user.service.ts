@@ -105,10 +105,6 @@ export async function backfillLinkedUserByTelegramId(
     .where(and(eq(contacts.linked_telegram_id, telegramId), isNull(contacts.linked_user_id)))
 }
 
-export async function updateCardNumber(userId: string, cardNumber: string | null): Promise<void> {
-  await db.update(users).set({ card_number: cardNumber }).where(eq(users.id, userId))
-}
-
 export async function updateLanguage(userId: string, lang: 'uz' | 'ru' | 'en'): Promise<void> {
   await db.update(users).set({ language_code: lang }).where(eq(users.id, userId))
 }

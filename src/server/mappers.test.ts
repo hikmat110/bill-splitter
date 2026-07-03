@@ -133,6 +133,13 @@ describe('toCreateBillInput', () => {
     expect(toCreateBillInput(withOutsider, CREATOR, P1).tipPaidByContactId).toBeNull()
   })
 
+  it('threads the route-resolved cardId; absent means none', () => {
+    const CARD = '99999999-9999-4999-8999-999999999999'
+    expect(toCreateBillInput(body, CREATOR, P1, CARD).cardId).toBe(CARD)
+    expect(toCreateBillInput(body, CREATOR, P1, null).cardId).toBeNull()
+    expect(toCreateBillInput(body, CREATOR, P1).cardId).toBeNull()
+  })
+
   it('round-trips through computeSettlement: sum(shares) ≤ total', () => {
     const input = toCreateBillInput(body, CREATOR)
     const items: ItemSpec[] = input.items.map((it) => ({

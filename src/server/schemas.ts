@@ -2,6 +2,7 @@
 // Money fields arrive as JS numbers (real 2-decimal som); stored as numeric(14,2).
 
 import { z } from 'zod'
+import { parseCardNumber } from '../utils/format'
 
 export const createBillItemSchema = z.object({
   name: z.string().trim().max(200).default(''),
@@ -31,6 +32,9 @@ export const createBillSchema = z
     // be one of the participants. The creator's own contact is normalized back
     // to null server-side (see mappers.toCreateBillInput).
     tipPaidByContactId: z.uuid().nullish(),
+    // Card shown to participants for paying. undefined = use the creator's
+    // default card (resolved server-side); null = explicitly no card.
+    cardId: z.uuid().nullish(),
     // Optional main receipt photo: the opaque attachment id returned by
     // POST /api/attachments, plus its mime. Both or neither.
     receiptAttachmentId: z.uuid().nullish(),
@@ -110,6 +114,16 @@ export const scanReceiptSchema = z.object({
   mime: imageMimeSchema,
 })
 export type ScanReceiptBody = z.infer<typeof scanReceiptSchema>
+
+// Add a payment card. The number may arrive spaced/dashed; the route re-parses
+// it to digits with the same helper.
+export const createCardSchema = z.object({
+  number: z
+    .string()
+    .refine((s) => parseCardNumber(s) !== null, 'Card number must be 16 digits'),
+  label: z.string().trim().min(1).max(50).optional(),
+})
+export type CreateCardBody = z.infer<typeof createCardSchema>
 
 export const createContactSchema = z.object({
   displayName: z.string().trim().min(1).max(100),
