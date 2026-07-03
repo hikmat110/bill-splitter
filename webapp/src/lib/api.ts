@@ -8,6 +8,7 @@ import type {
   CreateBillPayload,
   ScannedReceipt,
   UpdateBillPayload,
+  UserCard,
   UsernameAddResult,
 } from './types'
 
@@ -93,6 +94,8 @@ export const api = {
   scanReceipt: (attachmentId: string, mime: string) =>
     request<ScannedReceipt>('/receipts/scan', { method: 'POST', body: { attachmentId, mime } }),
   me: () => request<Me>('/me'),
+  addCard: (body: { number: string; label?: string }) =>
+    request<UserCard>('/cards', { method: 'POST', body }),
   contacts: () => request<ApiContact[]>('/contacts'),
   addContact: (body: { displayName: string; phone?: string }) =>
     request<ApiContact>('/contacts', { method: 'POST', body }),

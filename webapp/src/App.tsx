@@ -12,6 +12,7 @@ import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
 import { loadDraft, saveDraft, clearDraft, isDraftEmpty } from './lib/draftStorage'
 import { inboxCount } from './lib/billCalc'
+import { defaultCardId } from './lib/cards'
 import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegram'
 import { useT } from './i18n'
 import type { BillDetail, BillsResponse, Me } from './lib/types'
@@ -108,6 +109,13 @@ export function App() {
     return result
   }
 
+  // Add a payment card from the Split form's picker.
+  const addCard = useCallback(async (number: string) => {
+    const card = await api.addCard({ number })
+    setMe((m) => (m ? { ...m, cards: [...m.cards, card] } : m))
+    return card
+  }, [])
+
   // Load an existing created bill into the Split form for editing (PATCH on send).
   const editBill = useCallback((bill: BillDetail) => {
     setDraft({
@@ -126,6 +134,9 @@ export function App() {
       servicePct: bill.servicePct,
       tip: bill.tip,
       tipPaidBy: bill.tipPaidByContactId,
+      // Explicit: editing a bill whose card was deleted keeps "no card" — the
+      // default is never silently resurrected on someone else's behalf.
+      cardId: bill.cardId ?? null,
       receiptAttachmentId: bill.receiptAttachmentId,
       receiptMime: bill.receiptMime,
       receiptPreviewUrl: null,
@@ -169,13 +180,17 @@ export function App() {
     }
     const stored = loadDraft(me.id)
     if (stored && !isDraftEmpty(stored)) {
-      // Contacts may have been deleted since the draft was written — prune.
+      // Contacts (and cards) may have been deleted since the draft was written — prune.
       const known = new Set([me.selfContactId, ...contacts.map((c) => c.id)])
       setDraft({
         ...stored,
         participantIds: stored.participantIds.filter((id) => known.has(id)),
         items: stored.items.map((i) => ({ ...i, who: i.who.filter((w) => known.has(w.id)) })),
         tipPaidBy: stored.tipPaidBy && known.has(stored.tipPaidBy) ? stored.tipPaidBy : null,
+        cardId:
+          typeof stored.cardId === 'string' && !me.cards.some((c) => c.id === stored.cardId)
+            ? undefined
+            : stored.cardId,
       })
       toast(t('app.draft_restored'), 'ti-file-check')
     }
@@ -235,6 +250,9 @@ export function App() {
           draft.tip > 0 && draft.tipPaidBy && draft.tipPaidBy !== me.selfContactId
             ? draft.tipPaidBy
             : null,
+        // Resolve "use my default" locally so the review/preview and the
+        // stored bill agree even if the default changes later.
+        cardId: draft.cardId === undefined ? defaultCardId(me.cards) : draft.cardId,
         receiptAttachmentId: draft.receiptAttachmentId,
         receiptMime: draft.receiptMime,
       }
@@ -336,6 +354,8 @@ export function App() {
             setDraft={setDraft}
             people={people}
             selfContactId={me.selfContactId}
+            cards={me.cards}
+            onAddCard={addCard}
             onAddPeople={() => setPeopleOpen(true)}
             onSend={send}
             sending={sending}

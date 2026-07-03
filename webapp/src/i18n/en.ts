@@ -75,6 +75,12 @@ export const en = {
     units_auto: 'auto',
     units_left: '{{n}} unassigned — split equally',
     units_reset: 'Unit counts were reset',
+    pay_to_card: 'Pay to card',
+    no_card: 'No card',
+    add_card: 'Add card',
+    card_number_placeholder: 'Card number (16 digits)',
+    card_invalid: 'Enter exactly 16 digits',
+    card_added: 'Card added',
   },
   settle: {
     all_settled: 'All settled',
@@ -112,7 +118,7 @@ export const en = {
     owes_line: '{{name}}: {{amount}}',
     pay_to: '💳 Pay to: {{card}}',
     footer: 'by @billssplitbot',
-    no_card: 'Tip: set your card in the bot → Settings so it appears here.',
+    no_card: 'Tip: pick a card in the Split form (or add one there) so it appears here.',
     copy_manual: 'Couldn’t copy automatically — long-press the text above to select and copy it.',
   },
   incoming: {

@@ -146,7 +146,7 @@ export function BillDetailScreen({
 
   // People who aren't on the bot get no Telegram notification — the creator can
   // copy the whole bill as plain text and send it to them by hand.
-  const onShareBill = () => setShare({ text: buildBillText(bill, me, t), hasCard: !!me.cardNumber })
+  const onShareBill = () => setShare({ text: buildBillText(bill, t), hasCard: !!bill.cardNumber })
 
   const handleCopy = async (text: string) => {
     if (await copyText(text)) {

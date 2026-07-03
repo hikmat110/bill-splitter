@@ -24,6 +24,9 @@ export interface DraftBill {
   tip: number
   /** Contact id of whoever paid the tip; null = the creator (default). */
   tipPaidBy: string | null
+  /** Card shown to participants. undefined = my default card at send time;
+   *  null = explicitly no card; string = a specific card id. */
+  cardId?: string | null
   /** Main receipt photo: the uploaded attachment id + mime, null if none. */
   receiptAttachmentId: string | null
   receiptMime: string | null

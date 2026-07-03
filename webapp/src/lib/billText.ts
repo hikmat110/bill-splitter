@@ -7,7 +7,7 @@
 import { money } from './currency'
 import { to2 } from './calc'
 import type { I18nKey } from '../i18n'
-import type { BillDetail, Me } from './types'
+import type { BillDetail } from './types'
 
 type TFn = (key: I18nKey, vars?: Record<string, string | number>) => string
 
@@ -17,7 +17,7 @@ export function formatCard(digits: string): string {
 }
 
 /** The whole bill rendered as plain text, ready to paste into WhatsApp/SMS. */
-export function buildBillText(bill: BillDetail, me: Me, t: TFn): string {
+export function buildBillText(bill: BillDetail, t: TFn): string {
   const lines: string[] = [`📋 ${bill.title}`, '']
 
   // The original bill — every item, full price — then the totals.
@@ -49,8 +49,9 @@ export function buildBillText(bill: BillDetail, me: Me, t: TFn): string {
     lines.push('')
   }
 
-  if (me.cardNumber) {
-    lines.push(t('share.pay_to', { card: formatCard(me.cardNumber) }), '')
+  // The card attached to THIS bill (chosen at creation), not the sharer's default.
+  if (bill.cardNumber) {
+    lines.push(t('share.pay_to', { card: formatCard(bill.cardNumber) }), '')
   }
 
   lines.push(t('share.footer'))

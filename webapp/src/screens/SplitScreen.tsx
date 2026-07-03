@@ -10,6 +10,8 @@ import { amount, money } from '../lib/currency'
 import { api, ApiError } from '../lib/api'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
+import { cardLabel, defaultCardId } from '../lib/cards'
+import type { UserCard } from '../lib/types'
 import { haptic, showAlert } from '../lib/telegram'
 import { useT } from '../i18n'
 
@@ -26,6 +28,8 @@ export function SplitScreen({
   setDraft,
   people,
   selfContactId,
+  cards,
+  onAddCard,
   onAddPeople,
   onSend,
   sending,
@@ -35,6 +39,8 @@ export function SplitScreen({
   setDraft: (d: DraftBill) => void
   people: Person[]
   selfContactId: string
+  cards: UserCard[]
+  onAddCard: (number: string) => Promise<UserCard>
   onAddPeople: () => void
   onSend: () => void
   sending: boolean
@@ -182,6 +188,33 @@ export function SplitScreen({
   const removeReceipt = () => {
     if (draft.receiptPreviewUrl?.startsWith('blob:')) URL.revokeObjectURL(draft.receiptPreviewUrl)
     patch({ receiptAttachmentId: null, receiptMime: null, receiptPreviewUrl: null })
+  }
+
+  // Card picker: undefined on the draft = "use my default card".
+  const resolvedCardId = draft.cardId === undefined ? defaultCardId(cards) : draft.cardId
+  const [addingCard, setAddingCard] = useState(false)
+  const [cardInput, setCardInput] = useState('')
+  const [cardBusy, setCardBusy] = useState(false)
+
+  const submitCard = async () => {
+    const digits = cardInput.replace(/\D/g, '') // mirror the server's parseCardNumber
+    if (digits.length !== 16) {
+      toast(t('split.card_invalid'), 'ti-alert-circle')
+      return
+    }
+    setCardBusy(true)
+    try {
+      const card = await onAddCard(digits)
+      patch({ cardId: card.id })
+      setAddingCard(false)
+      setCardInput('')
+      haptic('success')
+      toast(t('split.card_added'), 'ti-credit-card')
+    } catch (e) {
+      toast(e instanceof Error ? e.message : t('common.something_wrong'), 'ti-alert-circle')
+    } finally {
+      setCardBusy(false)
+    }
   }
 
   const canSend =
@@ -441,6 +474,68 @@ export function SplitScreen({
               </div>
             </div>
           </>
+        )}
+      </div>
+
+      {/* card participants should pay to — default preselected, changeable per bill */}
+      <SecTitle>{t('split.pay_to_card')}</SecTitle>
+      <div className="card" style={{ padding: 'calc(14px * var(--dens))' }}>
+        <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
+          {cards.map((c) => {
+            const on = resolvedCardId === c.id
+            return (
+              <button
+                key={c.id}
+                onClick={() => {
+                  haptic('light')
+                  patch({ cardId: c.id })
+                }}
+                className="row"
+                style={cardPillStyle(on)}
+              >
+                <i className="ti ti-credit-card" style={{ fontSize: 16 }} />
+                <span>{cardLabel(c)}</span>
+                {on && <i className="ti ti-check" style={{ fontSize: 14 }} />}
+              </button>
+            )
+          })}
+          <button
+            onClick={() => {
+              haptic('light')
+              patch({ cardId: null })
+            }}
+            className="row"
+            style={cardPillStyle(resolvedCardId === null)}
+          >
+            <i className="ti ti-credit-card-off" style={{ fontSize: 16 }} />
+            <span>{t('split.no_card')}</span>
+            {resolvedCardId === null && <i className="ti ti-check" style={{ fontSize: 14 }} />}
+          </button>
+          <button
+            onClick={() => setAddingCard((v) => !v)}
+            className="row"
+            style={cardPillStyle(false)}
+          >
+            <i className="ti ti-plus" style={{ fontSize: 16 }} />
+            <span>{t('split.add_card')}</span>
+          </button>
+        </div>
+        {addingCard && (
+          <div className="row" style={{ gap: 8, marginTop: 11 }}>
+            <input
+              className="inp"
+              type="text"
+              inputMode="numeric"
+              autoFocus
+              placeholder={t('split.card_number_placeholder')}
+              value={cardInput}
+              onChange={(e) => setCardInput(e.target.value)}
+              style={{ flex: 1, fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
+            />
+            <button className="btn btn-sm btn-primary" disabled={cardBusy} onClick={() => void submitCard()}>
+              <i className={'ti ' + (cardBusy ? 'ti-loader-2' : 'ti-check')} />
+            </button>
+          </div>
         )}
       </div>
 
@@ -777,6 +872,21 @@ function ItemCard({
       )}
     </div>
   )
+}
+
+/** Selected/idle pill styling for the card picker (mirrors the tip-payer pills). */
+function cardPillStyle(on: boolean): React.CSSProperties {
+  return {
+    gap: 7,
+    background: on ? 'var(--accent-soft)' : 'var(--surface-2)',
+    color: on ? 'var(--accent-text)' : 'inherit',
+    borderRadius: 'var(--r-pill)',
+    padding: '7px 12px',
+    fontWeight: 600,
+    fontSize: 13.5,
+    border: on ? '1px solid var(--accent)' : '1px solid transparent',
+    cursor: 'pointer',
+  }
 }
 
 /** Compact − / value / + control shared by the qty and per-person unit rows. */

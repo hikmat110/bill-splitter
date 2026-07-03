@@ -73,6 +73,12 @@ export const uz: Dict = {
     units_auto: 'teng',
     units_left: "{{n}} ta taqsimlanmagan — teng bo'linadi",
     units_reset: 'Dona taqsimoti qayta tiklandi',
+    pay_to_card: "To'lov kartasi",
+    no_card: 'Kartasiz',
+    add_card: "Karta qo'shish",
+    card_number_placeholder: 'Karta raqami (16 raqam)',
+    card_invalid: 'Aynan 16 ta raqam kiriting',
+    card_added: "Karta qo'shildi",
   },
   settle: {
     all_settled: "Hammasi to'landi",
@@ -110,7 +116,7 @@ export const uz: Dict = {
     owes_line: '{{name}}: {{amount}}',
     pay_to: '💳 Karta: {{card}}',
     footer: '@billssplitbot orqali',
-    no_card: 'Maslahat: kartani botda → Sozlamalar boʻlimida kiriting.',
+    no_card: "Maslahat: hisob formasida kartani tanlang (yoki o'sha yerda qo'shing) — u shu yerda chiqadi.",
     copy_manual: "Avtomatik nusxalab bo'lmadi — yuqoridagi matnni bosib turib belgilang va nusxalang.",
   },
   incoming: {

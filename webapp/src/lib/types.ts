@@ -1,12 +1,23 @@
 // Shared API response/request types — mirror the shapes built in src/server/routes.ts.
 
+/** One of the user's payment cards, as shaped by the API. */
+export interface UserCard {
+  id: string
+  number: string
+  /** Custom name; display falls back to `${network} ••${last4}`. */
+  label: string | null
+  network: string
+  last4: string
+  isDefault: boolean
+}
+
 export interface Me {
   id: string
   firstName: string
   lastName: string | null
   username: string | null
   languageCode: string
-  cardNumber: string | null
+  cards: UserCard[]
   selfContactId: string
   /** Bot handle (no `@`) for the native-contact-picker deep link; null if unknown. */
   botUsername: string | null
@@ -89,7 +100,10 @@ export interface BillDetail {
   /** Set when the creator archived the bill (hidden from default lists). */
   archivedAt: string | null
   createdAt: string
-  creator: { id: string; firstName: string; cardNumber: string | null }
+  /** Card attached to THIS bill for paying (not the creator's current default). */
+  cardId: string | null
+  cardNumber: string | null
+  creator: { id: string; firstName: string }
   items: BillItem[]
   participants: BillParticipant[]
 }
@@ -135,6 +149,8 @@ export interface CreateBillPayload {
   servicePct: number
   tip: number
   tipPaidByContactId?: string | null
+  /** Card to attach: absent = server picks the default card; null = none. */
+  cardId?: string | null
   receiptAttachmentId?: string | null
   receiptMime?: string | null
 }
