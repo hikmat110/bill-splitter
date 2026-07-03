@@ -179,9 +179,15 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
 .chip:active { transform: scale(0.95); }
 
 /* segmented */
-.seg { display: inline-flex; background: var(--surface-2); border-radius: var(--r-pill); padding: 3px; gap: 2px; }
+/* Scrolls horizontally (scrollbar hidden) when the chips don't fit — narrow
+   phones + long labels would otherwise clip the last option out of reach. */
+.seg {
+  display: flex; background: var(--surface-2); border-radius: var(--r-pill); padding: 3px; gap: 2px;
+  max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
 .seg button {
-  flex: 1; border: none; background: transparent; font-family: inherit; font-weight: 600; font-size: 13px;
+  flex: 1 0 auto; border: none; background: transparent; font-family: inherit; font-weight: 600; font-size: 13px;
   color: var(--text-2); padding: 8px 14px; border-radius: var(--r-pill); cursor: pointer; white-space: nowrap;
   transition: color .18s;
 }
