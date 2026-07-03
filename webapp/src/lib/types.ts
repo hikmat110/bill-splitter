@@ -34,6 +34,8 @@ export type BillStatus = 'draft' | 'sent' | 'settled' | 'cancelled'
 export interface BreakdownItem {
   name: string
   share: number
+  /** Explicit unit count this person took (multi-unit items only). */
+  units?: number
 }
 
 /** Per-participant cost breakdown attached to participants by the API. */
@@ -53,6 +55,8 @@ export interface BillParticipant extends Breakdown {
   linkedUserId: string | null
   amount: number
   status: ParticipantStatus
+  /** When they marked their share paid (awaiting confirmation), if ever. */
+  markedPaidAt: string | null
   /** Proof-of-transfer photo the payer attached (creator-visible). */
   paymentProofAttachmentId: string | null
 }
@@ -60,10 +64,13 @@ export interface BillParticipant extends Breakdown {
 export interface BillItem {
   id: string
   name: string
+  /** Per-unit price; the line total is `price × quantity`. */
   price: number
   quantity: number
   position: number
   shareContactIds: string[]
+  /** Explicit per-person unit counts; sharers absent here split the remainder. */
+  unitsByContactId?: Record<string, number>
 }
 
 export interface BillDetail {
@@ -79,10 +86,20 @@ export interface BillDetail {
   /** Main receipt/cheque photo for the bill (participant-visible). */
   receiptAttachmentId: string | null
   receiptMime: string | null
+  /** Set when the creator archived the bill (hidden from default lists). */
+  archivedAt: string | null
   createdAt: string
   creator: { id: string; firstName: string; cardNumber: string | null }
   items: BillItem[]
   participants: BillParticipant[]
+}
+
+/** A bill blocking a contact delete (the 409 payload of DELETE /api/contacts/:id). */
+export interface BlockingBill {
+  id: string
+  title: string
+  status: BillStatus
+  createdAt: string
 }
 
 export interface IncomingBill {

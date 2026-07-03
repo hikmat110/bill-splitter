@@ -4,23 +4,23 @@ import { AddContactSheet } from './components/AddContactSheet'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { useToast } from './components/Toast'
 import { SplitScreen } from './screens/SplitScreen'
-import { SettleScreen } from './screens/SettleScreen'
-import { IncomingScreen } from './screens/IncomingScreen'
-import { ActivityScreen } from './screens/ActivityScreen'
+import { BillsScreen } from './screens/BillsScreen'
+import { InboxScreen } from './screens/InboxScreen'
+import { BillDetailScreen } from './screens/BillDetailScreen'
 import { api, ApiError } from './lib/api'
 import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
+import { inboxCount } from './lib/billCalc'
 import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegram'
 import { useT } from './i18n'
 import type { BillDetail, BillsResponse, Me } from './lib/types'
 
-type Tab = 'split' | 'settle' | 'pay' | 'activity'
+type Tab = 'split' | 'bills' | 'inbox'
 
-const TABS: { id: Tab; navKey: 'nav.split' | 'nav.settle' | 'nav.pay' | 'nav.activity'; icon: string }[] = [
+const TABS: { id: Tab; navKey: 'nav.split' | 'nav.bills' | 'nav.inbox'; icon: string }[] = [
   { id: 'split', navKey: 'nav.split', icon: 'ti-receipt-2' },
-  { id: 'settle', navKey: 'nav.settle', icon: 'ti-arrows-exchange' },
-  { id: 'pay', navKey: 'nav.pay', icon: 'ti-wallet' },
-  { id: 'activity', navKey: 'nav.activity', icon: 'ti-history' },
+  { id: 'bills', navKey: 'nav.bills', icon: 'ti-list-details' },
+  { id: 'inbox', navKey: 'nav.inbox', icon: 'ti-inbox' },
 ]
 
 export function App() {
@@ -34,7 +34,8 @@ export function App() {
   const [bills, setBills] = useState<BillsResponse>({ created: [], incoming: [] })
 
   const [draft, setDraft] = useState<DraftBill>(emptyDraft)
-  const [currentBillId, setCurrentBillId] = useState<string | null>(null)
+  // Bill shown in the full-screen detail overlay (over any tab); null = closed.
+  const [detailBillId, setDetailBillId] = useState<string | null>(null)
 
   const [peopleOpen, setPeopleOpen] = useState(false)
   const [addOpen, setAddOpen] = useState(false)
@@ -74,10 +75,13 @@ export function App() {
     return list.concat(contacts)
   }, [me, contacts, t])
 
-  const currentBill: BillDetail | null = useMemo(
-    () => bills.created.find((b) => b.id === currentBillId) ?? null,
-    [bills, currentBillId]
+  // Cached copy for instant overlay paint; BillDetailScreen re-fetches for truth.
+  const detailSeed: BillDetail | null = useMemo(
+    () => bills.created.find((b) => b.id === detailBillId) ?? null,
+    [bills, detailBillId]
   )
+
+  const openBill = useCallback((id: string) => setDetailBillId(id), [])
 
   const toggleParticipant = (id: string) =>
     setDraft((d) =>
@@ -103,12 +107,6 @@ export function App() {
     return result
   }
 
-  const newBill = () => {
-    setDraft(emptyDraft())
-    setCurrentBillId(null)
-    setTab('split')
-  }
-
   // Load an existing created bill into the Split form for editing (PATCH on send).
   const editBill = useCallback((bill: BillDetail) => {
     setDraft({
@@ -128,26 +126,50 @@ export function App() {
       receiptPreviewUrl: null,
       editingBillId: bill.id,
     })
+    setDetailBillId(null)
     setTab('split')
   }, [])
 
-  // Handle a `?startapp=edit_<billId>` deep link from the bot's "Edit in app"
-  // button — once, after the first load, if the bill exists and is still editable.
+  // Handle `?startapp=` deep links once, after the first load: `edit_<billId>`
+  // (the bot's "Edit in app" button) opens the editor while the bill is still
+  // editable, else falls back to the detail overlay; `bill_<billId>` opens the
+  // detail overlay directly.
   useEffect(() => {
     if (loading || deepLinkDone || !me) return
     setDeepLinkDone(true)
     const param = startParam()
-    if (!param?.startsWith('edit_')) return
-    const bill = bills.created.find((b) => b.id === param.slice('edit_'.length))
-    const editable =
-      bill && bill.participants.every((p) => p.linkedUserId === me.id || p.status === 'pending')
-    if (bill && editable) editBill(bill)
-    else if (bill) {
-      setCurrentBillId(bill.id)
-      setTab('settle')
-      toast(t('app.bill_not_editable'), 'ti-alert-circle')
+    if (param?.startsWith('edit_')) {
+      const bill = bills.created.find((b) => b.id === param.slice('edit_'.length))
+      if (!bill) return
+      const editable = bill.participants.every(
+        (p) => p.linkedUserId === me.id || p.status === 'pending'
+      )
+      if (editable) editBill(bill)
+      else {
+        openBill(bill.id)
+        toast(t('app.bill_not_editable'), 'ti-alert-circle')
+      }
+    } else if (param?.startsWith('bill_')) {
+      const id = param.slice('bill_'.length)
+      const known =
+        bills.created.some((b) => b.id === id) ||
+        bills.incoming.some((x) => x.bill.id === id)
+      if (known) {
+        setTab('bills')
+        openBill(id)
+      }
     }
-  }, [loading, deepLinkDone, me, bills, editBill, t, toast])
+  }, [loading, deepLinkDone, me, bills, editBill, openBill, t, toast])
+
+  // A contact was deleted: refresh lists and drop them from the working draft.
+  const onContactDeleted = useCallback(async (contactId: string) => {
+    setDraft((d) => ({
+      ...d,
+      participantIds: d.participantIds.filter((p) => p !== contactId),
+      items: d.items.map((i) => ({ ...i, who: i.who.filter((w) => w !== contactId) })),
+    }))
+    await refresh()
+  }, [refresh])
 
   const send = async () => {
     if (!me) return
@@ -177,11 +199,11 @@ export function App() {
         ? await api.updateBill(editingId, payload)
         : await api.createBill(payload)
       await refresh()
-      setCurrentBillId(saved.id)
       setDraft(emptyDraft())
       haptic('success')
       toast(t(editingId ? 'app.bill_updated' : 'app.bill_sent'), 'ti-send')
-      setTab('settle')
+      setTab('bills')
+      openBill(saved.id)
     } catch (e) {
       haptic('error')
       toast(e instanceof Error ? e.message : t('app.bill_send_failed'), 'ti-alert-circle')
@@ -217,11 +239,11 @@ export function App() {
   const subtitle =
     tab === 'split'
       ? draft.title.trim() || t('app.new_bill_subtitle')
-      : tab === 'settle'
-        ? currentBill?.title ?? t('nav.settle')
-        : tab === 'pay'
-          ? t('nav.pay')
-          : t('nav.activity')
+      : tab === 'bills'
+        ? t('nav.bills')
+        : t('nav.inbox')
+
+  const badge = me ? inboxCount(bills, me) : 0
 
   return (
     <div className="tg-app" data-theme={dark ? 'dark' : 'light'}>
@@ -274,27 +296,16 @@ export function App() {
             sending={sending}
           />
         )}
-        {tab === 'settle' && me && (
-          <SettleScreen
-            bill={currentBill}
-            me={me}
-            refresh={refresh}
-            goSplit={newBill}
-            onEdit={editBill}
-          />
-        )}
-        {tab === 'pay' && <IncomingScreen incoming={bills.incoming} refresh={refresh} />}
-        {tab === 'activity' && me && (
-          <ActivityScreen
+        {tab === 'bills' && me && (
+          <BillsScreen
             created={bills.created}
             incoming={bills.incoming}
             me={me}
-            openCreated={(b) => {
-              setCurrentBillId(b.id)
-              setTab('settle')
-            }}
-            goIncoming={() => setTab('pay')}
+            openBill={openBill}
           />
+        )}
+        {tab === 'inbox' && me && (
+          <InboxScreen bills={bills} me={me} refresh={refresh} openBill={openBill} />
         )}
       </ErrorBoundary>
 
@@ -311,17 +322,34 @@ export function App() {
           >
             <i className={'ti ' + tb.icon} />
             {t(tb.navKey)}
+            {tb.id === 'inbox' && badge > 0 && <span className="tab-badge">{badge}</span>}
           </button>
         ))}
       </div>
+
+      {/* bill detail — full-screen overlay above content and tabbar */}
+      {detailBillId && me && (
+        <ErrorBoundary resetKey={detailBillId}>
+          <BillDetailScreen
+            billId={detailBillId}
+            me={me}
+            seed={detailSeed}
+            refresh={refresh}
+            onClose={() => setDetailBillId(null)}
+            onEdit={editBill}
+          />
+        </ErrorBoundary>
+      )}
 
       <PeopleSheet
         open={peopleOpen}
         onClose={() => setPeopleOpen(false)}
         people={people}
         selected={draft.participantIds}
+        selfContactId={me?.selfContactId ?? null}
         onToggle={toggleParticipant}
         onOpenAdd={() => setAddOpen(true)}
+        onDeleted={onContactDeleted}
       />
 
       <AddContactSheet

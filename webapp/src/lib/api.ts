@@ -15,9 +15,12 @@ const BASE = '/api'
 
 export class ApiError extends Error {
   status: number
-  constructor(message: string, status: number) {
+  /** Parsed JSON error body, when the server sent one (e.g. blockingBills on 409). */
+  data: unknown
+  constructor(message: string, status: number, data?: unknown) {
     super(message)
     this.status = status
+    this.data = data
   }
 }
 
@@ -37,13 +40,15 @@ async function request<T>(
 
   if (!res.ok) {
     let message = `Request failed (${res.status})`
+    let data: unknown
     try {
-      const data = (await res.json()) as { error?: string }
-      if (data?.error) message = data.error
+      data = await res.json()
+      const err = (data as { error?: string })?.error
+      if (err) message = err
     } catch {
       // non-JSON error body — keep the generic message
     }
-    throw new ApiError(message, res.status)
+    throw new ApiError(message, res.status, data)
   }
 
   if (res.status === 204) return undefined as T
@@ -96,12 +101,21 @@ export const api = {
       method: 'POST',
       body: { usernames },
     }),
+  deleteContact: (id: string, opts?: { force?: boolean }) =>
+    request<{ ok: boolean }>(`/contacts/${id}${opts?.force ? '?force=1' : ''}`, {
+      method: 'DELETE',
+    }),
   bills: () => request<BillsResponse>('/bills'),
   bill: (id: string) => request<BillDetail>(`/bills/${id}`),
   createBill: (body: CreateBillPayload) =>
     request<BillDetail>('/bills', { method: 'POST', body }),
   updateBill: (id: string, body: UpdateBillPayload) =>
     request<BillDetail>(`/bills/${id}`, { method: 'PATCH', body }),
+  deleteBill: (id: string) => request<{ ok: boolean }>(`/bills/${id}`, { method: 'DELETE' }),
+  archiveBill: (id: string) =>
+    request<BillDetail>(`/bills/${id}/archive`, { method: 'POST' }),
+  unarchiveBill: (id: string) =>
+    request<BillDetail>(`/bills/${id}/unarchive`, { method: 'POST' }),
   remind: (billId: string, pid: string) =>
     request<{ ok: boolean }>(`/bills/${billId}/participants/${pid}/remind`, { method: 'POST' }),
   confirm: (billId: string, pid: string) =>

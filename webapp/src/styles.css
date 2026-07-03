@@ -230,6 +230,27 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
 .tabbar-item.on { color: var(--accent); }
 .tabbar-item.on .ti { transform: translateY(-1px); }
 
+/* count badge on a tabbar item (e.g. Inbox) */
+.tab-badge {
+  position: absolute; top: 2px; left: calc(50% + 6px);
+  min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 10.5px; font-weight: 800; line-height: 17px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* full-screen detail overlay (bill detail) — covers content + tabbar */
+.overlay-screen {
+  position: absolute; inset: 0; z-index: 30;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  animation: overlay-in .26s cubic-bezier(.32,.72,0,1);
+}
+@keyframes overlay-in {
+  from { transform: translateX(28px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
 /* top bar */
 .topbar {
   display: flex; align-items: center; gap: 12px;

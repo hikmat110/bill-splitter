@@ -1,44 +1,58 @@
+import { useState } from 'react'
 import { Money } from '../components/Money'
 import { AvatarStack } from '../components/Avatar'
-import { SecTitle, Empty } from '../components/common'
+import { SecTitle, Empty, Segmented } from '../components/common'
 import { money } from '../lib/currency'
 import { prettyDate } from '../lib/date'
 import { createdOutstanding, isSelf, paidCount } from '../lib/billCalc'
 import { useT } from '../i18n'
 import type { BillDetail, IncomingBill, Me } from '../lib/types'
 
+type Filter = 'all' | 'owed' | 'owe' | 'archived'
+
 type Row =
   | { kind: 'created'; at: string; bill: BillDetail }
   | { kind: 'incoming'; at: string; item: IncomingBill }
 
-export function ActivityScreen({
+export function BillsScreen({
   created,
   incoming,
   me,
-  openCreated,
-  goIncoming,
+  openBill,
 }: {
   created: BillDetail[]
   incoming: IncomingBill[]
   me: Me
-  openCreated: (bill: BillDetail) => void
-  goIncoming: () => void
+  openBill: (id: string) => void
 }) {
   const { t } = useT()
-  const youreOwed = created.reduce((s, b) => s + createdOutstanding(b, me), 0)
+  const [filter, setFilter] = useState<Filter>('all')
+
+  const live = created.filter((b) => !b.archivedAt)
+  const archived = created.filter((b) => b.archivedAt)
+
+  const youreOwed = live.reduce((s, b) => s + createdOutstanding(b, me), 0)
   const youOwe = incoming
     .filter((x) => x.participant.status !== 'confirmed')
     .reduce((s, x) => s + x.participant.amount, 0)
 
-  const rows: Row[] = [
-    ...created.map((bill): Row => ({ kind: 'created', at: bill.createdAt, bill })),
-    ...incoming.map((item): Row => ({ kind: 'incoming', at: item.bill.createdAt, item })),
-  ].sort((a, b) => +new Date(b.at) - +new Date(a.at))
+  const rows: Row[] = (
+    filter === 'archived'
+      ? archived.map((bill): Row => ({ kind: 'created', at: bill.createdAt, bill }))
+      : [
+          ...(filter !== 'owe'
+            ? live.map((bill): Row => ({ kind: 'created', at: bill.createdAt, bill }))
+            : []),
+          ...(filter !== 'owed'
+            ? incoming.map((item): Row => ({ kind: 'incoming', at: item.bill.createdAt, item }))
+            : []),
+        ]
+  ).sort((a, b) => +new Date(b.at) - +new Date(a.at))
 
   return (
     <div className="tg-scroll" style={{ padding: '4px 16px 24px' }}>
       {/* overall */}
-      <div className="row" style={{ gap: 10, marginBottom: 16 }}>
+      <div className="row" style={{ gap: 10, marginBottom: 14 }}>
         <div className="card pop" style={{ flex: 1, background: 'var(--pos-soft)', border: 'none', padding: '15px 16px' }}>
           <span
             style={{
@@ -49,7 +63,7 @@ export function ActivityScreen({
               letterSpacing: '.3px',
             }}
           >
-            {t('activity.youre_owed')}
+            {t('bills.youre_owed')}
           </span>
           <Money
             amount={youreOwed}
@@ -66,7 +80,7 @@ export function ActivityScreen({
               letterSpacing: '.3px',
             }}
           >
-            {t('activity.you_owe')}
+            {t('bills.you_owe')}
           </span>
           <Money
             amount={youOwe}
@@ -75,16 +89,36 @@ export function ActivityScreen({
         </div>
       </div>
 
-      <SecTitle>{t('activity.history')}</SecTitle>
+      <div style={{ marginBottom: 14 }}>
+        <Segmented<Filter>
+          value={filter}
+          onChange={setFilter}
+          options={[
+            { value: 'all', label: t('bills.filter_all') },
+            { value: 'owed', label: t('bills.filter_owed') },
+            { value: 'owe', label: t('bills.filter_owe') },
+            { value: 'archived', label: t('bills.filter_archived') },
+          ]}
+        />
+      </div>
+
       {rows.length === 0 ? (
-        <Empty icon="ti-history" title={t('activity.no_bills')} sub={t('activity.no_bills_sub')} />
+        filter === 'archived' ? (
+          <Empty icon="ti-archive" title={t('bills.empty_archived')} />
+        ) : (
+          <Empty icon="ti-history" title={t('bills.empty')} sub={t('bills.empty_sub')} />
+        )
       ) : (
         <div className="col" style={{ gap: 10 }}>
           {rows.map((row) =>
             row.kind === 'created' ? (
-              <CreatedRow key={row.bill.id} bill={row.bill} me={me} onClick={() => openCreated(row.bill)} />
+              <CreatedRow key={row.bill.id} bill={row.bill} me={me} onClick={() => openBill(row.bill.id)} />
             ) : (
-              <IncomingRow key={row.item.participant.id} item={row.item} onClick={goIncoming} />
+              <IncomingRow
+                key={row.item.participant.id}
+                item={row.item}
+                onClick={() => openBill(row.item.bill.id)}
+              />
             )
           )}
         </div>
@@ -108,7 +142,11 @@ function CreatedRow({ bill, me, onClick }: { bill: BillDetail; me: Me; onClick: 
       <div className="col" style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <div className="row" style={{ gap: 7 }}>
           <span style={titleStyle}>{bill.title}</span>
-          <span className="pill pill-acc" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('activity.sent')}</span>
+          {bill.archivedAt ? (
+            <span className="pill pill-mut" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('bills.archived_pill')}</span>
+          ) : (
+            <span className="pill pill-acc" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('bills.sent')}</span>
+          )}
         </div>
         <div className="row" style={{ gap: 8 }}>
           <AvatarStack people={people} size={22} max={4} />
@@ -120,7 +158,7 @@ function CreatedRow({ bill, me, onClick }: { bill: BillDetail; me: Me; onClick: 
       <div className="col" style={{ alignItems: 'flex-end', gap: 4 }}>
         {settled ? (
           <span className="pill pill-mut" style={{ fontSize: 11 }}>
-            <i className="ti ti-check" style={{ fontSize: 12 }} /> {t('activity.settled')}
+            <i className="ti ti-check" style={{ fontSize: 12 }} /> {t('bills.settled')}
           </span>
         ) : (
           <>
@@ -128,7 +166,7 @@ function CreatedRow({ bill, me, onClick }: { bill: BillDetail; me: Me; onClick: 
               +{money(outstanding)}
             </span>
             <span className="muted3" style={{ fontSize: 11, fontWeight: 600 }}>
-              {t('activity.paid_count', { paid, total })}
+              {t('bills.paid_count', { paid, total })}
             </span>
           </>
         )}
@@ -146,10 +184,10 @@ function IncomingRow({ item, onClick }: { item: IncomingBill; onClick: () => voi
       <div className="col" style={{ flex: 1, minWidth: 0, gap: 3 }}>
         <div className="row" style={{ gap: 7 }}>
           <span style={titleStyle}>{item.bill.title}</span>
-          <span className="pill pill-mut" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('activity.received')}</span>
+          <span className="pill pill-mut" style={{ fontSize: 10.5, padding: '1px 7px' }}>{t('bills.received')}</span>
         </div>
         <span className="muted3" style={{ fontSize: 12, fontWeight: 600 }}>
-          {t('activity.from', { name: item.bill.creatorName || t('common.friend') })} ·{' '}
+          {t('bills.from', { name: item.bill.creatorName || t('common.friend') })} ·{' '}
           {prettyDate(t, lang, item.bill.createdAt)}
         </span>
       </div>
@@ -159,7 +197,7 @@ function IncomingRow({ item, onClick }: { item: IncomingBill; onClick: () => voi
             <span className="tnum" style={{ fontWeight: 800, fontSize: 14.5, color: 'var(--neg-text)' }}>
               −{money(item.participant.amount)}
             </span>
-            <span className="muted3" style={{ fontSize: 11, fontWeight: 600 }}>{t('activity.you_owe_short')}</span>
+            <span className="muted3" style={{ fontSize: 11, fontWeight: 600 }}>{t('bills.you_owe_short')}</span>
           </>
         ) : (
           <span className="pill pill-pos" style={{ fontSize: 11 }}>

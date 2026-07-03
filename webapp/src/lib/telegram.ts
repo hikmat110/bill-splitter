@@ -60,6 +60,22 @@ export function openTelegramLink(url: string): void {
   wa()?.openTelegramLink(url)
 }
 
+/**
+ * Show Telegram's native back button wired to `cb`; the returned cleanup hides
+ * it and detaches the handler. No-op (still returns a cleanup) in a browser —
+ * overlays keep their own in-header back chevron for that case.
+ */
+export function onBackButton(cb: () => void): () => void {
+  const back = wa()?.BackButton
+  if (!back) return () => {}
+  back.onClick(cb)
+  back.show()
+  return () => {
+    back.offClick(cb)
+    back.hide()
+  }
+}
+
 /** Native Telegram modal alert (always renders in the webview, unlike the CSS
  *  toast). Falls back to window.alert in a plain browser. */
 export function showAlert(message: string): void {

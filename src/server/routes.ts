@@ -388,17 +388,10 @@ async function getBill(user: User, billId: string): Promise<Response> {
   const isParticipant = d.participants.some((p) => p.contact.linked_user_id === user.id)
   if (!isCreator && !isParticipant) return error(403, 'Forbidden')
 
-  const shaped = shapeBillDetail(d)
-  if (isCreator) return json(shaped)
-
-  // Recipient sees only their own share — redact others' participants/items.
-  // Breakdown amounts stay correct because they were computed over the full bill.
-  const own = shaped.participants.filter((p) => p.linkedUserId === user.id)
-  const ownContactIds = new Set(own.map((p) => p.contactId))
-  const items = shaped.items.filter((it) =>
-    it.shareContactIds.some((id) => ownContactIds.has(id))
-  )
-  return json({ ...shaped, participants: own, items })
+  // Creator and participants all see the full bill — items, everyone's
+  // amounts and statuses. Splitting is between friends; transparency beats
+  // redaction (and the payer legitimately wants to see who owes what).
+  return json(shapeBillDetail(d))
 }
 
 async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {
@@ -559,9 +552,12 @@ async function getFile(user: User, id: string): Promise<Response> {
 
   const participant = await findParticipantWithBillByProofAttachment(id)
   if (participant) {
+    // Same visibility rule as the bill itself: creator or any participant.
+    const d = await getBillWithDetails(participant.bill.id)
+    if (!d) return error(404, 'Not found')
     const canView =
-      participant.bill.creator_id === user.id ||
-      participant.contact.linked_user_id === user.id
+      d.bill.creator_id === user.id ||
+      d.participants.some((p) => p.contact.linked_user_id === user.id)
     if (!canView) return error(403, 'Forbidden')
     return streamAttachment(id, participant.payment_proof_mime)
   }
