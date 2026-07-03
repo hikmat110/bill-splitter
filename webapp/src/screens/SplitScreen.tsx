@@ -49,9 +49,11 @@ export function SplitScreen({
   const shares = previewShares(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
+  // "Custom" sits right after Off — much easier to spot than at the far end.
   const serviceOptions = [
-    ...SERVICE_PRESETS.map((p) => ({ value: p, label: p ? p + '%' : t('common.off') })),
+    { value: 0, label: t('common.off') },
     { value: SERVICE_CUSTOM, label: t('split.service_custom') },
+    ...SERVICE_PRESETS.filter((p) => p > 0).map((p) => ({ value: p, label: p + '%' })),
   ]
   // Custom mode: the user tapped "Custom", or the value isn't one of the presets
   // (e.g. a fractional % derived from a receipt scan, or an edited bill).
@@ -61,8 +63,9 @@ export function SplitScreen({
   // Custom mode: the tip isn't one of the presets, or the user picked "Custom".
   const [tipCustom, setTipCustom] = useState(() => draft.tip > 0 && !TIP_PRESETS.includes(draft.tip))
   const tipOptions = [
-    ...TIP_PRESETS.map((tp) => ({ value: tp, label: tp === 0 ? t('common.none') : amount(tp) })),
+    { value: 0, label: t('common.none') },
     { value: TIP_CUSTOM, label: t('split.tip_custom') },
+    ...TIP_PRESETS.filter((tp) => tp > 0).map((tp) => ({ value: tp, label: amount(tp) })),
   ]
   // Tip payer always includes the creator ("You", default) plus the participants.
   const payerOptions = [selfContactId, ...participants.filter((id) => id !== selfContactId)]
