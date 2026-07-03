@@ -89,7 +89,7 @@ export function App() {
         ? {
             ...d,
             participantIds: d.participantIds.filter((p) => p !== id),
-            items: d.items.map((i) => ({ ...i, who: i.who.filter((w) => w !== id) })),
+            items: d.items.map((i) => ({ ...i, who: i.who.filter((w) => w.id !== id) })),
           }
         : { ...d, participantIds: [...d.participantIds, id] }
     )
@@ -116,7 +116,11 @@ export function App() {
         id: uid(),
         name: it.name,
         price: it.price,
-        who: it.shareContactIds,
+        qty: it.quantity,
+        who: it.shareContactIds.map((id) => ({
+          id,
+          units: it.unitsByContactId?.[id] ?? null,
+        })),
       })),
       servicePct: bill.servicePct,
       tip: bill.tip,
@@ -166,7 +170,7 @@ export function App() {
     setDraft((d) => ({
       ...d,
       participantIds: d.participantIds.filter((p) => p !== contactId),
-      items: d.items.map((i) => ({ ...i, who: i.who.filter((w) => w !== contactId) })),
+      items: d.items.map((i) => ({ ...i, who: i.who.filter((w) => w.id !== contactId) })),
     }))
     await refresh()
   }, [refresh])
@@ -180,11 +184,19 @@ export function App() {
         participantContactIds: draft.participantIds,
         items: draft.items
           .filter((i) => i.price > 0 && i.who.length > 0)
-          .map((i) => ({
-            name: i.name.trim() || t('split.default_item_name'),
-            price: i.price,
-            shareContactIds: i.who.filter((w) => draft.participantIds.includes(w)),
-          })),
+          .map((i) => {
+            const who = i.who.filter((w) => draft.participantIds.includes(w.id))
+            const units = Object.fromEntries(
+              who.filter((w) => w.units != null && w.units > 0).map((w) => [w.id, w.units!])
+            )
+            return {
+              name: i.name.trim() || t('split.default_item_name'),
+              price: i.price,
+              quantity: Math.max(1, Math.floor(i.qty || 1)),
+              shareContactIds: who.map((w) => w.id),
+              ...(Object.keys(units).length > 0 ? { unitsByContactId: units } : {}),
+            }
+          }),
         servicePct: draft.servicePct,
         tip: draft.tip,
         tipPaidByContactId:

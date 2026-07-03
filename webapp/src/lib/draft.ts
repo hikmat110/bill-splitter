@@ -1,10 +1,19 @@
 // Local "new bill" draft model used by the Split screen before it's sent.
 
+/** One sharer of a draft item. `units: null` = no explicit count — they split
+ *  the unassigned remainder equally. */
+export interface DraftWho {
+  id: string
+  units: number | null
+}
+
 export interface DraftItem {
   id: string
   name: string
+  /** Per-unit price; the line total is `price × qty`. */
   price: number
-  who: string[] // participant (contact) ids sharing this item — equal split
+  qty: number
+  who: DraftWho[]
 }
 
 export interface DraftBill {

@@ -66,6 +66,11 @@ export const ru: Dict = {
     each: '{{amount}} с чел.',
     default_item_name: 'Позиция',
     per_person: 'Каждый платит',
+    qty: 'Кол-во',
+    price_per_unit: 'Цена за штуку',
+    units_auto: 'поровну',
+    units_left: '{{n}} не распределено — делится поровну',
+    units_reset: 'Распределение по штукам сброшено',
   },
   settle: {
     all_settled: 'Всё оплачено',

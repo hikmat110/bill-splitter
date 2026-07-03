@@ -124,7 +124,14 @@ export interface BillsResponse {
 export interface CreateBillPayload {
   title: string
   participantContactIds: string[]
-  items: { name: string; price: number; shareContactIds: string[] }[]
+  items: {
+    name: string
+    /** Per-unit price. */
+    price: number
+    quantity: number
+    shareContactIds: string[]
+    unitsByContactId?: Record<string, number>
+  }[]
   servicePct: number
   tip: number
   tipPaidByContactId?: string | null

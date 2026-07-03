@@ -68,6 +68,11 @@ export const en = {
     each: '{{amount}} ea.',
     default_item_name: 'Item',
     per_person: 'Each person owes',
+    qty: 'Qty',
+    price_per_unit: 'Price per unit',
+    units_auto: 'auto',
+    units_left: '{{n}} unassigned — split equally',
+    units_reset: 'Unit counts were reset',
   },
   settle: {
     all_settled: 'All settled',

@@ -1,13 +1,18 @@
 // Client-side total *preview* for the Split editor. The authoritative total is
 // computed server-side by utils/settlement.computeSettlement on create; this just
-// mirrors its shape (subtotal + proportional service + tip, at 2-decimal precision).
+// mirrors its shape (weighted units + proportional service + tip, at 2-decimal
+// precision).
 
-import type { DraftBill } from './draft'
+import type { DraftBill, DraftItem } from './draft'
 
 /** Truncate to 2 decimals (floor at the cent), dust-guarded — mirrors the
  * server's `to2` in utils/settlement. */
 export function to2(n: number): number {
   return Math.floor(n * 100 + 1e-6) / 100
+}
+
+function itemQty(it: DraftItem): number {
+  return Math.max(1, Math.floor(it.qty || 1))
 }
 
 export function previewTotals(draft: DraftBill): {
@@ -17,7 +22,7 @@ export function previewTotals(draft: DraftBill): {
   total: number
 } {
   const subtotal = draft.items.reduce(
-    (s, it) => s + (it.who.length > 0 && it.price > 0 ? it.price : 0),
+    (s, it) => s + (it.who.length > 0 && it.price > 0 ? it.price * itemQty(it) : 0),
     0
   )
   const service = (subtotal * (draft.servicePct || 0)) / 100
@@ -31,16 +36,23 @@ export function previewTotals(draft: DraftBill): {
 }
 
 /** Per-person owed amount preview for the Split editor — mirrors the server's
- * computeSettlement (utils/settlement). Only people who share at least one priced
- * item appear; the tip/service split equally among those distinct sharers, matching
- * what the bill will show after it's sent. */
+ * computeSettlement (utils/settlement): explicitly assigned units cost
+ * `units × price`, the unassigned remainder splits equally among the item's
+ * sharers. Only people who share at least one priced item appear; tip splits
+ * equally among those distinct sharers, matching the bill after it's sent. */
 export function previewShares(draft: DraftBill): { id: string; amount: number }[] {
   const base = new Map<string, number>()
   for (const it of draft.items) {
     const count = it.who.length
     if (count === 0 || it.price <= 0) continue
-    const perShare = to2(it.price / count)
-    for (const id of it.who) base.set(id, to2((base.get(id) ?? 0) + perShare))
+    const qty = itemQty(it)
+    const assigned = it.who.reduce((s, w) => s + (w.units ?? 0), 0)
+    const remainder = Math.max(0, qty - assigned)
+    const remainderPerHead = (remainder * it.price) / count
+    for (const w of it.who) {
+      const share = to2((w.units ?? 0) * it.price + remainderPerHead)
+      base.set(w.id, to2((base.get(w.id) ?? 0) + share))
+    }
   }
 
   const ids = draft.participantIds.filter((id) => base.has(id))

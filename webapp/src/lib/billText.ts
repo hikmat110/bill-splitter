@@ -38,7 +38,8 @@ export function buildBillText(bill: BillDetail, me: Me, t: TFn): string {
   for (const p of bill.participants) {
     lines.push(t('share.owes_line', { name: p.displayName, amount: money(p.amount) }))
     for (const it of p.items) {
-      lines.push(`  • ${it.name}: ${money(it.share)}`)
+      const label = it.units ? `${it.name} ×${it.units}` : it.name
+      lines.push(`  • ${label}: ${money(it.share)}`)
     }
     if (p.service > 0) lines.push(`  ${t('breakdown.service')}: ${money(p.service)}`)
     if (p.tip > 0) lines.push(`  ${t('breakdown.tip')}: ${money(p.tip)}`)

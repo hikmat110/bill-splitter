@@ -66,6 +66,11 @@ export const uz: Dict = {
     each: 'kishi boshiga {{amount}}',
     default_item_name: 'Mahsulot',
     per_person: 'Har kim qancha',
+    qty: 'Soni',
+    price_per_unit: 'Dona narxi',
+    units_auto: 'teng',
+    units_left: "{{n}} ta taqsimlanmagan — teng bo'linadi",
+    units_reset: 'Dona taqsimoti qayta tiklandi',
   },
   settle: {
     all_settled: "Hammasi to'landi",

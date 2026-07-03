@@ -70,12 +70,17 @@ export function SplitScreen({
   const patchItem = (id: string, p: Partial<DraftItem>) =>
     patch({ items: draft.items.map((i) => (i.id === id ? { ...i, ...p } : i)) })
   const addItem = () =>
-    patch({ items: [...draft.items, { id: uid(), name: '', price: 0, who: [...participants] }] })
+    patch({
+      items: [
+        ...draft.items,
+        { id: uid(), name: '', price: 0, qty: 1, who: participants.map((id) => ({ id, units: null })) },
+      ],
+    })
   const removeItem = (id: string) => patch({ items: draft.items.filter((i) => i.id !== id) })
   const removePerson = (id: string) =>
     patch({
       participantIds: participants.filter((p) => p !== id),
-      items: draft.items.map((i) => ({ ...i, who: i.who.filter((w) => w !== id) })),
+      items: draft.items.map((i) => ({ ...i, who: i.who.filter((w) => w.id !== id) })),
       // If the removed person was paying the tip, fall back to the creator.
       ...(draft.tipPaidBy === id ? { tipPaidBy: null } : {}),
     })
@@ -118,7 +123,8 @@ export function SplitScreen({
         id: uid(),
         name: it.name || t('split.default_item_name'),
         price: it.price,
-        who: [...participants], // empty until the user adds people
+        qty: 1, // the scan folds quantity into the line total
+        who: participants.map((id) => ({ id, units: null })), // empty until people are added
       }))
       // The scan ran but extracted nothing — tell the user instead of silently
       // pasting an empty list (which looks like "nothing happened").
@@ -541,13 +547,36 @@ function ItemCard({
   onRemove: () => void
 }) {
   const { t } = useT()
-  const who = item.who.filter((w) => participants.includes(w))
+  const toast = useToast()
+  const qty = Math.max(1, Math.floor(item.qty || 1))
+  const who = item.who.filter((w) => participants.includes(w.id))
   const multi = who.length > 1
+  const assigned = who.reduce((s, w) => s + (w.units ?? 0), 0)
+  const remainder = Math.max(0, qty - assigned)
+
   const toggleWho = (id: string) => {
-    const has = item.who.includes(id)
-    onPatch({ who: has ? item.who.filter((w) => w !== id) : [...item.who, id] })
+    const has = item.who.some((w) => w.id === id)
+    onPatch({
+      who: has ? item.who.filter((w) => w.id !== id) : [...item.who, { id, units: null }],
+    })
   }
-  const perHead = who.length ? money(item.price / who.length) : '—'
+
+  const setQty = (next: number) => {
+    const q = Math.max(1, Math.floor(next))
+    // Explicit assignments can't survive a shrink below their sum — reset to
+    // the equal split rather than guessing whose count to cut.
+    if (assigned > q) {
+      onPatch({ qty: q, who: item.who.map((w) => ({ ...w, units: null })) })
+      toast(t('split.units_reset'), 'ti-refresh')
+    } else {
+      onPatch({ qty: q })
+    }
+  }
+
+  const setUnits = (id: string, units: number | null) =>
+    onPatch({ who: item.who.map((w) => (w.id === id ? { ...w, units } : w)) })
+
+  const perHead = who.length ? money((item.price * qty) / who.length) : '—'
 
   return (
     <div className="card pop" style={{ padding: 'calc(13px * var(--dens))' }}>
@@ -583,6 +612,7 @@ function ItemCard({
           step="0.01"
           value={item.price || ''}
           placeholder="0"
+          title={qty > 1 ? t('split.price_per_unit') : undefined}
           onChange={(e) =>
             onPatch({ price: Math.max(0, Math.round((Number(e.target.value) || 0) * 100) / 100) })
           }
@@ -595,9 +625,28 @@ function ItemCard({
         />
       </div>
 
+      {/* quantity stepper + line total */}
+      <div className="row" style={{ gap: 8, marginTop: 11, alignItems: 'center' }}>
+        <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
+          {t('split.qty')}
+        </span>
+        <Stepper
+          display={String(qty)}
+          canDec={qty > 1}
+          onDec={() => setQty(qty - 1)}
+          onInc={() => setQty(qty + 1)}
+        />
+        <span style={{ flex: 1 }} />
+        {qty > 1 && item.price > 0 && (
+          <span className="muted tnum" style={{ fontSize: 12.5, fontWeight: 600, whiteSpace: 'nowrap' }}>
+            {qty} × {money(item.price)} = {money(item.price * qty)}
+          </span>
+        )}
+      </div>
+
       <div className="row" style={{ gap: 6, marginTop: 11, flexWrap: 'wrap' }}>
         {participants.map((id) => {
-          const on = item.who.includes(id)
+          const on = item.who.some((w) => w.id === id)
           return (
             <button
               key={id}
@@ -639,7 +688,51 @@ function ItemCard({
         })}
       </div>
 
-      {multi && (
+      {/* per-person unit assignment — only meaningful for multi-unit items */}
+      {qty > 1 && who.length > 0 && (
+        <div className="col" style={{ gap: 7, marginTop: 11 }}>
+          {who.map((w) => {
+            const maxForW = (w.units ?? 0) + remainder
+            return (
+              <div key={w.id} className="row" style={{ gap: 9, alignItems: 'center' }}>
+                <Avatar id={w.id} name={nameById(w.id)} size={24} />
+                <span
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    fontWeight: 600,
+                    fontSize: 13,
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    whiteSpace: 'nowrap',
+                  }}
+                >
+                  {nameById(w.id)}
+                </span>
+                {w.units != null && item.price > 0 && (
+                  <span className="muted tnum" style={{ fontSize: 12, fontWeight: 600 }}>
+                    {money(w.units * item.price)}
+                  </span>
+                )}
+                <Stepper
+                  display={w.units == null ? t('split.units_auto') : String(w.units)}
+                  canDec={w.units != null}
+                  canInc={w.units == null ? remainder > 0 : (w.units ?? 0) < maxForW}
+                  onDec={() => setUnits(w.id, w.units === 1 ? null : (w.units ?? 1) - 1)}
+                  onInc={() => setUnits(w.id, (w.units ?? 0) + 1)}
+                />
+              </div>
+            )
+          })}
+          {remainder > 0 && assigned > 0 && (
+            <span className="muted" style={{ fontSize: 12, fontWeight: 600, textAlign: 'right' }}>
+              {t('split.units_left', { n: remainder })}
+            </span>
+          )}
+        </div>
+      )}
+
+      {multi && qty === 1 && (
         <div className="row" style={{ gap: 8, marginTop: 11, justifyContent: 'flex-end' }}>
           <span
             className="muted tnum"
@@ -649,6 +742,63 @@ function ItemCard({
           </span>
         </div>
       )}
+    </div>
+  )
+}
+
+/** Compact − / value / + control shared by the qty and per-person unit rows. */
+function Stepper({
+  display,
+  canDec,
+  canInc = true,
+  onDec,
+  onInc,
+}: {
+  display: string
+  canDec: boolean
+  canInc?: boolean
+  onDec: () => void
+  onInc: () => void
+}) {
+  return (
+    <div
+      className="row"
+      style={{
+        gap: 0,
+        background: 'var(--surface-2)',
+        borderRadius: 'var(--r-pill)',
+        alignItems: 'center',
+        flexShrink: 0,
+      }}
+    >
+      <button
+        className="icon-btn"
+        disabled={!canDec}
+        onClick={() => {
+          haptic('light')
+          onDec()
+        }}
+        style={{ width: 28, height: 28, fontSize: 14, background: 'none', border: 'none', opacity: canDec ? 1 : 0.35 }}
+      >
+        <i className="ti ti-minus" />
+      </button>
+      <span
+        className="tnum"
+        style={{ minWidth: 34, textAlign: 'center', fontWeight: 700, fontSize: 13 }}
+      >
+        {display}
+      </span>
+      <button
+        className="icon-btn"
+        disabled={!canInc}
+        onClick={() => {
+          haptic('light')
+          onInc()
+        }}
+        style={{ width: 28, height: 28, fontSize: 14, background: 'none', border: 'none', opacity: canInc ? 1 : 0.35 }}
+      >
+        <i className="ti ti-plus" />
+      </button>
     </div>
   )
 }

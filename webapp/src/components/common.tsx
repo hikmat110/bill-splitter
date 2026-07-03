@@ -10,7 +10,7 @@ export function BreakdownLines({ b, style }: { b: Breakdown; style?: React.CSSPr
   return (
     <div className="col" style={{ gap: 5, ...style }}>
       {b.items.map((it, idx) => (
-        <Line key={idx} label={it.name} amount={it.share} />
+        <Line key={idx} label={it.units ? `${it.name} ×${it.units}` : it.name} amount={it.share} />
       ))}
       {b.service > 0 && <Line label={t('breakdown.service')} amount={b.service} />}
       {b.tip > 0 && <Line label={t('breakdown.tip')} amount={b.tip} />}
