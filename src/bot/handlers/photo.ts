@@ -1,8 +1,8 @@
 import type { Bot } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
-import { config } from '../../config'
 import { saveImage, StorageError } from '../../services/storage.service'
+import { downloadTelegramFile } from '../../services/telegram-file.service'
 import { markParticipantPaid, getParticipantById } from '../../services/bill.service'
 import { notifyCreatorOfPaymentMark } from '../../services/notification.service'
 import { showReview } from './new-bill'
@@ -27,14 +27,9 @@ export async function photoHandler(ctx: MyContext, bot: Bot<MyContext>): Promise
   if (!ph) return
 
   // Download + persist the photo. Telegram always delivers photos as JPEG.
-  // NOTE: the file URL embeds the bot token — never log it.
   let stored
   try {
-    const f = await ctx.api.getFile(ph.file_id)
-    const res = await fetch(
-      `https://api.telegram.org/file/bot${config.BOT_TOKEN}/${f.file_path}`
-    )
-    const bytes = new Uint8Array(await res.arrayBuffer())
+    const bytes = await downloadTelegramFile(ctx.api, ph.file_id)
     stored = await saveImage(bytes, 'image/jpeg')
   } catch (err) {
     if (err instanceof StorageError) {

@@ -37,9 +37,11 @@ import {
   findOrCreateSelfContact,
   findContactById,
   getBillsReferencingContact,
+  getContactAvatarTelegramId,
   softDeleteContact,
   deleteContact,
 } from '../services/contact.service'
+import { getAvatarFile } from '../services/avatar.service'
 import { findById, updateLanguage } from '../services/user.service'
 import {
   listCards,
@@ -246,6 +248,11 @@ export async function handleApi(
     // GET /api/files/:id — stream a stored image (auth + ownership enforced)
     if (seg[0] === 'files' && seg.length === 2 && method === 'GET') {
       return await getFile(user, seg[1]!)
+    }
+
+    // GET /api/avatars/:contactId — Telegram profile photo; 404 → initials
+    if (seg[0] === 'avatars' && seg.length === 2 && method === 'GET') {
+      return await getAvatar(seg[1]!, bot)
     }
 
     // /api/bills ...
@@ -677,6 +684,24 @@ async function getFile(user: User, id: string): Promise<Response> {
   }
 
   return error(404, 'Not found')
+}
+
+/**
+ * Telegram profile photo for a contact (or the self-contact). Deliberately
+ * requires only authentication + a valid contact uuid: participants view
+ * avatars of contacts owned by the bill creator, uuids aren't enumerable, and
+ * the bytes are what Telegram already exposes to the bot under the subject's
+ * own privacy settings. Unknown contact / no telegram id / no photo are one
+ * uniform 404 — the endpoint is not a contact-existence oracle.
+ */
+async function getAvatar(contactId: string, bot: Bot<MyContext>): Promise<Response> {
+  const telegramId = await getContactAvatarTelegramId(contactId)
+  if (!telegramId) return error(404, 'Not found')
+  const file = await getAvatarFile(bot.api, telegramId)
+  if (!file) return error(404, 'Not found')
+  return new Response(file, {
+    headers: { 'content-type': 'image/jpeg', 'cache-control': 'private, max-age=86400' },
+  })
 }
 
 async function streamAttachment(id: string, mime: string | null): Promise<Response> {

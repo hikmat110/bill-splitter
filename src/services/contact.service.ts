@@ -300,6 +300,27 @@ export async function getBillsReferencingContact(contactId: string): Promise<Con
     .map((b) => ({ id: b.id, title: b.title, status: b.status, created_at: b.created_at }))
 }
 
+/**
+ * The Telegram id behind a contact, for profile-photo lookups: the linked
+ * registered user's id, else the deferred pre-registration link, else null.
+ * Soft-deleted contacts intentionally resolve too — they still render inside
+ * old bills.
+ */
+export async function getContactAvatarTelegramId(contactId: string): Promise<bigint | null> {
+  const rows = await db
+    .select({
+      userTgId: users.telegram_id,
+      contactTgId: contacts.linked_telegram_id,
+    })
+    .from(contacts)
+    .leftJoin(users, eq(contacts.linked_user_id, users.id))
+    .where(eq(contacts.id, contactId))
+    .limit(1)
+  const row = rows[0]
+  if (!row) return null
+  return row.userTgId ?? row.contactTgId ?? null
+}
+
 export async function deleteContact(contactId: string): Promise<void> {
   await db.delete(contacts).where(eq(contacts.id, contactId))
 }

@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { avatarColor, initials } from '../lib/avatar'
+import { avatarObjectUrl, cachedAvatarUrl } from '../lib/avatars'
 
 export function Avatar({
   id,
@@ -15,6 +17,43 @@ export function Avatar({
   style?: CSSProperties
 }) {
   const color = avatarColor(id)
+  // Telegram profile photo, when the contact has one. Starting from the sync
+  // cache avoids an initials flash when navigating back to a screen.
+  const [url, setUrl] = useState<string | null>(() => cachedAvatarUrl(id) ?? null)
+
+  useEffect(() => {
+    let alive = true
+    const known = cachedAvatarUrl(id)
+    setUrl(known ?? null)
+    if (known === undefined) {
+      void avatarObjectUrl(id).then((u) => {
+        if (alive && u) setUrl(u)
+      })
+    }
+    return () => {
+      alive = false
+    }
+  }, [id])
+
+  if (url) {
+    return (
+      <img
+        className="avatar"
+        src={url}
+        alt=""
+        onError={() => setUrl(null)}
+        style={{
+          width: size,
+          height: size,
+          objectFit: 'cover',
+          background: color,
+          boxShadow: ring ? `0 0 0 2.5px var(--surface), 0 0 0 4px ${color}` : 'none',
+          ...style,
+        }}
+      />
+    )
+  }
+
   return (
     <div
       className="avatar"
