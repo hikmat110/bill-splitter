@@ -94,8 +94,13 @@ export const api = {
   scanReceipt: (attachmentId: string, mime: string) =>
     request<ScannedReceipt>('/receipts/scan', { method: 'POST', body: { attachmentId, mime } }),
   me: () => request<Me>('/me'),
+  updateMe: (body: { languageCode: 'uz' | 'ru' | 'en' }) =>
+    request<Me>('/me', { method: 'PATCH', body }),
   addCard: (body: { number: string; label?: string }) =>
     request<UserCard>('/cards', { method: 'POST', body }),
+  updateCard: (id: string, body: { label?: string | null; isDefault?: true }) =>
+    request<UserCard>(`/cards/${id}`, { method: 'PATCH', body }),
+  deleteCard: (id: string) => request<{ ok: boolean }>(`/cards/${id}`, { method: 'DELETE' }),
   contacts: () => request<ApiContact[]>('/contacts'),
   addContact: (body: { displayName: string; phone?: string }) =>
     request<ApiContact>('/contacts', { method: 'POST', body }),

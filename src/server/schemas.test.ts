@@ -2,6 +2,8 @@ import { describe, it, expect } from 'bun:test'
 import {
   createBillSchema,
   createCardSchema,
+  updateCardSchema,
+  updateMeSchema,
   createContactSchema,
   addContactsByUsernameSchema,
 } from './schemas'
@@ -164,6 +166,32 @@ describe('createCardSchema', () => {
     expect(
       createCardSchema.safeParse({ number: '8600123412341234', label: 'x'.repeat(51) }).success
     ).toBe(false)
+  })
+})
+
+describe('updateCardSchema', () => {
+  it('accepts a rename, a clear, a set-default, or both together', () => {
+    expect(updateCardSchema.safeParse({ label: 'Ish karta' }).success).toBe(true)
+    expect(updateCardSchema.safeParse({ label: null }).success).toBe(true)
+    expect(updateCardSchema.safeParse({ isDefault: true }).success).toBe(true)
+    expect(updateCardSchema.safeParse({ label: 'X', isDefault: true }).success).toBe(true)
+  })
+
+  it('rejects an empty body, isDefault:false, and bad labels', () => {
+    expect(updateCardSchema.safeParse({}).success).toBe(false)
+    expect(updateCardSchema.safeParse({ isDefault: false }).success).toBe(false)
+    expect(updateCardSchema.safeParse({ label: '   ' }).success).toBe(false)
+    expect(updateCardSchema.safeParse({ label: 'x'.repeat(51) }).success).toBe(false)
+  })
+})
+
+describe('updateMeSchema', () => {
+  it('accepts the supported language codes only', () => {
+    expect(updateMeSchema.safeParse({ languageCode: 'uz' }).success).toBe(true)
+    expect(updateMeSchema.safeParse({ languageCode: 'ru' }).success).toBe(true)
+    expect(updateMeSchema.safeParse({ languageCode: 'en' }).success).toBe(true)
+    expect(updateMeSchema.safeParse({ languageCode: 'de' }).success).toBe(false)
+    expect(updateMeSchema.safeParse({}).success).toBe(false)
   })
 })
 

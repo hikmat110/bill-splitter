@@ -7,6 +7,7 @@ import { SplitScreen } from './screens/SplitScreen'
 import { BillsScreen } from './screens/BillsScreen'
 import { InboxScreen } from './screens/InboxScreen'
 import { BillDetailScreen } from './screens/BillDetailScreen'
+import { ProfileScreen } from './screens/ProfileScreen'
 import { api, ApiError } from './lib/api'
 import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
@@ -17,12 +18,17 @@ import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegra
 import { useT } from './i18n'
 import type { BillDetail, BillsResponse, Me } from './lib/types'
 
-type Tab = 'split' | 'bills' | 'inbox'
+type Tab = 'split' | 'bills' | 'inbox' | 'profile'
 
-const TABS: { id: Tab; navKey: 'nav.split' | 'nav.bills' | 'nav.inbox'; icon: string }[] = [
+const TABS: {
+  id: Tab
+  navKey: 'nav.split' | 'nav.bills' | 'nav.inbox' | 'nav.profile'
+  icon: string
+}[] = [
   { id: 'split', navKey: 'nav.split', icon: 'ti-receipt-2' },
   { id: 'bills', navKey: 'nav.bills', icon: 'ti-list-details' },
   { id: 'inbox', navKey: 'nav.inbox', icon: 'ti-inbox' },
+  { id: 'profile', navKey: 'nav.profile', icon: 'ti-user' },
 ]
 
 export function App() {
@@ -40,7 +46,9 @@ export function App() {
   const [detailBillId, setDetailBillId] = useState<string | null>(null)
 
   const [peopleOpen, setPeopleOpen] = useState(false)
-  const [addOpen, setAddOpen] = useState(false)
+  // Which surface opened the add-contact sheet — a contact added mid-split
+  // joins the draft's participants; one added from Profile must not.
+  const [addOpen, setAddOpen] = useState<false | 'split' | 'profile'>(false)
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [fatal, setFatal] = useState<'unauthorized' | string | null>(null)
@@ -52,7 +60,9 @@ export function App() {
       .then(([meRes, contactsRes, billsRes]) => {
         setMe(meRes)
         setLang(meRes.languageCode)
-        setContacts(contactsRes.map((c) => ({ id: c.id, name: c.displayName })))
+        setContacts(
+          contactsRes.map((c) => ({ id: c.id, name: c.displayName, linkedUserId: c.linkedUserId }))
+        )
         setBills(billsRes)
       })
       .catch((e) =>
@@ -65,8 +75,14 @@ export function App() {
 
   const refresh = useCallback(async () => {
     const [contactsRes, billsRes] = await Promise.all([api.contacts(), api.bills()])
-    setContacts(contactsRes.map((c) => ({ id: c.id, name: c.displayName })))
+    setContacts(
+      contactsRes.map((c) => ({ id: c.id, name: c.displayName, linkedUserId: c.linkedUserId }))
+    )
     setBills(billsRes)
+  }, [])
+
+  const refreshMe = useCallback(async () => {
+    setMe(await api.me())
   }, [])
 
   const [deepLinkDone, setDeepLinkDone] = useState(false)
@@ -98,8 +114,10 @@ export function App() {
 
   const addContactByName = async (name: string, phone?: string) => {
     const c = await api.addContact({ displayName: name, phone })
-    setContacts((prev) => [...prev, { id: c.id, name: c.displayName }])
-    setDraft((d) => ({ ...d, participantIds: [...d.participantIds, c.id] }))
+    setContacts((prev) => [...prev, { id: c.id, name: c.displayName, linkedUserId: c.linkedUserId }])
+    if (addOpen === 'split') {
+      setDraft((d) => ({ ...d, participantIds: [...d.participantIds, c.id] }))
+    }
   }
 
   // Batch-add registered users by @handle, then reload contacts from the server.
@@ -109,12 +127,26 @@ export function App() {
     return result
   }
 
-  // Add a payment card from the Split form's picker.
+  // Add a payment card from the Split form's picker or the Profile tab.
   const addCard = useCallback(async (number: string) => {
     const card = await api.addCard({ number })
     setMe((m) => (m ? { ...m, cards: [...m.cards, card] } : m))
     return card
   }, [])
+
+  // A card was deleted: drop it from the working draft (a new draft falls back
+  // to "use my default"; an edit session keeps an explicit "no card" — the
+  // default is never silently resurrected), then reload cards (the server may
+  // have promoted a new default).
+  const onCardDeleted = useCallback(
+    async (cardId: string) => {
+      setDraft((d) =>
+        d.cardId === cardId ? { ...d, cardId: d.editingBillId ? null : undefined } : d
+      )
+      await refreshMe()
+    },
+    [refreshMe]
+  )
 
   // Load an existing created bill into the Split form for editing (PATCH on send).
   const editBill = useCallback((bill: BillDetail) => {
@@ -304,7 +336,9 @@ export function App() {
       ? draft.title.trim() || t('app.new_bill_subtitle')
       : tab === 'bills'
         ? t('nav.bills')
-        : t('nav.inbox')
+        : tab === 'inbox'
+          ? t('nav.inbox')
+          : t('nav.profile')
 
   const badge = me ? inboxCount(bills, me) : 0
 
@@ -373,6 +407,18 @@ export function App() {
         {tab === 'inbox' && me && (
           <InboxScreen bills={bills} me={me} refresh={refresh} openBill={openBill} />
         )}
+        {tab === 'profile' && me && (
+          <ProfileScreen
+            me={me}
+            contacts={contacts}
+            onMe={setMe}
+            onRefreshMe={refreshMe}
+            onAddCard={addCard}
+            onCardDeleted={onCardDeleted}
+            onOpenAddContact={() => setAddOpen('profile')}
+            onContactDeleted={onContactDeleted}
+          />
+        )}
       </ErrorBoundary>
 
       {/* bottom nav */}
@@ -414,12 +460,12 @@ export function App() {
         selected={draft.participantIds}
         selfContactId={me?.selfContactId ?? null}
         onToggle={toggleParticipant}
-        onOpenAdd={() => setAddOpen(true)}
+        onOpenAdd={() => setAddOpen('split')}
         onDeleted={onContactDeleted}
       />
 
       <AddContactSheet
-        open={addOpen}
+        open={addOpen !== false}
         onClose={() => setAddOpen(false)}
         botUsername={me?.botUsername ?? null}
         onAddByName={addContactByName}

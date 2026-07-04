@@ -16,6 +16,7 @@ export interface Me {
   firstName: string
   lastName: string | null
   username: string | null
+  phone: string
   languageCode: string
   cards: UserCard[]
   selfContactId: string

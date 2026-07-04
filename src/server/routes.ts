@@ -40,12 +40,15 @@ import {
   softDeleteContact,
   deleteContact,
 } from '../services/contact.service'
-import { findById } from '../services/user.service'
+import { findById, updateLanguage } from '../services/user.service'
 import {
   listCards,
   findCardById,
   getDefaultCard,
   addCard,
+  setDefaultCard,
+  renameCard,
+  deleteCard,
   CardLimitError,
 } from '../services/card.service'
 import { cardNetwork } from '../utils/format'
@@ -73,6 +76,8 @@ import {
   createBillSchema,
   updateBillSchema,
   createCardSchema,
+  updateCardSchema,
+  updateMeSchema,
   createContactSchema,
   addContactsByUsernameSchema,
   disputeSchema,
@@ -191,6 +196,11 @@ export async function handleApi(
       return await getMe(user, bot)
     }
 
+    // PATCH /api/me — profile updates (language); returns the fresh Me shape
+    if (method === 'PATCH' && seg[0] === 'me' && seg.length === 1) {
+      return await patchMe(req, user, bot)
+    }
+
     // /api/contacts
     if (seg[0] === 'contacts' && seg.length === 1) {
       if (method === 'GET') return await getContacts(user)
@@ -215,6 +225,12 @@ export async function handleApi(
     // POST /api/cards — add a payment card (first one becomes the default)
     if (seg[0] === 'cards' && seg.length === 1 && method === 'POST') {
       return await postCard(req, user)
+    }
+
+    // /api/cards/:id — rename / set default / delete
+    if (seg[0] === 'cards' && seg.length === 2) {
+      if (method === 'PATCH') return await patchCard(req, user, seg[1]!)
+      if (method === 'DELETE') return await deleteCardRoute(user, seg[1]!)
     }
 
     // POST /api/attachments — multipart image upload, returns { id, mime }
@@ -286,21 +302,56 @@ export async function handleApi(
 
 // ─── handlers ─────────────────────────────────────────────────────────────────
 
-async function getMe(user: User, bot: Bot<MyContext>): Promise<Response> {
+async function shapeMe(user: User, bot: Bot<MyContext>) {
   // Lazily ensure a self-contact exists so "You" can be a bill participant.
   const self = await findOrCreateSelfContact(user.id, user.first_name)
-  return json({
+  return {
     id: user.id,
     firstName: user.first_name,
     lastName: user.last_name,
     username: user.username,
+    phone: user.phone,
     languageCode: user.language_code,
     cards: (await listCards(user.id)).map(shapeCard),
     selfContactId: self.id,
     // Used by the Mini App to deep-link into the bot's native contact picker.
     // `botInfo` throws until the bot is initialized, so guard with isInited().
     botUsername: bot.isInited() ? bot.botInfo.username : null,
-  })
+  }
+}
+
+async function getMe(user: User, bot: Bot<MyContext>): Promise<Response> {
+  return json(await shapeMe(user, bot))
+}
+
+async function patchMe(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {
+  const body = updateMeSchema.parse(await req.json())
+  await updateLanguage(user.id, body.languageCode)
+  // `user` was loaded before the update — patch the field for the response.
+  return json(await shapeMe({ ...user, language_code: body.languageCode }, bot))
+}
+
+async function patchCard(req: Request, user: User, cardId: string): Promise<Response> {
+  const body = updateCardSchema.parse(await req.json())
+  // Both ops are ownership-checked in the service; not-found and not-owned are
+  // indistinguishable (single 404, no existence leak).
+  let card = null
+  if (body.label !== undefined) {
+    card = await renameCard(user.id, cardId, body.label)
+    if (!card) return error(404, 'Card not found')
+  }
+  if (body.isDefault) {
+    card = await setDefaultCard(user.id, cardId)
+    if (!card) return error(404, 'Card not found')
+  }
+  return json(shapeCard(card!))
+}
+
+async function deleteCardRoute(user: User, cardId: string): Promise<Response> {
+  // Deleting the default promotes the newest remaining card (in the service);
+  // bills referencing the card keep working via FK SET NULL.
+  const ok = await deleteCard(user.id, cardId)
+  return ok ? json({ ok: true }) : error(404, 'Card not found')
 }
 
 async function getContacts(user: User): Promise<Response> {

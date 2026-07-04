@@ -125,6 +125,23 @@ export const createCardSchema = z.object({
 })
 export type CreateCardBody = z.infer<typeof createCardSchema>
 
+// Rename a card (null clears the custom label) and/or make it the default.
+// `isDefault: false` is not a state — there is always at most one default and
+// no "unset" operation.
+export const updateCardSchema = z
+  .object({
+    label: z.string().trim().min(1).max(50).nullable().optional(),
+    isDefault: z.literal(true).optional(),
+  })
+  .refine((d) => d.label !== undefined || d.isDefault, 'No fields to update')
+export type UpdateCardBody = z.infer<typeof updateCardSchema>
+
+// Profile updates from the mini-app — language only (name/username sync from Telegram).
+export const updateMeSchema = z.object({
+  languageCode: z.enum(['uz', 'ru', 'en']),
+})
+export type UpdateMeBody = z.infer<typeof updateMeSchema>
+
 export const createContactSchema = z.object({
   displayName: z.string().trim().min(1).max(100),
   phone: z.string().trim().min(3).max(32).optional(),

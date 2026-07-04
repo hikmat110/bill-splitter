@@ -6,15 +6,11 @@
 
 import { money } from './currency'
 import { to2 } from './calc'
+import { formatCard } from './cards'
 import type { I18nKey } from '../i18n'
 import type { BillDetail } from './types'
 
 type TFn = (key: I18nKey, vars?: Record<string, string | number>) => string
-
-/** "8600123456789012" -> "8600 1234 5678 9012" (mirrors src/utils/format.ts). */
-export function formatCard(digits: string): string {
-  return digits.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4')
-}
 
 /** The whole bill rendered as plain text, ready to paste into WhatsApp/SMS. */
 export function buildBillText(bill: BillDetail, t: TFn): string {

@@ -39,6 +39,9 @@ export interface DraftBill {
 export interface Person {
   id: string
   name: string
+  /** Registered-user link (contact is "on the bot"); optional — only the
+   *  Profile friends list cares. */
+  linkedUserId?: string | null
 }
 
 export function emptyDraft(): DraftBill {
