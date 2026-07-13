@@ -11,7 +11,7 @@ type Path<T, Prefix extends string = ''> = T extends object
   ? { [K in keyof T & string]: Path<T[K], Prefix extends '' ? K : `${Prefix}.${K}`> }[keyof T & string]
   : Prefix
 
-type I18nKey = Path<typeof ru>
+export type I18nKey = Path<typeof ru>
 
 function resolvePath(obj: Record<string, unknown>, path: string): string {
   const parts = path.split('.')
@@ -38,6 +38,18 @@ export function t(ctx: Context, key: I18nKey, vars?: Record<string, string>): st
     }
   }
   return text
+}
+
+/** Minimal context shim carrying only a language, for t() callers outside a
+ *  live update (boot-time API calls, notifications to other users). */
+export function langCtx(lang: string): Context {
+  return { from: { language_code: lang } } as unknown as Context
+}
+
+/** Translate without a live update context — for boot-time API calls and
+ *  notifications where only the recipient's stored language is known. */
+export function tLang(lang: string, key: I18nKey, vars?: Record<string, string>): string {
+  return t(langCtx(lang), key, vars)
 }
 
 export function statusLabel(ctx: Context, status: string): string {

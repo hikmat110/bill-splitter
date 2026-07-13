@@ -9,7 +9,8 @@ import { useToast } from '../components/Toast'
 import { money } from '../lib/currency'
 import { prettyDate } from '../lib/date'
 import { buildBillText } from '../lib/billText'
-import { copyText } from '../lib/clipboard'
+import { formatCard } from '../lib/cards'
+import { copyText, copyWithToast } from '../lib/clipboard'
 import { api, ApiError } from '../lib/api'
 import { haptic, onBackButton } from '../lib/telegram'
 import { statusLabel, pillClass } from '../lib/status'
@@ -225,6 +226,14 @@ export function BillDetailScreen({
     )
   }
 
+  const copyCard = async () => {
+    if (!bill.cardNumber) return
+    await copyWithToast(bill.cardNumber, toast, {
+      copied: t('detail.card_copied'),
+      manual: t('share.copy_manual'),
+    })
+  }
+
   const heroSettled = isCreator ? allSettled : own?.status === 'confirmed'
 
   return (
@@ -318,6 +327,30 @@ export function BillDetailScreen({
             </span>
           )}
         </div>
+
+        {/* payer: the card to transfer to (tap to copy) */}
+        {!isCreator && own && own.status !== 'confirmed' && bill.cardNumber && (
+          <div
+            className="card pop"
+            onClick={() => void copyCard()}
+            style={{ marginBottom: 16, padding: 'calc(13px * var(--dens))', cursor: 'pointer' }}
+          >
+            <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+              <div className="row" style={{ gap: 10, alignItems: 'center', minWidth: 0 }}>
+                <i className="ti ti-credit-card" style={{ fontSize: 20, color: 'var(--accent)', flexShrink: 0 }} />
+                <div className="col" style={{ gap: 1, minWidth: 0 }}>
+                  <span className="muted" style={{ fontSize: 11.5, fontWeight: 700 }}>
+                    {t('split.pay_to_card')}
+                  </span>
+                  <span style={{ fontWeight: 700, fontSize: 15, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}>
+                    {formatCard(bill.cardNumber)}
+                  </span>
+                </div>
+              </div>
+              <i className="ti ti-copy" style={{ fontSize: 17, color: 'var(--text-3)', flexShrink: 0 }} />
+            </div>
+          </div>
+        )}
 
         {/* payer: pay actions for their own share */}
         {!isCreator && own && (own.status === 'pending' || own.status === 'disputed') && (

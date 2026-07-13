@@ -454,6 +454,7 @@ async function getBills(user: User): Promise<Response> {
         receiptAttachmentId: r.bill.receipt_attachment_id,
         createdAt: r.bill.created_at,
         creatorName,
+        cardNumber: d?.card?.number ?? null,
       },
       participant: {
         id: r.participant.id,

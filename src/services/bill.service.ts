@@ -359,6 +359,19 @@ export async function listBillsForParticipant(userId: string): Promise<Participa
   }))
 }
 
+/** Shares on sent bills this user was never notified about — their contact row
+ *  was linked only after the bill went out (registration backfill), or the
+ *  original send failed. Filters listBillsForParticipant so both views share
+ *  one definition of "bills sent to this user". */
+export async function listUnnotifiedPendingForUser(userId: string): Promise<ParticipantBill[]> {
+  return (await listBillsForParticipant(userId)).filter(
+    (r) =>
+      r.bill.status === 'sent' &&
+      r.participant.status === 'pending' &&
+      r.participant.notification_message_id === null
+  )
+}
+
 export interface ParticipantWithContactAndBill extends BillParticipant {
   contact: Contact
   bill: Bill

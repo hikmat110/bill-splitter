@@ -10,6 +10,23 @@ export const en = {
     card_skip: '⏭ Skip',
     card_saved: '✅ Card saved! It will be attached to your bills.',
     card_skipped: 'You can add cards anytime in ⚙️ Settings.',
+    welcome_guide:
+      "Here's how it works:\n\n1️⃣ Create a bill and mark who ate what\n2️⃣ Friends get a message with their share and your card\n3️⃣ They mark it paid — you confirm\n\nThe fastest way is the app: everything is on one screen, and it can scan a receipt. Type /help anytime for a refresher.",
+  },
+  commands: {
+    start: 'Main menu',
+    help: 'How the bot works',
+    cancel: 'Cancel the current action',
+  },
+  help: {
+    text:
+      '<b>How Bill Split works</b>\n\n' +
+      '🧾 <b>New Bill</b> — add items and mark who shared each one. The bot splits fairly, including service and tip.\n' +
+      '📨 Every participant gets a message with their share and your card.\n' +
+      '✅ They tap «Mark as Paid» — you confirm. Both of you see the status.\n' +
+      '👥 <b>Contacts</b> — add friends by name, @username, or from Telegram.\n' +
+      '💳 <b>Settings</b> — cards for receiving transfers and language.\n\n' +
+      '🚀 The app has all of this on one screen — and can scan a receipt photo.',
   },
   menu: {
     title: 'Main Menu',
@@ -121,6 +138,7 @@ export const en = {
     your_share: 'Your share: <b>{{amount}}</b>',
     status_label: 'Status: {{status}}',
     your_items_header: '\n<b>Your items:</b>',
+    open_in_app: '📱 Open in app',
     back: '⬅️ Back',
   },
   history: {

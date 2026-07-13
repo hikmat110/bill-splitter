@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import type { ReactNode } from 'react'
 import { Avatar } from '../components/Avatar'
 import { AuthImage } from '../components/AuthImage'
 import { Money } from '../components/Money'
@@ -195,6 +196,16 @@ export function SplitScreen({
   const [addingCard, setAddingCard] = useState(false)
   const [cardInput, setCardInput] = useState('')
   const [cardBusy, setCardBusy] = useState(false)
+  const cardSectionRef = useRef<HTMLDivElement>(null)
+
+  // The getting-started card nudge: open the add-card input and bring it into view.
+  const openCardAdd = () => {
+    setAddingCard(true)
+    setTimeout(
+      () => cardSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' }),
+      50
+    )
+  }
 
   const submitCard = async () => {
     const digits = cardInput.replace(/\D/g, '') // mirror the server's parseCardNumber
@@ -331,17 +342,72 @@ export function SplitScreen({
 
       <div className="col" style={{ gap: 10, marginBottom: 18 }}>
         {draft.items.length === 0 && (
-          <div
-            className="card"
-            style={{
-              textAlign: 'center',
-              color: 'var(--text-3)',
-              fontSize: 14,
-              fontWeight: 600,
-              padding: 22,
-            }}
-          >
-            {t('split.no_items')}
+          <div className="card pop" style={{ padding: 'calc(15px * var(--dens))' }}>
+            <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 13 }}>
+              {t('split.gs_title')}
+            </div>
+            <div className="col" style={{ gap: 12 }}>
+              <GsStep
+                n={1}
+                done={participants.length > 0}
+                label={t('split.gs_people')}
+                action={
+                  participants.length === 0 && (
+                    <button
+                      className="btn btn-sm btn-soft"
+                      onClick={onAddPeople}
+                      style={{ flexShrink: 0 }}
+                    >
+                      <i className="ti ti-plus" />
+                    </button>
+                  )
+                }
+              />
+              <GsStep n={2} done={false} label={t('split.gs_items')} />
+              <div className="row" style={{ gap: 8, paddingLeft: 36 }}>
+                <button
+                  className="btn btn-primary"
+                  style={{ flex: 1 }}
+                  disabled={participants.length === 0 || scanning}
+                  onClick={() => scanFileRef.current?.click()}
+                >
+                  <i className={'ti ' + (scanning ? 'ti-loader-2' : 'ti-sparkles')} />{' '}
+                  {scanning ? t('split.scanning') : t('split.scan_receipt')}
+                </button>
+                <button
+                  className="btn"
+                  style={{ flex: 1 }}
+                  disabled={participants.length === 0}
+                  onClick={addItem}
+                >
+                  <i className="ti ti-plus" /> {t('split.add_item')}
+                </button>
+              </div>
+              <GsStep n={3} done={canSend} label={t('split.gs_send')} />
+            </div>
+            {cards.length === 0 && (
+              <div
+                className="row"
+                style={{
+                  gap: 8,
+                  alignItems: 'center',
+                  marginTop: 13,
+                  paddingTop: 13,
+                  borderTop: '1px solid var(--border)',
+                }}
+              >
+                <i
+                  className="ti ti-credit-card"
+                  style={{ fontSize: 16, color: 'var(--text-3)', flexShrink: 0 }}
+                />
+                <span className="muted" style={{ fontSize: 12.5, fontWeight: 600, flex: 1 }}>
+                  {t('split.card_nudge')}
+                </span>
+                <button className="btn btn-sm" onClick={openCardAdd} style={{ flexShrink: 0 }}>
+                  {t('split.add_card')}
+                </button>
+              </div>
+            )}
           </div>
         )}
         {draft.items.map((item, i) => (
@@ -355,13 +421,15 @@ export function SplitScreen({
             onRemove={() => removeItem(item.id)}
           />
         ))}
-        <button
-          className="btn btn-soft btn-block"
-          onClick={addItem}
-          disabled={participants.length === 0}
-        >
-          <i className="ti ti-plus" /> {t('split.add_item')}
-        </button>
+        {draft.items.length > 0 && (
+          <button
+            className="btn btn-soft btn-block"
+            onClick={addItem}
+            disabled={participants.length === 0}
+          >
+            <i className="ti ti-plus" /> {t('split.add_item')}
+          </button>
+        )}
       </div>
 
       {/* adjustments */}
@@ -479,7 +547,7 @@ export function SplitScreen({
 
       {/* card participants should pay to — default preselected, changeable per bill */}
       <SecTitle>{t('split.pay_to_card')}</SecTitle>
-      <div className="card" style={{ padding: 'calc(14px * var(--dens))' }}>
+      <div className="card" ref={cardSectionRef} style={{ padding: 'calc(14px * var(--dens))' }}>
         <div className="row" style={{ gap: 8, flexWrap: 'wrap' }}>
           {cards.map((c) => {
             const on = resolvedCardId === c.id
@@ -586,7 +654,14 @@ export function SplitScreen({
             />
           </div>
         ) : (
-          <button className="btn btn-block" onClick={() => scanFileRef.current?.click()}>
+          // Same people-first gate as the checklist's scan button: scanned
+          // items are assigned to the current participants, so scanning with
+          // nobody on the bill produces items nobody owns.
+          <button
+            className="btn btn-block"
+            disabled={participants.length === 0}
+            onClick={() => scanFileRef.current?.click()}
+          >
             <i className="ti ti-sparkles" /> {t('split.scan_receipt')}
           </button>
         )}
@@ -655,6 +730,53 @@ export function SplitScreen({
           {calc.tip > 0 && <span>· {t('split.tip_summary', { amount: money(calc.tip) })}</span>}
         </div>
       </div>
+    </div>
+  )
+}
+
+/** One row of the getting-started checklist: numbered badge that flips to a
+ *  check once done, a label, and an optional trailing action. */
+function GsStep({
+  n,
+  done,
+  label,
+  action,
+}: {
+  n: number
+  done: boolean
+  label: string
+  action?: ReactNode
+}) {
+  return (
+    <div className="row" style={{ gap: 10, alignItems: 'center' }}>
+      <div
+        style={{
+          width: 26,
+          height: 26,
+          borderRadius: 9,
+          background: done ? 'var(--pos-soft)' : 'var(--accent-soft)',
+          color: done ? 'var(--pos-text)' : 'var(--accent-text)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          fontSize: 12.5,
+          fontWeight: 800,
+          flexShrink: 0,
+        }}
+      >
+        {done ? <i className="ti ti-check" style={{ fontSize: 14 }} /> : n}
+      </div>
+      <span
+        style={{
+          fontWeight: 600,
+          fontSize: 13.5,
+          flex: 1,
+          color: done ? 'var(--text-3)' : 'var(--text)',
+        }}
+      >
+        {label}
+      </span>
+      {action}
     </div>
   )
 }

@@ -4,6 +4,7 @@ import { Money } from '../components/Money'
 import { SecTitle, Empty } from '../components/common'
 import { useToast } from '../components/Toast'
 import { api, ApiError } from '../lib/api'
+import { copyWithToast } from '../lib/clipboard'
 import { haptic } from '../lib/telegram'
 import { prettyDate } from '../lib/date'
 import { statusLabel, pillClass } from '../lib/status'
@@ -72,6 +73,12 @@ export function InboxScreen({
       'ti-alert-triangle'
     )
   }
+
+  const copyCard = (digits: string) =>
+    copyWithToast(digits, toast, {
+      copied: t('detail.card_copied'),
+      manual: t('share.copy_manual'),
+    })
 
   if (toConfirm.length === 0 && toPay.length === 0) {
     return (
@@ -176,6 +183,18 @@ export function InboxScreen({
                   {x.participant.status === 'disputed' && (
                     <span className={'pill ' + pillClass(x.participant.status)} style={{ fontSize: 11 }}>
                       {statusLabel(t, x.participant.status)}
+                    </span>
+                  )}
+                  {x.bill.cardNumber && (
+                    <span
+                      className="pill pill-mut"
+                      style={{ fontSize: 11, cursor: 'pointer' }}
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        void copyCard(x.bill.cardNumber!)
+                      }}
+                    >
+                      💳 ••{x.bill.cardNumber.slice(-4)}
                     </span>
                   )}
                 </div>

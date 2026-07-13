@@ -15,6 +15,7 @@ import {
   tipPayerKeyboard,
   billReviewKeyboard,
   receiptSkipKeyboard,
+  noContactsKeyboard,
 } from '../keyboards'
 import { formatMoney } from '../../utils/format'
 import { computeSettlement } from '../../utils/settlement'
@@ -117,7 +118,7 @@ async function saveTitleStep(ctx: MyContext, title: string): Promise<void> {
   ])
 
   if (allContacts.length === 0) {
-    await editWizardMessage(ctx, t(ctx, 'bill.no_contacts'))
+    await editWizardMessage(ctx, t(ctx, 'bill.no_contacts'), noContactsKeyboard(ctx))
     ctx.session.bill_wizard = undefined
     return
   }

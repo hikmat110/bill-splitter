@@ -6,6 +6,7 @@ import { initial, sessionMiddleware } from './middleware/session'
 import { loggerMiddleware } from './middleware/logger'
 import { authMiddleware } from './middleware/auth'
 import { startHandler, contactHandler } from './handlers/start'
+import { helpHandler } from './handlers/help'
 import { showMainMenu } from './handlers/menu'
 import {
   contactsMenuHandler,
@@ -70,6 +71,8 @@ bot.use(authMiddleware)
 
 bot.command('start', startHandler)
 
+bot.command('help', helpHandler)
+
 bot.command('cancel', async (ctx) => {
   ctx.session.bill_wizard = undefined
   ctx.session.contact_wizard = undefined
@@ -80,7 +83,7 @@ bot.command('cancel', async (ctx) => {
 })
 
 // Contact shares are only used for phone-based registration
-bot.on('message:contact', contactHandler)
+bot.on('message:contact', (ctx) => contactHandler(ctx, bot))
 
 // Multi-select picker results (request_users) → batch-add contacts
 bot.on('message:users_shared', usersSharedHandler)

@@ -10,6 +10,23 @@ export const uz = {
     card_skip: "⏭ O'tkazib yuborish",
     card_saved: '✅ Karta saqlandi! U hisoblaringizga biriktiriladi.',
     card_skipped: "Kartalarni istalgan vaqtda ⚙️ Sozlamalarda qo'shish mumkin.",
+    welcome_guide:
+      "Bu qanday ishlaydi:\n\n1️⃣ Hisob yarating va kim nima yeganini belgilang\n2️⃣ Do'stlaringizga ulushi va kartangiz bilan xabar boradi\n3️⃣ Ular to'lovni belgilaydi — siz tasdiqlaysiz\n\nEng tez yo'li — ilova: hammasi bitta ekranda, chekni skanerlash ham mumkin. Istalgan vaqtda /help buyrug'ini yozing.",
+  },
+  commands: {
+    start: 'Asosiy menyu',
+    help: 'Bot qanday ishlaydi',
+    cancel: 'Joriy amalni bekor qilish',
+  },
+  help: {
+    text:
+      "<b>Bill Split qanday ishlaydi</b>\n\n" +
+      "🧾 <b>Yangi hisob</b> — pozitsiyalarni qo'shing va kim nimani bo'lishganini belgilang. Bot xizmat va choy pulini ham hisobga olib, adolatli taqsimlaydi.\n" +
+      "📨 Har bir ishtirokchiga ulushi va kartangiz bilan xabar boradi.\n" +
+      "✅ U «To'landi» tugmasini bosadi — siz tasdiqlaysiz. Holat ikkalangizga ham ko'rinadi.\n" +
+      "👥 <b>Kontaktlar</b> — do'stlarni ism, @username yoki Telegramdan qo'shing.\n" +
+      "💳 <b>Sozlamalar</b> — pul o'tkazmalari uchun kartalar va til.\n\n" +
+      "🚀 Ilovada bularning barchasi bitta ekranda — chek rasmini skanerlash ham mumkin.",
   },
   menu: {
     title: 'Asosiy menyu',
@@ -121,6 +138,7 @@ export const uz = {
     your_share: 'Sizning ulushingiz: <b>{{amount}}</b>',
     status_label: 'Holat: {{status}}',
     your_items_header: '\n<b>Sizning taomlaringiz:</b>',
+    open_in_app: '📱 Ilovada ochish',
     back: '⬅️ Orqaga',
   },
   history: {

@@ -5,18 +5,14 @@ import {
   getParticipantById,
   saveNotificationMessageId,
   remindParticipant,
+  listUnnotifiedPendingForUser,
 } from './bill.service'
+import { config } from '../config'
 import type { BillWithDetails, BillParticipantWithContact } from './bill.service'
 import { attachmentPath } from './storage.service'
 import { findById } from './user.service'
 import { formatMoney, formatCard } from '../utils/format'
-import { t } from '../i18n'
-import type { Context } from 'grammy'
-
-// Minimal context shim for t() when no real bot context is available
-function langCtx(lang: string): Context {
-  return { from: { language_code: lang } } as unknown as Context
-}
+import { t, langCtx } from '../i18n'
 
 /** Edit a notification message to new text, transparently handling the case
  *  where the original was sent as a photo (caption) rather than plain text. */
@@ -60,6 +56,12 @@ async function notifyParticipantOfBill(
     t(ctx, 'incoming.mark_paid'),
     `bill:mark_paid:${participant.id}`
   )
+  if (config.WEBAPP_URL) {
+    kb.row().webApp(
+      t(ctx, 'incoming.open_in_app'),
+      `${config.WEBAPP_URL}?startapp=bill_${details.bill.id}`
+    )
+  }
 
   const chatId = Number(participantUser.telegram_id)
   const { receipt_attachment_id, receipt_mime } = details.bill
@@ -87,6 +89,23 @@ export async function sendBillNotifications(
 
   for (const participant of details.participants) {
     await notifyParticipantOfBill(bot, details, participant)
+  }
+}
+
+/**
+ * Deliver bill notifications that predate a user's registration. Their contact
+ * rows were linked by the registration backfill, so shares that never got a
+ * message (no notification_message_id) are now reachable. A successful send
+ * records the message id, making repeat calls no-ops.
+ */
+export async function notifyPendingBillsForNewUser(
+  bot: Bot<MyContext>,
+  userId: string
+): Promise<void> {
+  for (const { bill, participant } of await listUnnotifiedPendingForUser(userId)) {
+    const details = await getBillWithDetails(bill.id)
+    const row = details?.participants.find((p) => p.id === participant.id)
+    if (details && row) await notifyParticipantOfBill(bot, details, row)
   }
 }
 

@@ -6,13 +6,22 @@ import { config } from '../../config'
 import { cardDisplayLabel } from '../../utils/format'
 import type { Card, Contact } from '../../db/schema'
 
-export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
-  const kb = new InlineKeyboard()
-  // Mini App launcher (only when a public HTTPS URL is configured).
+/** Prepend the Mini App launcher row (only when a public HTTPS URL is configured). */
+function withOpenApp(kb: InlineKeyboard, ctx: MyContext): InlineKeyboard {
   if (config.WEBAPP_URL) {
     kb.webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL).row()
   }
   return kb
+}
+
+/** Just the Mini App launcher, or undefined when no URL is configured. */
+export function openAppKeyboard(ctx: MyContext): InlineKeyboard | undefined {
+  if (!config.WEBAPP_URL) return undefined
+  return new InlineKeyboard().webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL)
+}
+
+export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
+  return withOpenApp(new InlineKeyboard(), ctx)
     .text(t(ctx, 'menu.new_bill'), 'menu:new_bill')
     .row()
     .text(t(ctx, 'menu.contacts'), 'menu:contacts')
@@ -21,6 +30,21 @@ export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
     .text(t(ctx, 'menu.history'), 'menu:history')
     .row()
     .text(t(ctx, 'menu.settings'), 'menu:settings')
+}
+
+export function helpKeyboard(ctx: MyContext): InlineKeyboard {
+  const kb = withOpenApp(new InlineKeyboard(), ctx)
+  // /help is reachable before registration — no main menu to go back to yet.
+  if (ctx.user) kb.text(t(ctx, 'menu.back'), 'menu:back')
+  return kb
+}
+
+/** Actions for the "New Bill but no contacts yet" dead-end. */
+export function noContactsKeyboard(ctx: MyContext): InlineKeyboard {
+  return withOpenApp(new InlineKeyboard(), ctx)
+    .text(t(ctx, 'contacts.add_button'), encode('contact', 'add', 'new'))
+    .row()
+    .text(t(ctx, 'menu.back'), 'menu:back')
 }
 
 // ─── Contacts ────────────────────────────────────────────────────────────────
@@ -164,11 +188,6 @@ export function receiptSkipKeyboard(ctx: MyContext): InlineKeyboard {
 }
 
 // ─── Payment / notification ───────────────────────────────────────────────────
-
-export function markPaidKeyboard(participantId: string, ctx: MyContext): InlineKeyboard {
-  return new InlineKeyboard()
-    .text(t(ctx, 'incoming.mark_paid'), encode('bill', 'mark_paid', participantId))
-}
 
 export function confirmDisputeKeyboard(participantId: string, ctx: MyContext): InlineKeyboard {
   return new InlineKeyboard()

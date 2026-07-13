@@ -126,6 +126,8 @@ export interface IncomingBill {
     receiptAttachmentId: string | null
     createdAt: string
     creatorName: string
+    /** Creator's pay-to card, if one is attached to the bill. */
+    cardNumber: string | null
   }
   // Recipient's own itemization (what they're paying for).
   participant: { id: string; amount: number; status: ParticipantStatus } & Breakdown

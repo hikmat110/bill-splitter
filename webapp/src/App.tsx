@@ -12,6 +12,8 @@ import { api, ApiError } from './lib/api'
 import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
 import { loadDraft, saveDraft, clearDraft, isDraftEmpty } from './lib/draftStorage'
+import { hasSeenTour, markTourSeen } from './lib/firstRun'
+import { WelcomeTour } from './components/WelcomeTour'
 import { inboxCount } from './lib/billCalc'
 import { defaultCardId } from './lib/cards'
 import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegram'
@@ -52,6 +54,7 @@ export function App() {
   const [sending, setSending] = useState(false)
   const [loading, setLoading] = useState(true)
   const [fatal, setFatal] = useState<'unauthorized' | string | null>(null)
+  const [showTour, setShowTour] = useState(false)
 
   useEffect(() => onThemeChange((s) => setDark(s === 'dark')), [])
 
@@ -226,6 +229,18 @@ export function App() {
       })
       toast(t('app.draft_restored'), 'ti-file-check')
     }
+
+    // Welcome tour — only on an organic open (a deep link leaves the flag
+    // unburned, so the tour still shows on the next normal open), and only for
+    // users with no prior activity. A restorable draft or a bill they CREATED
+    // means they've used the app before; incoming bills don't count — those
+    // arrive passively, possibly before the user ever opened the app.
+    if (param?.startsWith('bill_')) return
+    if ((stored && !isDraftEmpty(stored)) || bills.created.length > 0) {
+      markTourSeen(me.id)
+      return
+    }
+    if (!hasSeenTour(me.id)) setShowTour(true)
   }, [loading, deepLinkDone, me, bills, contacts, editBill, openBill, t, toast])
 
   // Persist the working draft (debounced). Edit sessions are never persisted —
@@ -438,6 +453,16 @@ export function App() {
           </button>
         ))}
       </div>
+
+      {/* first-open welcome tour — full-screen overlay */}
+      {showTour && me && (
+        <WelcomeTour
+          onClose={() => {
+            markTourSeen(me.id)
+            setShowTour(false)
+          }}
+        />
+      )}
 
       {/* bill detail — full-screen overlay above content and tabbar */}
       {detailBillId && me && (
