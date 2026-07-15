@@ -58,6 +58,7 @@ export const ru: Dict = {
     items: 'Позиции · {{n}}',
     item: 'Позиция',
     add_item: 'Добавить позицию',
+    no_items: 'Пока нет позиций — добавьте людей, затем позицию.',
     service_tip: 'Сервис · Чаевые',
     service_charge: 'Сервисный сбор',
     service_custom: 'Другая',

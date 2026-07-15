@@ -409,6 +409,7 @@ export function App() {
             onSend={send}
             sending={sending}
             onDiscard={discardDraft}
+            hasCreatedBills={bills.created.length > 0}
           />
         )}
         {tab === 'bills' && me && (

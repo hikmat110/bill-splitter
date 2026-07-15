@@ -35,6 +35,7 @@ export function SplitScreen({
   onSend,
   sending,
   onDiscard,
+  hasCreatedBills,
 }: {
   draft: DraftBill
   setDraft: (d: DraftBill) => void
@@ -46,6 +47,9 @@ export function SplitScreen({
   onSend: () => void
   sending: boolean
   onDiscard: () => void
+  /** Gates the first-bill onboarding checklist: only creating a bill counts as
+   *  prior experience — received bills arrive passively. */
+  hasCreatedBills: boolean
 }) {
   const { t } = useT()
   const toast = useToast()
@@ -239,6 +243,10 @@ export function SplitScreen({
     draft.items.length > 0 ||
     !!draft.receiptAttachmentId
 
+  // First-bill onboarding checklist — until the user has created a bill of
+  // their own; everyone else gets the plain empty state.
+  const showChecklist = draft.items.length === 0 && !hasCreatedBills
+
   const discard = () => {
     if (!window.confirm(t('app.draft_discard'))) return
     haptic('light')
@@ -341,7 +349,21 @@ export function SplitScreen({
       <SecTitle>{t('split.items', { n: draft.items.length })}</SecTitle>
 
       <div className="col" style={{ gap: 10, marginBottom: 18 }}>
-        {draft.items.length === 0 && (
+        {draft.items.length === 0 && !showChecklist && (
+          <div
+            className="card"
+            style={{
+              textAlign: 'center',
+              color: 'var(--text-3)',
+              fontSize: 14,
+              fontWeight: 600,
+              padding: 22,
+            }}
+          >
+            {t('split.no_items')}
+          </div>
+        )}
+        {showChecklist && (
           <div className="card pop" style={{ padding: 'calc(15px * var(--dens))' }}>
             <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 13 }}>
               {t('split.gs_title')}
@@ -364,10 +386,11 @@ export function SplitScreen({
                 }
               />
               <GsStep n={2} done={false} label={t('split.gs_items')} />
-              <div className="row" style={{ gap: 8, paddingLeft: 36 }}>
+              {/* wrap: long labels (uz/ru) stack the buttons instead of overflowing */}
+              <div className="row" style={{ gap: 8, paddingLeft: 36, flexWrap: 'wrap' }}>
                 <button
                   className="btn btn-primary"
-                  style={{ flex: 1 }}
+                  style={{ flex: '1 1 auto' }}
                   disabled={participants.length === 0 || scanning}
                   onClick={() => scanFileRef.current?.click()}
                 >
@@ -376,7 +399,7 @@ export function SplitScreen({
                 </button>
                 <button
                   className="btn"
-                  style={{ flex: 1 }}
+                  style={{ flex: '1 1 auto' }}
                   disabled={participants.length === 0}
                   onClick={addItem}
                 >
@@ -421,7 +444,7 @@ export function SplitScreen({
             onRemove={() => removeItem(item.id)}
           />
         ))}
-        {draft.items.length > 0 && (
+        {!showChecklist && (
           <button
             className="btn btn-soft btn-block"
             onClick={addItem}
