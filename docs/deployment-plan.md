@@ -183,8 +183,10 @@ exist before the first automated deploy:
    (Option B) per §4, terminating TLS in front of the Bun `PORT`.
 6. **Create `.env` on the server** (never synced, never in git) with production
    values: `BOT_TOKEN`, `DATABASE_URL`, `NODE_ENV=production`, `LOG_LEVEL=info`,
-   `ADMIN_TELEGRAM_IDS`, **`PORT`** (must match what the proxy/tunnel forwards to), and
-   **`WEBAPP_URL`** (the public HTTPS origin from step 5).
+   `ADMIN_TELEGRAM_IDS`, **`PORT`** (must match what the proxy/tunnel forwards to),
+   **`WEBAPP_URL`** (the public HTTPS origin from step 5), and
+   **`CARD_ENCRYPTION_KEY`** (generate with `openssl rand -hex 32`; see §6 — back
+   it up outside the server, losing it makes all stored cards unreadable).
 7. **Deploy SSH key:** generate a keypair, add the public key to the server's
    `~/.ssh/authorized_keys`, store the private key as the `VPS_SSH_KEY` secret.
 8. **Boot persistence:** run `pm2 startup` once (and `pm2 save` after first deploy)
@@ -195,6 +197,37 @@ exist before the first automated deploy:
 10. **Kick it off:** push to `main` (or use the manual *Run workflow* button). The
     first run's remote step builds `webapp/dist` and `pm2 startOrReload` performs the
     initial `pm2 start`.
+
+---
+
+## 6. Card encryption at rest (rollout + key management)
+
+`cards.number` is stored encrypted (AES-256-GCM, `src/utils/card-crypto.ts`);
+the key never leaves the server `.env`. Reads tolerate legacy plaintext rows
+until the backfill runs, so the rollout is zero-downtime — but the **order is
+load-bearing**:
+
+1. `openssl rand -hex 32` → add as `CARD_ENCRYPTION_KEY` to the server `.env`.
+   **Back the key up somewhere off the server and outside the DB** (password
+   manager). Losing it bricks every stored card.
+2. Deploy the code (`pm2 startOrReload ecosystem.config.cjs --update-env`).
+   From this moment reads accept both forms and all writes encrypt.
+3. Run `bun run db:encrypt-cards` in the deploy dir. Re-run once to confirm it
+   reports `encrypted: 0` (idempotent).
+4. **Expire old DB backups**: any `pg_dump` taken before step 3 contains
+   plaintext card numbers. Dumps taken after contain only ciphertext.
+
+**Key rotation** (no code changes needed):
+
+1. In `.env`: move the current key to `CARD_ENCRYPTION_KEY_PREVIOUS`, set a new
+   `CARD_ENCRYPTION_KEY` (`openssl rand -hex 32`).
+2. `pm2 startOrReload ecosystem.config.cjs --update-env` — decryption now tries
+   the new key first, then falls back to the old one.
+3. `bun run db:encrypt-cards --rotate` — re-encrypts every row under the new key.
+4. Remove `CARD_ENCRYPTION_KEY_PREVIOUS` from `.env`, reload again.
+
+**TLS note:** Postgres currently runs on the same host, which is fine. If
+`DATABASE_URL` ever points at a remote host, it must carry `sslmode=require`.
 
 ---
 

@@ -5,10 +5,10 @@ import {
   billItems,
   billItemShares,
   billParticipants,
-  cards,
   contacts,
   users,
 } from '../db/schema'
+import { findCardById } from './card.service'
 import type { Bill, BillItem, BillParticipant, Card, Contact, User } from '../db/schema'
 import { computeSettlement, computeBreakdown } from '../utils/settlement'
 import type { ItemSpec, ItemShare, ParticipantBreakdown } from '../utils/settlement'
@@ -293,11 +293,8 @@ export async function getBillWithDetails(billId: string): Promise<BillWithDetail
     .where(eq(billParticipants.bill_id, billId))
 
   // A deleted card has already SET NULL'd card_id, so a plain lookup suffices.
-  let card: Card | null = null
-  if (bill.card_id) {
-    const cardRows = await db.select().from(cards).where(eq(cards.id, bill.card_id)).limit(1)
-    card = cardRows[0] ?? null
-  }
+  // Must go through card.service — cards.number is encrypted at rest.
+  const card: Card | null = bill.card_id ? await findCardById(bill.card_id) : null
 
   return {
     bill,

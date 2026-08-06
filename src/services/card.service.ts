@@ -2,6 +2,7 @@ import { and, asc, desc, eq } from 'drizzle-orm'
 import { db } from '../db/client'
 import { cards } from '../db/schema'
 import type { Card } from '../db/schema'
+import { decryptCardNumber, encryptCardNumber } from '../utils/card-crypto'
 
 export const MAX_CARDS_PER_USER = 10
 
@@ -13,18 +14,25 @@ export class CardLimitError extends Error {
   }
 }
 
+// cards.number is stored encrypted; every Card returned by this service
+// carries the decrypted number, so nothing outside touches ciphertext.
+function decryptCard(card: Card): Card {
+  return { ...card, number: decryptCardNumber(card.number) }
+}
+
 /** All of a user's cards, default first, then oldest-added first. */
 export async function listCards(userId: string): Promise<Card[]> {
-  return db
+  const rows = await db
     .select()
     .from(cards)
     .where(eq(cards.user_id, userId))
     .orderBy(desc(cards.is_default), asc(cards.created_at))
+  return rows.map(decryptCard)
 }
 
 export async function findCardById(cardId: string): Promise<Card | null> {
   const rows = await db.select().from(cards).where(eq(cards.id, cardId)).limit(1)
-  return rows[0] ?? null
+  return rows[0] ? decryptCard(rows[0]) : null
 }
 
 export async function getDefaultCard(userId: string): Promise<Card | null> {
@@ -33,7 +41,7 @@ export async function getDefaultCard(userId: string): Promise<Card | null> {
     .from(cards)
     .where(and(eq(cards.user_id, userId), eq(cards.is_default, true)))
     .limit(1)
-  return rows[0] ?? null
+  return rows[0] ? decryptCard(rows[0]) : null
 }
 
 /**
@@ -56,13 +64,14 @@ export async function addCard(
       .insert(cards)
       .values({
         user_id: userId,
-        number,
+        number: encryptCardNumber(number),
         label: label ?? null,
         is_default: existing.length === 0,
       })
       .returning()
     if (!card) throw new Error('Failed to insert card')
-    return card
+    // Return the validated plaintext rather than round-tripping the ciphertext.
+    return { ...card, number }
   })
 }
 
@@ -78,7 +87,7 @@ export async function setDefaultCard(userId: string, cardId: string): Promise<Ca
       .set({ is_default: true })
       .where(eq(cards.id, cardId))
       .returning()
-    return updated ?? null
+    return updated ? decryptCard(updated) : null
   })
 }
 
@@ -93,7 +102,7 @@ export async function renameCard(
     .set({ label })
     .where(and(eq(cards.id, cardId), eq(cards.user_id, userId)))
     .returning()
-  return updated ?? null
+  return updated ? decryptCard(updated) : null
 }
 
 /**

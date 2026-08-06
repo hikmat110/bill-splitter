@@ -4,3 +4,4 @@
 process.env.BOT_TOKEN ||= 'test-bot-token'
 process.env.DATABASE_URL ||= 'postgres://test:test@localhost:5432/test'
 process.env.NODE_ENV ||= 'test'
+process.env.CARD_ENCRYPTION_KEY ||= 'ab'.repeat(32)

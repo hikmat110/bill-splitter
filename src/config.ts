@@ -19,6 +19,18 @@ const schema = z.object({
   GEMINI_API_KEY: z.string().min(1).optional(),
   // Gemini model used for receipt scanning (free-tier Flash-Lite by default).
   GEMINI_MODEL: z.string().default('gemini-2.5-flash-lite'),
+  // 32-byte key for encrypting card numbers at rest (AES-256-GCM). Required —
+  // an optional key would silently keep writing plaintext. Losing it makes all
+  // encrypted cards unreadable, so back it up outside the server and DB.
+  CARD_ENCRYPTION_KEY: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, 'must be 64 hex chars — generate with: openssl rand -hex 32'),
+  // Set only during key rotation so ciphertexts under the old key still decrypt
+  // (see docs/deployment-plan.md for the rotation procedure).
+  CARD_ENCRYPTION_KEY_PREVIOUS: z
+    .string()
+    .regex(/^[0-9a-f]{64}$/i, 'must be 64 hex chars')
+    .optional(),
   LOG_LEVEL: z
     .enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace'])
     .default('info'),

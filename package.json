@@ -9,6 +9,7 @@
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "bun run src/db/migrate.ts",
+    "db:encrypt-cards": "bun run src/db/scripts/encrypt-cards.ts",
     "db:push": "drizzle-kit push",
     "db:studio": "drizzle-kit studio",
     "typecheck": "tsc --noEmit",

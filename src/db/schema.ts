@@ -50,7 +50,10 @@ export const cards = pgTable(
     user_id: uuid('user_id')
       .notNull()
       .references(() => users.id, { onDelete: 'cascade' }),
-    // 16 digits, validated upstream (parseCardNumber).
+    // 16 digits (validated upstream via parseCardNumber), stored encrypted as
+    // `v1.<iv>.<tag>.<ct>` (AES-256-GCM, utils/card-crypto). card.service is
+    // the sole encrypt/decrypt boundary — never select or write this column
+    // directly.
     number: text('number').notNull(),
     // Optional custom name; display falls back to "<network> ••<last4>".
     label: text('label'),
