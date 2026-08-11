@@ -52,6 +52,10 @@ export const ru: Dict = {
     draft_restored: 'Черновик восстановлен',
     draft_discard: 'Удалить этот черновик?',
   },
+  update: {
+    body: 'Доступна новая версия.',
+    action: 'Обновить',
+  },
   split: {
     untitled: 'Счёт без названия',
     people: 'Участников: {{n}}',

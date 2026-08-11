@@ -52,6 +52,10 @@ export const uz: Dict = {
     draft_restored: 'Qoralama tiklandi',
     draft_discard: "Bu qoralama o'chirilsinmi?",
   },
+  update: {
+    body: 'Yangi versiya mavjud.',
+    action: 'Yangilash',
+  },
   split: {
     untitled: 'Nomsiz hisob',
     people: '{{n}} kishi',

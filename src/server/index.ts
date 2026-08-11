@@ -8,7 +8,8 @@ import type { MyContext } from '../bot/index'
 import { config } from '../config'
 import { rootLogger } from '../bot/middleware/logger'
 import { handleApi } from './routes'
-import { error } from './json'
+import { error, json } from './json'
+import { SERVER_BUILD, cacheControlFor, readWebappBuild } from './version'
 
 const DIST = join(import.meta.dir, '../../webapp/dist')
 
@@ -27,7 +28,15 @@ async function handleRequest(req: Request, bot: Bot<MyContext>): Promise<Respons
   // (e.g. "/"), which `new URL` can't parse without a base. Fall back to the Host.
   const url = new URL(req.url, `http://${req.headers.get('host') ?? 'localhost'}`)
 
-  if (url.pathname === '/health') return new Response('ok')
+  // Also the freshness oracle for the Mini App's stale-bundle check, hence
+  // `no-store`: a cached /health (a proxy, or Cloudflare in front of the origin)
+  // would silently disable it. `webapp` is the build on disk — see ./version.
+  if (url.pathname === '/health') {
+    return json(
+      { status: 'ok', server: SERVER_BUILD, webapp: await readWebappBuild(DIST) },
+      { headers: { 'cache-control': 'no-store' } }
+    )
+  }
 
   if (url.pathname.startsWith('/api/')) {
     if (req.method === 'OPTIONS') return cors(new Response(null, { status: 204 }))
@@ -66,10 +75,21 @@ function cors(res: Response): Response {
 async function serveStatic(url: URL): Promise<Response> {
   const rel = normalize(decodeURIComponent(url.pathname)).replace(/^(\.\.([/\\]|$))+/, '')
   const file = Bun.file(join(DIST, rel))
-  if (url.pathname !== '/' && (await file.exists())) return new Response(file)
+  if (url.pathname !== '/' && (await file.exists())) {
+    return new Response(file, { headers: { 'cache-control': cacheControlFor(url.pathname) } })
+  }
+
+  // A hashed asset that isn't on disk belongs to a build that no longer exists
+  // (every build wipes dist). 404 it rather than falling through: answering a
+  // module-script request with index.html fails on MIME type, which is a white
+  // screen instead of a clean error. Assets are never client-side routes — the
+  // app has no router at all.
+  if (url.pathname.startsWith('/assets/')) return new Response('Not found', { status: 404 })
 
   // SPA fallback to index.html for client-side routes.
   const index = Bun.file(join(DIST, 'index.html'))
-  if (await index.exists()) return new Response(index)
+  if (await index.exists()) {
+    return new Response(index, { headers: { 'cache-control': 'no-cache' } })
+  }
   return new Response('Web app not built — run `bun run web:build`', { status: 404 })
 }

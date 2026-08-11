@@ -54,6 +54,11 @@ bun run web:dev        # http://localhost:5173
 
 # Build the SPA for production (output: webapp/dist, served by src/server in prod)
 bun run web:build
+
+# The build stamps a version into the bundle and into webapp/dist/version.json
+# (reported by /health, shown at the bottom of Profile). It reads the commit
+# from git; where there is no .git — notably the VPS — pass it explicitly:
+APP_COMMIT=$(git rev-parse --short HEAD) bun run web:build
 ```
 
 Telegram requires **HTTPS** for Mini Apps. In development, expose the Vite dev server

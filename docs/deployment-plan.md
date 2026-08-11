@@ -76,7 +76,8 @@ gated.
   - `bun run typecheck`
   - `bun test`  ← test files under `src/**` and `webapp/src/**`
   - `bun --cwd webapp install --frozen-lockfile`
-  - `bun run web:build`  ← fail the PR if the SPA doesn't compile
+  - `APP_COMMIT: ${{ github.sha }}` + `bun run web:build`  ← fail the PR if the SPA
+    doesn't compile (see §7 for why the build needs the commit passed in)
 
 ---
 
@@ -96,9 +97,12 @@ bot and the SPA (they ship together in one process). Drop `dorny/paths-filter`.
      `ssh-keyscan` the host into `known_hosts`
   6. **rsync** repo → server, **excluding** `.git`, `node_modules`, `.env`,
      `.github`. Note: `--exclude='node_modules'` matches at any depth, so
-     `webapp/node_modules` is excluded too and rebuilt server-side. `webapp/dist` is
-     gitignored / not built into the synced tree — it is built on the server in step 7,
-     so the running SPA always matches the deployed source:
+     `webapp/node_modules` is excluded too and rebuilt server-side. `webapp/dist` **is**
+     synced — rsync doesn't read `.gitignore`, and step 4 already built it on the runner —
+     but step 7 rebuilds it on the server and Vite's `emptyOutDir` wipes the directory
+     first, so the two never mix and the running SPA always matches the deployed source.
+     (The runner's build is a useful fallback if the server build fails; pass `APP_COMMIT`
+     to both so they can't disagree about the version.)
 
      ```bash
      rsync -rlz --no-perms --no-owner --no-group --omit-dir-times \
@@ -115,7 +119,7 @@ bot and the SPA (they ship together in one process). Drop `dorny/paths-filter`.
      cd "${{ secrets.VPS_DEPLOY_PATH }}"
      bun install --frozen-lockfile
      bun --cwd webapp install --frozen-lockfile
-     bun run web:build                      # compiles webapp/dist served by src/server
+     APP_COMMIT=<sha> bun run web:build     # compiles webapp/dist served by src/server
      bun run db:migrate
      pm2 startOrReload ecosystem.config.cjs --update-env
      pm2 save
@@ -231,13 +235,61 @@ load-bearing**:
 
 ---
 
+## 7. App version and the stale-bundle check
+
+One version covers bot, API and Mini App — they always ship from one commit. The
+semver lives in the **root `package.json`** (`webapp/package.json` stays
+version-less) and is bumped by hand at release time; the short commit makes each
+build individually identifiable.
+
+The Vite build resolves that identity once and ships it two ways that cannot
+drift: inlined into the bundle, and written to `webapp/dist/version.json`. The
+server never derives it — `/health` just reports the file on disk:
+
+```json
+{ "status": "ok",
+  "server": { "version": "0.1.0", "commit": null, "startedAt": "…" },
+  "webapp": { "version": "0.1.0", "stamp": "5e113c9", "buildId": "0.1.0+5e113c9", "builtAt": "…" } }
+```
+
+The app compares its own baked-in `buildId` against that one on launch and on
+resume, and offers a reload when they differ. Reporting the **dist on disk**
+rather than the running process is what keeps that honest: during a deploy the
+old process briefly serves the new dist, and if `web:build` fails while PM2
+reloads anyway, disk still holds the old build — clients running it are then
+correctly told they are current instead of being sent into a reload loop.
+
+**`APP_COMMIT` is required for a meaningful commit in production.** The deploy
+rsync excludes `.git`, so `git rev-parse` finds nothing on the server; without
+the env var the build falls back to a timestamp stamp (`b…`), which still works
+— it is unique per build — but isn't traceable to a commit. Pass it on **both**
+build invocations (runner and server).
+
+**Diagnostic:** if `webapp.builtAt` is newer than `server.startedAt`, the SPA was
+rebuilt but the process never reloaded — a half-finished deploy, visible in one
+`curl`.
+
+Two supporting pieces, both in `src/server/index.ts`:
+
+- `index.html` is served `no-cache` (revalidate every time) and `/assets/*`
+  `immutable` (content-hashed, so the URL changes with the bytes). Without this a
+  Telegram webview can cache the unhashed shell and pin itself to a build whose
+  assets no longer exist.
+- A request for a hashed asset that isn't on disk returns **404**, not the SPA
+  fallback. Answering a module-script request with HTML fails on MIME type and
+  leaves a white screen; in that state no JS runs, so the update banner cannot
+  help — the cache headers are the real fix, the banner only covers clients whose
+  old bundle still boots.
+
+---
+
 ## Critical files
 
 | File | Change |
 |---|---|
 | `src/db/migrate.ts` | ✅ added — non-interactive migrator |
 | `src/db/migrations/**` | ✅ added — generated initial migration (committed) |
-| `package.json` | ✅ added `db:migrate` script (`web:build` already present) |
+| `package.json` | ✅ added `db:migrate` script; `version` field (§7); fixed `web:build`/`web:dev` (`bun --cwd X run Y` silently no-ops on Bun 1.3 — the flag must follow `run`) |
 | `.github/workflows/ci.yml` | **new** — typecheck + test + webapp build on PRs |
 | `.github/workflows/deploy.yml` | **new** — rsync + webapp build + migrate + PM2 reload + notify |
 | `README.md` | add Deployment / server-setup section (incl. HTTPS + `WEBAPP_URL`) |

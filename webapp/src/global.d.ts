@@ -81,4 +81,13 @@ declare global {
   interface Window {
     Telegram?: { WebApp: TelegramWebApp }
   }
+
+  /** Build identity, inlined by the `define` in vite.config.ts. The same object
+   *  is written to dist/version.json — see src/lib/version.ts. */
+  const __APP_BUILD__: {
+    version: string
+    stamp: string
+    buildId: string
+    builtAt: string
+  }
 }

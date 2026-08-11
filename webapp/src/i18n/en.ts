@@ -54,6 +54,10 @@ export const en = {
     draft_restored: 'Draft restored',
     draft_discard: 'Discard this draft?',
   },
+  update: {
+    body: 'A new version is available.',
+    action: 'Update',
+  },
   split: {
     untitled: 'Untitled bill',
     people: '{{n}} people',

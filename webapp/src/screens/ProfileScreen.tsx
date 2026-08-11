@@ -5,6 +5,8 @@ import { SecTitle } from '../components/common'
 import { useToast } from '../components/Toast'
 import { useContactDelete, BlockingBillsPanel } from '../components/ContactDelete'
 import { cardLabel, formatCard } from '../lib/cards'
+import { copyWithToast } from '../lib/clipboard'
+import { BUILD, VERSION_LABEL } from '../lib/version'
 import { api } from '../lib/api'
 import { haptic } from '../lib/telegram'
 import { useT } from '../i18n'
@@ -326,6 +328,30 @@ export function ProfileScreen({
           ))}
         </div>
       </div>
+
+      {/* build identity — tap to copy, so a bug report can quote it exactly */}
+      <button
+        className="muted3"
+        onClick={() =>
+          copyWithToast(BUILD.buildId, toast, {
+            copied: t('share.copied'),
+            manual: t('share.copy_failed'),
+          })
+        }
+        style={{
+          display: 'block',
+          width: '100%',
+          background: 'none',
+          border: 0,
+          padding: '18px 0 4px',
+          textAlign: 'center',
+          fontFamily: 'inherit',
+          fontSize: 12,
+          fontWeight: 600,
+        }}
+      >
+        {VERSION_LABEL}
+      </button>
 
       {/* blocked contact delete → force soft-delete confirmation */}
       <Sheet

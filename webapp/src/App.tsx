@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { PeopleSheet } from './components/PeopleSheet'
 import { AddContactSheet } from './components/AddContactSheet'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { UpdateBanner, useUpdateCheck } from './components/UpdateBanner'
 import { useToast } from './components/Toast'
 import { SplitScreen } from './screens/SplitScreen'
 import { BillsScreen } from './screens/BillsScreen'
@@ -57,6 +58,10 @@ export function App() {
   const [showTour, setShowTour] = useState(false)
 
   useEffect(() => onThemeChange((s) => setDark(s === 'dark')), [])
+
+  // Above the early returns below — hooks must run unconditionally, and the
+  // fatal branch needs the banner most of all.
+  const update = useUpdateCheck()
 
   useEffect(() => {
     Promise.all([api.me(), api.contacts(), api.bills()])
@@ -342,6 +347,9 @@ export function App() {
             {fatal === 'unauthorized' ? t('app.unauthorized_help') : fatal}
           </div>
         </div>
+        {/* A bundle stale enough to break against a changed API lands here —
+            without this the user has no way out but reinstalling the app. */}
+        {update.target && <UpdateBanner onUpdate={update.update} onDismiss={update.dismiss} />}
       </div>
     )
   }
@@ -436,6 +444,9 @@ export function App() {
           />
         )}
       </ErrorBoundary>
+
+      {/* new build available — sits above the tabbar, under any overlay */}
+      {update.target && <UpdateBanner onUpdate={update.update} onDismiss={update.dismiss} />}
 
       {/* bottom nav */}
       <div className="tabbar">
