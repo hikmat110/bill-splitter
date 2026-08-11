@@ -26,7 +26,7 @@ const schema = z.object({
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'must be 64 hex chars — generate with: openssl rand -hex 32'),
   // Set only during key rotation so ciphertexts under the old key still decrypt
-  // (see docs/deployment-plan.md for the rotation procedure).
+  // (see deploy/README.md for the rotation procedure).
   CARD_ENCRYPTION_KEY_PREVIOUS: z
     .string()
     .regex(/^[0-9a-f]{64}$/i, 'must be 64 hex chars')

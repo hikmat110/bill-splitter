@@ -1,0 +1,225 @@
+# Deploys the bot + Mini App to billsplit.arcan.uz.
+#
+# Manual trigger only — there is deliberately no `push:` here. Pick the branch in
+# the Actions tab and `actions/checkout` takes it from there, so `github.sha` (and
+# with it the version stamp, the health gate and the smoke test) refers to
+# whatever you chose. Merging to main ships nothing by itself. To make main
+# auto-deploy later, add `push: { branches: [main] }` above `workflow_dispatch`.
+#
+# The VPS is shared with Arcan-vision (:3001, :3002) and global-go (:3000).
+# See deploy/README.md before changing paths, ports or the PM2 name.
+
+name: Deploy — Production
+
+on:
+  workflow_dispatch:
+
+concurrency:
+  # Serializes this project against itself. Note it does NOT serialize against
+  # the sibling projects, which deploy to the same box as the same user.
+  group: deploy-production
+  cancel-in-progress: false
+
+env:
+  DEPLOY_PATH: /home/behzodbek_abdurasulov/projects/bill-splitter
+  PM2_APP: bill-splitter
+  PUBLIC_URL: https://billsplit.arcan.uz
+
+jobs:
+  deploy:
+    name: Build, ship, migrate, reload
+    runs-on: ubuntu-latest
+    environment: production
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'webapp/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Install webapp dependencies
+        working-directory: webapp
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test
+        run: bun test
+
+      # Built here rather than on the VPS: the box then needs no webapp
+      # devDependencies, and a failed build cannot leave new src/ beside an old
+      # dist/ with PM2 restarted anyway.
+      #
+      # NEVER `bun --cwd webapp run build` — that form silently lists scripts and
+      # exits 1 on Bun 1.3. The root script has the flag after `run`.
+      - name: Build webapp
+        env:
+          APP_COMMIT: ${{ github.sha }}
+        run: bun run web:build
+
+      # Catch a mis-stamped build here rather than debugging it in production.
+      # version.json is written with 2-space indent, hence the optional space.
+      - name: Assert the build carries this commit
+        run: |
+          SHORT="${GITHUB_SHA:0:7}"
+          cat webapp/dist/version.json
+          grep -Eq "\"stamp\": ?\"$SHORT\"" webapp/dist/version.json || {
+            echo "::error::webapp/dist/version.json is not stamped with $SHORT"
+            exit 1
+          }
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.VPS_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -p ${{ secrets.VPS_PORT || 22 }} ${{ secrets.VPS_HOST }} >> ~/.ssh/known_hosts
+
+      # One rsync for repo + built SPA: the Bun server serves webapp/dist from
+      # inside this same tree (src/server/index.ts).
+      #
+      # NO --delete, ever. The target holds the server-side .env (with
+      # CARD_ENCRYPTION_KEY), uploads/ (every receipt image), node_modules/, and
+      # hashed assets from earlier builds that older webviews still request. The
+      # sibling projects use --delete on their frontend rsync because their target
+      # is a pure artifact webroot; this one is not.
+      - name: Rsync repo + built SPA to the VPS
+        run: |
+          rsync -rlz \
+            --no-perms --no-owner --no-group --omit-dir-times \
+            --exclude='.git/' \
+            --exclude='.github/' \
+            --exclude='node_modules/' \
+            --exclude='.env' \
+            --exclude='uploads/' \
+            --exclude='Splitwell.html' \
+            -e "ssh -p ${{ secrets.VPS_PORT || 22 }} -i ~/.ssh/id_rsa" \
+            ./ \
+            "${{ secrets.VPS_USER }}@${{ secrets.VPS_HOST }}:${{ env.DEPLOY_PATH }}/"
+
+      - name: Install, migrate, restart, health-gate
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.VPS_HOST }}
+          username: ${{ secrets.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ secrets.VPS_PORT || 22 }}
+          script: |
+            set -euo pipefail
+            # Bun lives in ~/.bun/bin, which is not on the non-interactive PATH.
+            export PATH="$HOME/.bun/bin:$PATH"
+            cd "${{ env.DEPLOY_PATH }}"
+
+            # Install before migrate: node_modules is excluded from the rsync and
+            # src/db/migrate.ts imports drizzle-orm and postgres from it.
+            bun install --frozen-lockfile
+            bun run db:migrate
+
+            # --update-env picks this up, so /health can report server.commit.
+            export APP_COMMIT="${{ github.sha }}"
+
+            # startOrRestart, not startOrReload: identical in fork mode today, but
+            # a rolling reload under cluster mode would briefly run two grammY
+            # pollers (Telegram answers 409) and two Bun.serve on one port.
+            pm2 startOrRestart ecosystem.config.cjs --update-env
+            pm2 save
+
+            # ── Health gate ────────────────────────────────────────────────────
+            # /health reports the build on disk, so this separates four states
+            # that otherwise all look green: healthy, crash-looping, rsync didn't
+            # land, and restarted-against-a-stale-dist.
+            PORT="$(awk -F= '/^PORT=/{gsub(/[^0-9]/,"",$2); print $2}' .env | tail -1)"
+            PORT="${PORT:-3000}"
+            SHORT="$(printf '%s' "${{ github.sha }}" | cut -c1-7)"
+            echo "Waiting for 127.0.0.1:$PORT/health to report stamp $SHORT ..."
+
+            BODY=""
+            for _ in $(seq 1 30); do
+              BODY="$(curl -fsS --max-time 5 "http://127.0.0.1:$PORT/health" 2>/dev/null || true)"
+              case "$BODY" in
+                *"\"stamp\":\"$SHORT\""*)
+                  echo "✓ ${{ env.PM2_APP }} healthy on $SHORT"
+                  echo "$BODY"
+                  exit 0
+                  ;;
+              esac
+              sleep 2
+            done
+
+            echo "::error::health check failed after 60s"
+            echo "--- last /health body ---"
+            echo "${BODY:-<no response>}"
+            pm2 describe ${{ env.PM2_APP }} || true
+            pm2 logs ${{ env.PM2_APP }} --lines 60 --nostream || true
+            exit 1
+
+      # Proves the whole chain from outside: DNS, TLS, nginx, proxy_pass, the Bun
+      # process, and the dist it is serving.
+      - name: Public smoke test
+        run: |
+          SHORT="${GITHUB_SHA:0:7}"
+          BODY="$(curl -fsS --max-time 20 "${{ env.PUBLIC_URL }}/health")"
+          echo "$BODY"
+          echo "$BODY" | grep -q "\"stamp\":\"$SHORT\"" || {
+            echo "::error::public /health is not serving $SHORT"; exit 1; }
+
+          # nginx must not strip the /api prefix. An unauthenticated GET /api/me
+          # is a 401 from src/server/auth.ts. With a trailing slash on proxy_pass
+          # the upstream would see /me, miss the /api/ branch, fall through to the
+          # SPA fallback and return 200 text/html — a success status with the
+          # wrong body, which no "did it 200?" check would catch.
+          CODE="$(curl -s -o /dev/null -w '%{http_code}' --max-time 20 "${{ env.PUBLIC_URL }}/api/me")"
+          [ "$CODE" = "401" ] || {
+            echo "::error::GET /api/me returned $CODE, expected 401 — nginx is rewriting the /api prefix"
+            exit 1; }
+          echo "✓ public origin healthy, /api prefix intact"
+
+  notify:
+    name: Notify via Telegram
+    runs-on: ubuntu-latest
+    needs: [deploy]
+    if: always()
+    steps:
+      - name: Build notification message
+        id: msg
+        run: |
+          DEPLOY="${{ needs.deploy.result }}"
+          REPO="${{ github.repository }}"
+          BRANCH="${{ github.ref_name }}"
+          COMMIT="${{ github.sha }}"
+          SHORT_COMMIT="${COMMIT:0:7}"
+          ACTOR="${{ github.actor }}"
+          RUN_URL="https://github.com/$REPO/actions/runs/${{ github.run_id }}"
+
+          case "$DEPLOY" in
+            success)   OVERALL="✅ Deploy Successful" ;;
+            failure)   OVERALL="❌ Deploy Failed" ;;
+            cancelled) OVERALL="⚪ Deploy Cancelled" ;;
+            *)         OVERALL="⏭️ Nothing Deployed" ;;
+          esac
+
+          MESSAGE=$(printf '%s — bill-splitter\n\n🌿 Branch: %s\n🔖 Commit: %s\n👤 By: %s\n🌐 %s\n\n🔗 Run: %s' \
+            "$OVERALL" "$BRANCH" "$SHORT_COMMIT" "$ACTOR" \
+            "${{ env.PUBLIC_URL }}" "$RUN_URL")
+
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$MESSAGE" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Send Telegram message
+        uses: appleboy/telegram-action@master
+        with:
+          to: ${{ secrets.DEPLOY_TELEGRAM_CHAT_ID }}
+          token: ${{ secrets.DEPLOY_TELEGRAM_BOT_TOKEN }}
+          message: ${{ steps.msg.outputs.message }}

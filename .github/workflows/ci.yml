@@ -1,0 +1,55 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    name: Typecheck, test, build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      # One cache for both lockfiles — bun installs into a single global store
+      # and the two installs run back to back.
+      - name: Cache Bun dependencies
+        uses: actions/cache@v4
+        with:
+          path: ~/.bun/install/cache
+          key: bun-${{ runner.os }}-${{ hashFiles('bun.lock', 'webapp/bun.lock') }}
+          restore-keys: bun-${{ runner.os }}-
+
+      - name: Install root dependencies
+        run: bun install --frozen-lockfile
+
+      # webapp/ has its own package.json + bun.lock and the root declares no
+      # workspaces, so the root install does not reach it.
+      - name: Install webapp dependencies
+        working-directory: webapp
+        run: bun install --frozen-lockfile
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      # Run from the root, which discovers src/**/*.test.ts and
+      # webapp/src/**/*.test.ts alike.
+      - name: Test
+        run: bun test
+
+      # web:build is `tsc --noEmit && vite build`, so this doubles as the webapp
+      # typecheck. APP_COMMIT is passed explicitly because on a pull_request event
+      # HEAD is the ephemeral merge commit — the build's git fallback would stamp
+      # a sha that exists nowhere.
+      - name: Build webapp
+        env:
+          APP_COMMIT: ${{ github.event.pull_request.head.sha }}
+        run: bun run web:build

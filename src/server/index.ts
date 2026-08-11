@@ -15,6 +15,12 @@ const DIST = join(import.meta.dir, '../../webapp/dist')
 
 export function startServer(bot: Bot<MyContext>) {
   const server = Bun.serve({
+    // Loopback by default. In production this sits behind nginx on a box with a
+    // public IP, and binding 0.0.0.0 would expose the whole Mini App and API
+    // over plain HTTP on the raw port — initData credentials included — right
+    // past the TLS that Telegram requires. Set BIND_HOST=0.0.0.0 only to reach a
+    // dev server from another device on the LAN.
+    hostname: process.env.BIND_HOST ?? '127.0.0.1',
     port: config.PORT,
     idleTimeout: 120,
     fetch: (req) => handleRequest(req, bot),

@@ -70,6 +70,20 @@ user.
 Features the design includes but the bot doesn't yet support are documented in
 `webapp/DEFERRED-FEATURES.md`.
 
+## Deployment
+
+Production runs at **https://billsplit.arcan.uz** — one process serving both the bot and
+the Mini App, behind nginx on a VPS shared with two sibling projects.
+
+Deploys are **manual**: Actions → *Deploy — Production* → **Run workflow**, picking a
+branch. There is no push trigger, so merging to `main` ships nothing by itself. The run
+builds the SPA, rsyncs, migrates, restarts PM2, and then health-gates itself before
+reporting to Telegram.
+
+See **`deploy/README.md`** for the server layout, required secrets, first-time
+provisioning, the card-encryption key procedure, and day-2 operations.
+`docs/versioning.md` explains what `/health` reports and how the stale-bundle check works.
+
 ## Project Structure
 
 See `CLAUDE.md` for full architecture, schema, and flow documentation.

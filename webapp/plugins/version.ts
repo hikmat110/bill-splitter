@@ -24,11 +24,13 @@ type Env = Record<string, string | undefined>
 /**
  * A short token that is unique per deployable build.
  *
- * The order is load-bearing. `web:build` runs on the VPS, where the deploy
- * rsync has excluded `.git` (docs/deployment-plan.md), so git only answers on a
- * dev machine — and a chain that bottomed out in a constant like 'unknown'
- * would make every comparison trivially equal, silently disabling the check.
- * The timestamp tier is what guarantees uniqueness when nothing else can.
+ * The order is load-bearing. Deploys build on the CI runner and pass
+ * APP_COMMIT explicitly (deploy/README.md) — needed because on a pull_request
+ * event HEAD is an ephemeral merge commit, and because anyone building on the
+ * VPS has no `.git` at all, the deploy rsync having excluded it. Git answers on
+ * a dev machine. A chain that bottomed out in a constant like 'unknown' would
+ * make every comparison trivially equal, silently disabling the stale check, so
+ * the timestamp tier is what guarantees uniqueness when nothing else can.
  */
 export function resolveStamp(env: Env = process.env, git: () => string | null = gitStamp): string {
   const fromEnv = env.APP_COMMIT?.trim()
@@ -44,7 +46,7 @@ function gitStamp(): string | null {
     // committed one it was built from.
     return git(['status', '--porcelain']) ? `${head}-dirty` : head
   } catch {
-    // No git binary, or no .git directory — expected on the server.
+    // No git binary, or no .git directory — expected when building on the VPS.
     return null
   }
 }
