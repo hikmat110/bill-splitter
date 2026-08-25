@@ -61,8 +61,18 @@ import {
   notifyCreatorOfPaymentMark,
   notifyParticipantConfirmed,
   notifyParticipantDisputed,
+  notifyAdminsOfFeedback,
   sendReminder,
 } from '../services/notification.service'
+import {
+  createFeedback,
+  listFeedback,
+  getFeedbackById,
+  updateFeedbackStatus,
+  findFeedbackAttachment,
+  FeedbackLimitError,
+} from '../services/feedback.service'
+import type { FeedbackWithDetails } from '../services/feedback.service'
 import {
   saveImage,
   readAttachment,
@@ -85,11 +95,15 @@ import {
   disputeSchema,
   markPaidSchema,
   scanReceiptSchema,
+  createFeedbackSchema,
+  updateFeedbackSchema,
+  feedbackCategorySchema,
+  feedbackStatusSchema,
 } from './schemas'
 import { parseCardNumber } from '../utils/format'
 import { parseUsernameList } from '../utils/username'
 import { toCreateBillInput, toUpdateBillInput } from './mappers'
-import { canManageBill, canMarkPaid } from './authz'
+import { canManageBill, canMarkPaid, isAdmin } from './authz'
 
 // ─── response shapers ──────────────────────────────────────────────────────────
 
@@ -298,6 +312,15 @@ export async function handleApi(
       return await markPaid(req, user, seg[1]!, bot)
     }
 
+    // /api/feedback — POST is user-level; GET/PATCH are admin-only (guarded in
+    // the handlers, matching the per-handler authz style above)
+    if (seg[0] === 'feedback') {
+      if (seg.length === 1 && method === 'POST') return await postFeedback(req, user, bot)
+      if (seg.length === 1 && method === 'GET') return await getFeedbackList(user, url)
+      if (seg.length === 2 && method === 'GET') return await getFeedbackRoute(user, seg[1]!)
+      if (seg.length === 2 && method === 'PATCH') return await patchFeedback(req, user, seg[1]!)
+    }
+
     return error(404, 'Not found')
   } catch (e) {
     if (e instanceof ZodError) {
@@ -324,6 +347,7 @@ async function shapeMe(user: User, bot: Bot<MyContext>) {
     // Used by the Mini App to deep-link into the bot's native contact picker.
     // `botInfo` throws until the bot is initialized, so guard with isInited().
     botUsername: bot.isInited() ? bot.botInfo.username : null,
+    isAdmin: isAdmin(user, config.ADMIN_TELEGRAM_IDS),
   }
 }
 
@@ -684,7 +708,111 @@ async function getFile(user: User, id: string): Promise<Response> {
     return streamAttachment(id, participant.payment_proof_mime)
   }
 
+  const fb = await findFeedbackAttachment(id)
+  if (fb) {
+    // Feedback screenshots: visible to the uploader and to admins.
+    const canView = fb.feedback.user_id === user.id || isAdmin(user, config.ADMIN_TELEGRAM_IDS)
+    if (!canView) return error(403, 'Forbidden')
+    return streamAttachment(id, fb.attachment.mime)
+  }
+
   return error(404, 'Not found')
+}
+
+// ─── feedback ───────────────────────────────────────────────────────────────
+
+function shapeFeedback(f: FeedbackWithDetails) {
+  return {
+    id: f.id,
+    category: f.category,
+    message: f.message,
+    status: f.status,
+    screen: f.screen,
+    buildId: f.build_id,
+    platform: f.platform,
+    tgVersion: f.tg_version,
+    language: f.language,
+    createdAt: f.created_at,
+    reporter: {
+      firstName: f.reporter.first_name,
+      lastName: f.reporter.last_name,
+      username: f.reporter.username,
+    },
+    attachments: f.attachments.map((a) => ({
+      attachmentId: a.attachment_id,
+      mime: a.mime,
+      isAutoCapture: a.is_auto_capture,
+    })),
+  }
+}
+
+async function postFeedback(
+  req: Request,
+  user: User,
+  bot: Bot<MyContext>
+): Promise<Response> {
+  const body = createFeedbackSchema.parse(await req.json())
+  let created
+  try {
+    created = await createFeedback(user.id, {
+      category: body.category,
+      message: body.message,
+      screen: body.context.screen,
+      buildId: body.context.buildId,
+      platform: body.context.platform,
+      tgVersion: body.context.tgVersion,
+      language: body.context.language,
+      attachments: body.attachments,
+    })
+  } catch (e) {
+    if (e instanceof FeedbackLimitError) return error(429, 'Too many feedback submissions')
+    throw e
+  }
+  // Best-effort DMs (each send already swallows its own errors).
+  await notifyAdminsOfFeedback(bot, {
+    category: created.feedback.category,
+    message: created.feedback.message,
+    screen: created.feedback.screen,
+    buildId: created.feedback.build_id,
+    platform: created.feedback.platform,
+    tgVersion: created.feedback.tg_version,
+    language: created.feedback.language,
+    reporter: user,
+    attachmentCount: created.attachments.length,
+    attachments: created.attachments,
+  })
+  return json({ id: created.feedback.id }, { status: 201 })
+}
+
+async function getFeedbackList(user: User, url: URL): Promise<Response> {
+  if (!isAdmin(user, config.ADMIN_TELEGRAM_IDS)) return error(403, 'Forbidden')
+  const status = feedbackStatusSchema.safeParse(url.searchParams.get('status'))
+  const category = feedbackCategorySchema.safeParse(url.searchParams.get('category'))
+  const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0)
+  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit')) || 20))
+  const { items, total } = await listFeedback({
+    status: status.success ? status.data : undefined,
+    category: category.success ? category.data : undefined,
+    offset,
+    limit,
+  })
+  return json({ items: items.map(shapeFeedback), total })
+}
+
+async function getFeedbackRoute(user: User, id: string): Promise<Response> {
+  if (!isAdmin(user, config.ADMIN_TELEGRAM_IDS)) return error(403, 'Forbidden')
+  const found = await getFeedbackById(id)
+  if (!found) return error(404, 'Feedback not found')
+  return json(shapeFeedback(found))
+}
+
+async function patchFeedback(req: Request, user: User, id: string): Promise<Response> {
+  if (!isAdmin(user, config.ADMIN_TELEGRAM_IDS)) return error(403, 'Forbidden')
+  const body = updateFeedbackSchema.parse(await req.json())
+  const updated = await updateFeedbackStatus(id, body.status)
+  if (!updated) return error(404, 'Feedback not found')
+  const full = await getFeedbackById(id)
+  return json(full ? shapeFeedback(full) : { ok: true })
 }
 
 /**

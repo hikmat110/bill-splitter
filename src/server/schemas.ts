@@ -159,3 +159,52 @@ export const disputeSchema = z.object({
   reason: z.string().trim().min(1).max(500),
 })
 export type DisputeBody = z.infer<typeof disputeSchema>
+
+// ─── feedback ────────────────────────────────────────────────────────────────
+
+export const feedbackCategorySchema = z.enum(['bug', 'suggestion', 'other'])
+export type FeedbackCategory = z.infer<typeof feedbackCategorySchema>
+
+export const feedbackStatusSchema = z.enum(['open', 'in_progress', 'resolved'])
+export type FeedbackStatus = z.infer<typeof feedbackStatusSchema>
+
+// Submit in-app feedback. Attachment ids are opaque server-generated uuids from
+// POST /api/attachments — trusted as such (same stance as scanReceiptSchema).
+// Context is client-reported and only informational, so it's capped, not parsed.
+export const createFeedbackSchema = z
+  .object({
+    category: feedbackCategorySchema,
+    message: z.string().trim().min(1).max(2000),
+    attachments: z
+      .array(
+        z.object({
+          attachmentId: z.uuid(),
+          mime: imageMimeSchema,
+          isAutoCapture: z.boolean().default(false),
+        })
+      )
+      .max(5)
+      .default([]),
+    context: z.object({
+      screen: z.string().trim().max(50),
+      buildId: z.string().trim().max(100),
+      platform: z.string().trim().max(30),
+      tgVersion: z.string().trim().max(20),
+      language: z.string().trim().max(10),
+    }),
+  })
+  .superRefine((data, ctx) => {
+    if (data.attachments.filter((a) => a.isAutoCapture).length > 1) {
+      ctx.addIssue({
+        code: 'custom',
+        message: 'at most one attachment may be the auto-capture',
+        path: ['attachments'],
+      })
+    }
+  })
+export type CreateFeedbackBody = z.infer<typeof createFeedbackSchema>
+
+export const updateFeedbackSchema = z.object({
+  status: feedbackStatusSchema,
+})
+export type UpdateFeedbackBody = z.infer<typeof updateFeedbackSchema>

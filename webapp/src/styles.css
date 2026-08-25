@@ -288,6 +288,21 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
 .sheet-handle { width: 38px; height: 4px; border-radius: 999px; background: var(--border-2); margin: 4px auto 14px; }
 .sheet-title { font-size: 19px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 4px; }
 
+/* feedback floating button — z 32: above .overlay-screen (30) so it shows over
+   bill detail / admin inbox, below .scrim (40) so any open sheet covers it */
+.feedback-fab {
+  position: absolute; right: 16px;
+  bottom: calc(84px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  z-index: 32;
+  width: 44px; height: 44px; border-radius: var(--r-pill);
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface); color: var(--text-2);
+  border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  cursor: pointer; font-size: 21px; opacity: .92;
+  transition: transform .12s ease, opacity .18s ease;
+}
+.feedback-fab:active { transform: scale(0.9); }
+
 /* toast */
 .toast {
   position: absolute; left: 50%; bottom: 92px; transform: translate(-50%, 20px);

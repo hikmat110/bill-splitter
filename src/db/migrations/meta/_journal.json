@@ -43,6 +43,13 @@
       "when": 1783091187030,
       "tag": "0005_organic_metal_master",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787667078719,
+      "tag": "0006_wild_leo",
+      "breakpoints": true
     }
   ]
 }

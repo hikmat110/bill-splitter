@@ -8,7 +8,7 @@ import { SnapSlider } from '../components/SnapSlider'
 import { useToast } from '../components/Toast'
 import { previewTotals, previewShares, to2 } from '../lib/calc'
 import { amount, money } from '../lib/currency'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, MAX_UPLOAD } from '../lib/api'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
 import { cardLabel, defaultCardId } from '../lib/cards'
@@ -21,8 +21,6 @@ const SERVICE_PRESETS = [0, 5, 10, 15, 20]
 // Sentinel slider positions that reveal a free-form input.
 const TIP_CUSTOM = -1
 const SERVICE_CUSTOM = -1
-// Matches the server's MAX_UPLOAD_BYTES default — checked client-side for fast feedback.
-const MAX_UPLOAD = 5_000_000
 
 export function SplitScreen({
   draft,

@@ -280,6 +280,72 @@ export const billParticipantsRelations = relations(
   })
 )
 
+// ─── feedback ─────────────────────────────────────────────────────────────────
+
+// In-app feedback / bug reports submitted from the Mini App. Context columns
+// are client-supplied (capped by Zod) so an admin can reproduce: which screen
+// the user was on, the webapp build, and the Telegram client.
+export const feedback = pgTable('feedback', {
+  id: uuid('id')
+    .primaryKey()
+    .default(sql`gen_random_uuid()`),
+  user_id: uuid('user_id')
+    .notNull()
+    .references(() => users.id, { onDelete: 'cascade' }),
+  category: text('category').notNull(), // 'bug' | 'suggestion' | 'other'
+  message: text('message').notNull(),
+  status: text('status').notNull().default('open'), // 'open' | 'in_progress' | 'resolved'
+  screen: text('screen').notNull(),
+  build_id: text('build_id').notNull(),
+  platform: text('platform').notNull(),
+  tg_version: text('tg_version').notNull(),
+  language: text('language').notNull(),
+  created_at: timestamp('created_at', { withTimezone: true })
+    .defaultNow()
+    .notNull(),
+})
+
+export const feedbackRelations = relations(feedback, ({ one, many }) => ({
+  user: one(users, {
+    fields: [feedback.user_id],
+    references: [users.id],
+  }),
+  attachments: many(feedbackAttachments),
+}))
+
+// ─── feedback_attachments ─────────────────────────────────────────────────────
+
+export const feedbackAttachments = pgTable(
+  'feedback_attachments',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    feedback_id: uuid('feedback_id')
+      .notNull()
+      .references(() => feedback.id, { onDelete: 'cascade' }),
+    // Opaque attachment id (file on disk, see storage.service) + its mime.
+    // Unique so GET /api/files/:id can reverse-lookup the owning feedback.
+    attachment_id: text('attachment_id').notNull(),
+    mime: text('mime').notNull(),
+    // The screenshot the widget captured automatically (at most one per
+    // feedback), as opposed to images the user attached from the gallery.
+    is_auto_capture: boolean('is_auto_capture').default(false).notNull(),
+    position: integer('position').notNull(),
+  },
+  (t) => [uniqueIndex('feedback_attachments_attachment_unique').on(t.attachment_id)]
+)
+
+export const feedbackAttachmentsRelations = relations(
+  feedbackAttachments,
+  ({ one }) => ({
+    feedback: one(feedback, {
+      fields: [feedbackAttachments.feedback_id],
+      references: [feedback.id],
+    }),
+  })
+)
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect
@@ -289,3 +355,5 @@ export type Contact = typeof contacts.$inferSelect
 export type Bill = typeof bills.$inferSelect
 export type BillItem = typeof billItems.$inferSelect
 export type BillParticipant = typeof billParticipants.$inferSelect
+export type Feedback = typeof feedback.$inferSelect
+export type FeedbackAttachment = typeof feedbackAttachments.$inferSelect

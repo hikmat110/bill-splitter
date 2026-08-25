@@ -22,6 +22,8 @@ export interface Me {
   selfContactId: string
   /** Bot handle (no `@`) for the native-contact-picker deep link; null if unknown. */
   botUsername: string | null
+  /** Listed in the server's ADMIN_TELEGRAM_IDS — unlocks the feedback inbox. */
+  isAdmin: boolean
 }
 
 export interface ApiContact {
@@ -165,6 +167,48 @@ export type UpdateBillPayload = CreateBillPayload
 export interface AttachmentRef {
   id: string
   mime: string
+}
+
+// ─── feedback ────────────────────────────────────────────────────────────────
+
+export type FeedbackCategory = 'bug' | 'suggestion' | 'other'
+export type FeedbackStatus = 'open' | 'in_progress' | 'resolved'
+
+/** Client context auto-attached to a feedback submission. */
+export interface FeedbackContext {
+  screen: string
+  buildId: string
+  platform: string
+  tgVersion: string
+  language: string
+}
+
+export interface CreateFeedbackPayload {
+  category: FeedbackCategory
+  message: string
+  attachments: { attachmentId: string; mime: string; isAutoCapture: boolean }[]
+  context: FeedbackContext
+}
+
+/** One feedback row as shaped for the admin inbox. */
+export interface FeedbackItem {
+  id: string
+  category: FeedbackCategory
+  message: string
+  status: FeedbackStatus
+  screen: string
+  buildId: string
+  platform: string
+  tgVersion: string
+  language: string
+  createdAt: string
+  reporter: { firstName: string; lastName: string | null; username: string | null }
+  attachments: { attachmentId: string; mime: string; isAutoCapture: boolean }[]
+}
+
+export interface FeedbackListResponse {
+  items: FeedbackItem[]
+  total: number
 }
 
 /** One line item extracted from a receipt photo. */

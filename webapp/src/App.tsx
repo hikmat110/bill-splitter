@@ -3,13 +3,17 @@ import { PeopleSheet } from './components/PeopleSheet'
 import { AddContactSheet } from './components/AddContactSheet'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { UpdateBanner, useUpdateCheck } from './components/UpdateBanner'
+import { FeedbackFab } from './components/FeedbackFab'
+import { FeedbackSheet } from './components/FeedbackSheet'
 import { useToast } from './components/Toast'
 import { SplitScreen } from './screens/SplitScreen'
 import { BillsScreen } from './screens/BillsScreen'
 import { InboxScreen } from './screens/InboxScreen'
 import { BillDetailScreen } from './screens/BillDetailScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
+import { FeedbackAdminScreen } from './screens/FeedbackAdminScreen'
 import { api, ApiError } from './lib/api'
+import { captureScreen } from './lib/capture'
 import { emptyDraft, uid } from './lib/draft'
 import type { DraftBill, Person } from './lib/draft'
 import { loadDraft, saveDraft, clearDraft, isDraftEmpty } from './lib/draftStorage'
@@ -17,7 +21,15 @@ import { hasSeenTour, markTourSeen } from './lib/firstRun'
 import { WelcomeTour } from './components/WelcomeTour'
 import { inboxCount } from './lib/billCalc'
 import { defaultCardId } from './lib/cards'
-import { getColorScheme, onThemeChange, haptic, startParam } from './lib/telegram'
+import {
+  getColorScheme,
+  getPlatform,
+  getTgVersion,
+  onThemeChange,
+  haptic,
+  startParam,
+} from './lib/telegram'
+import { BUILD } from './lib/version'
 import { useT } from './i18n'
 import type { BillDetail, BillsResponse, Me } from './lib/types'
 
@@ -35,7 +47,7 @@ const TABS: {
 ]
 
 export function App() {
-  const { t, setLang } = useT()
+  const { t, lang, setLang } = useT()
   const toast = useToast()
   const [dark, setDark] = useState(() => getColorScheme() === 'dark')
   const [tab, setTab] = useState<Tab>('split')
@@ -56,6 +68,12 @@ export function App() {
   const [loading, setLoading] = useState(true)
   const [fatal, setFatal] = useState<'unauthorized' | string | null>(null)
   const [showTour, setShowTour] = useState(false)
+
+  // Feedback widget: the FAB captures the screen first, then opens the sheet.
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [feedbackShot, setFeedbackShot] = useState<File | null>(null)
+  const [capturing, setCapturing] = useState(false)
+  const [feedbackAdminOpen, setFeedbackAdminOpen] = useState(false)
 
   useEffect(() => onThemeChange((s) => setDark(s === 'dark')), [])
 
@@ -354,6 +372,26 @@ export function App() {
     )
   }
 
+  // Where the user is right now — tagged onto feedback so reports are reproducible.
+  const currentScreen = feedbackAdminOpen
+    ? 'feedback_admin'
+    : showTour
+      ? 'tour'
+      : detailBillId
+        ? 'bill_detail'
+        : tab
+
+  const openFeedback = async () => {
+    haptic('light')
+    setCapturing(true)
+    // Capture BEFORE the sheet opens so the sheet isn't in the shot; null on
+    // failure — the form still opens, just without a screenshot.
+    const shot = await captureScreen()
+    setFeedbackShot(shot)
+    setFeedbackOpen(true)
+    setCapturing(false)
+  }
+
   const subtitle =
     tab === 'split'
       ? draft.title.trim() || t('app.new_bill_subtitle')
@@ -441,6 +479,7 @@ export function App() {
             onCardDeleted={onCardDeleted}
             onOpenAddContact={() => setAddOpen('profile')}
             onContactDeleted={onContactDeleted}
+            onOpenFeedbackAdmin={() => setFeedbackAdminOpen(true)}
           />
         )}
       </ErrorBoundary>
@@ -489,6 +528,30 @@ export function App() {
           />
         </ErrorBoundary>
       )}
+
+      {/* admin-only feedback inbox — full-screen overlay */}
+      {feedbackAdminOpen && me?.isAdmin && (
+        <ErrorBoundary resetKey="feedback-admin">
+          <FeedbackAdminScreen onClose={() => setFeedbackAdminOpen(false)} />
+        </ErrorBoundary>
+      )}
+
+      {/* feedback FAB — floats over every screen (open sheets cover it via the
+          scrim); hidden during the tour so it doesn't overlap the walkthrough */}
+      {me && !showTour && <FeedbackFab onClick={() => void openFeedback()} capturing={capturing} />}
+
+      <FeedbackSheet
+        open={feedbackOpen}
+        onClose={() => setFeedbackOpen(false)}
+        screenshot={feedbackShot}
+        context={{
+          screen: currentScreen,
+          buildId: BUILD.buildId,
+          platform: getPlatform(),
+          tgVersion: getTgVersion(),
+          language: lang,
+        }}
+      />
 
       <PeopleSheet
         open={peopleOpen}

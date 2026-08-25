@@ -29,6 +29,7 @@ export function ProfileScreen({
   onCardDeleted,
   onOpenAddContact,
   onContactDeleted,
+  onOpenFeedbackAdmin,
 }: {
   me: Me
   /** The user's contacts (self excluded — the header covers "you"). */
@@ -39,6 +40,7 @@ export function ProfileScreen({
   onCardDeleted: (cardId: string) => Promise<void>
   onOpenAddContact: () => void
   onContactDeleted: (contactId: string) => Promise<void>
+  onOpenFeedbackAdmin: () => void
 }) {
   const { t, lang, setLang } = useT()
   const toast = useToast()
@@ -328,6 +330,17 @@ export function ProfileScreen({
           ))}
         </div>
       </div>
+
+      {/* admin-only feedback inbox (me.isAdmin mirrors the server-side guard) */}
+      {me.isAdmin && (
+        <button
+          className="btn btn-block"
+          style={{ marginTop: 18 }}
+          onClick={onOpenFeedbackAdmin}
+        >
+          <i className="ti ti-message-report" /> {t('feedback.admin_row')}
+        </button>
+      )}
 
       {/* build identity — tap to copy, so a bug report can quote it exactly */}
       <button

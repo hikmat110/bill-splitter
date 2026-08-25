@@ -11,15 +11,13 @@ import { prettyDate } from '../lib/date'
 import { buildBillText } from '../lib/billText'
 import { formatCard } from '../lib/cards'
 import { copyText, copyWithToast } from '../lib/clipboard'
-import { api, ApiError } from '../lib/api'
+import { api, ApiError, MAX_UPLOAD } from '../lib/api'
 import { haptic, onBackButton } from '../lib/telegram'
 import { statusLabel, pillClass } from '../lib/status'
 import { isSelf, createdOutstanding } from '../lib/billCalc'
 import { useT } from '../i18n'
 import type { BillDetail, BillParticipant, Me } from '../lib/types'
 
-// Matches the server's MAX_UPLOAD_BYTES default.
-const MAX_UPLOAD = 5_000_000
 
 type Proof = { id: string; mime: string; previewUrl: string }
 

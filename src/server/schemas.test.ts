@@ -6,6 +6,8 @@ import {
   updateMeSchema,
   createContactSchema,
   addContactsByUsernameSchema,
+  createFeedbackSchema,
+  updateFeedbackSchema,
 } from './schemas'
 
 const P1 = '11111111-1111-4111-8111-111111111111'
@@ -218,5 +220,93 @@ describe('addContactsByUsernameSchema', () => {
 
   it('rejects an overly long string', () => {
     expect(addContactsByUsernameSchema.safeParse({ usernames: 'a'.repeat(501) }).success).toBe(false)
+  })
+})
+
+describe('createFeedbackSchema', () => {
+  const context = {
+    screen: 'bill_detail',
+    buildId: '0.1.0+64070b7',
+    platform: 'ios',
+    tgVersion: '8.0',
+    language: 'ru',
+  }
+  const shot = (isAutoCapture = false) => ({
+    attachmentId: P1,
+    mime: 'image/jpeg',
+    isAutoCapture,
+  })
+
+  it('accepts a minimal submission (attachments default to [])', () => {
+    const parsed = createFeedbackSchema.parse({
+      category: 'bug',
+      message: 'Broken total',
+      context,
+    })
+    expect(parsed.attachments).toEqual([])
+  })
+
+  it('accepts attachments with at most one auto-capture', () => {
+    expect(
+      createFeedbackSchema.safeParse({
+        category: 'suggestion',
+        message: 'Add dark mode',
+        attachments: [shot(true), shot()],
+        context,
+      }).success
+    ).toBe(true)
+  })
+
+  it('rejects an empty message and overlong message', () => {
+    expect(
+      createFeedbackSchema.safeParse({ category: 'bug', message: '   ', context }).success
+    ).toBe(false)
+    expect(
+      createFeedbackSchema.safeParse({ category: 'bug', message: 'x'.repeat(2001), context })
+        .success
+    ).toBe(false)
+  })
+
+  it('rejects a bad category, bad mime, and more than 5 attachments', () => {
+    expect(
+      createFeedbackSchema.safeParse({ category: 'praise', message: 'hi', context }).success
+    ).toBe(false)
+    expect(
+      createFeedbackSchema.safeParse({
+        category: 'bug',
+        message: 'hi',
+        attachments: [{ attachmentId: P1, mime: 'image/gif' }],
+        context,
+      }).success
+    ).toBe(false)
+    expect(
+      createFeedbackSchema.safeParse({
+        category: 'bug',
+        message: 'hi',
+        attachments: Array.from({ length: 6 }, () => shot()),
+        context,
+      }).success
+    ).toBe(false)
+  })
+
+  it('rejects two auto-captures', () => {
+    expect(
+      createFeedbackSchema.safeParse({
+        category: 'bug',
+        message: 'hi',
+        attachments: [shot(true), shot(true)],
+        context,
+      }).success
+    ).toBe(false)
+  })
+})
+
+describe('updateFeedbackSchema', () => {
+  it('accepts only the known statuses', () => {
+    expect(updateFeedbackSchema.safeParse({ status: 'open' }).success).toBe(true)
+    expect(updateFeedbackSchema.safeParse({ status: 'in_progress' }).success).toBe(true)
+    expect(updateFeedbackSchema.safeParse({ status: 'resolved' }).success).toBe(true)
+    expect(updateFeedbackSchema.safeParse({ status: 'closed' }).success).toBe(false)
+    expect(updateFeedbackSchema.safeParse({}).success).toBe(false)
   })
 })

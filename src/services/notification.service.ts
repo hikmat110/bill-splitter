@@ -261,6 +261,96 @@ export async function notifyParticipantDisputed(
     .catch(() => undefined)
 }
 
+// ─── feedback → admin DMs ─────────────────────────────────────────────────────
+
+/** Telegram photo-caption hard limit. */
+const CAPTION_MAX = 1024
+
+const FEEDBACK_HEADERS: Record<string, string> = {
+  bug: '🐞 Bug report',
+  suggestion: '💡 Suggestion',
+  other: '💬 Feedback',
+}
+
+export interface FeedbackCaptionInput {
+  category: string
+  message: string
+  screen: string
+  buildId: string
+  platform: string
+  tgVersion: string
+  language: string
+  reporter: {
+    first_name: string
+    last_name: string | null
+    username: string | null
+    telegram_id: bigint
+  }
+  attachmentCount: number
+}
+
+/**
+ * Compose the admin DM for a feedback submission. Plain text (sent without
+ * parse_mode — the message is user input), fits Telegram's 1024-char photo
+ * caption by truncating the message portion; the admin screen has the full text.
+ */
+export function buildFeedbackCaption(input: FeedbackCaptionInput): string {
+  const r = input.reporter
+  const name = [r.first_name, r.last_name].filter(Boolean).join(' ')
+  const from = [name, r.username ? `@${r.username}` : null, `id ${r.telegram_id}`]
+    .filter(Boolean)
+    .join(' · ')
+
+  const head = `${FEEDBACK_HEADERS[input.category] ?? FEEDBACK_HEADERS.other}\nFrom: ${from}`
+  const contextLine = [
+    input.screen,
+    input.buildId,
+    `${input.platform} ${input.tgVersion}`.trim(),
+    input.language,
+  ]
+    .filter(Boolean)
+    .join(' · ')
+  const tail =
+    contextLine +
+    (input.attachmentCount > 1
+      ? `\n+${input.attachmentCount - 1} more photo(s) in the admin screen`
+      : '')
+
+  const overhead = head.length + tail.length + 4 // the two "\n\n" separators
+  const room = Math.max(0, CAPTION_MAX - overhead)
+  const message =
+    input.message.length > room ? input.message.slice(0, Math.max(0, room - 1)) + '…' : input.message
+
+  return `${head}\n\n${message}\n\n${tail}`
+}
+
+/**
+ * DM every admin in ADMIN_TELEGRAM_IDS about a new feedback — as a photo when a
+ * screenshot exists (auto-capture preferred). Best-effort per admin; an empty
+ * admin list is a no-op (the feedback is already stored).
+ */
+export async function notifyAdminsOfFeedback(
+  bot: Bot<MyContext>,
+  input: FeedbackCaptionInput & {
+    attachments: { attachment_id: string; mime: string; is_auto_capture: boolean }[]
+  }
+): Promise<void> {
+  const caption = buildFeedbackCaption(input)
+  const photo =
+    input.attachments.find((a) => a.is_auto_capture) ?? input.attachments[0] ?? null
+
+  for (const adminId of config.ADMIN_TELEGRAM_IDS) {
+    await (photo
+      ? bot.api.sendPhoto(
+          adminId,
+          new InputFile(attachmentPath(photo.attachment_id, photo.mime)),
+          { caption }
+        )
+      : bot.api.sendMessage(adminId, caption)
+    ).catch(() => undefined)
+  }
+}
+
 export async function sendReminder(
   bot: Bot<MyContext>,
   participantId: string

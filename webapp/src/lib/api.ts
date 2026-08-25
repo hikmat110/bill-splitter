@@ -6,6 +6,11 @@ import type {
   BillDetail,
   BillsResponse,
   CreateBillPayload,
+  CreateFeedbackPayload,
+  FeedbackCategory,
+  FeedbackItem,
+  FeedbackListResponse,
+  FeedbackStatus,
   ScannedReceipt,
   UpdateBillPayload,
   UserCard,
@@ -13,6 +18,9 @@ import type {
 } from './types'
 
 const BASE = '/api'
+
+/** Matches the server's MAX_UPLOAD_BYTES default — checked client-side for fast feedback. */
+export const MAX_UPLOAD = 5_000_000
 
 export class ApiError extends Error {
   status: number
@@ -138,4 +146,22 @@ export const api = {
       method: 'POST',
       ...(proof ? { body: proof } : {}),
     }),
+  createFeedback: (body: CreateFeedbackPayload) =>
+    request<{ id: string }>('/feedback', { method: 'POST', body }),
+  feedbackList: (opts: {
+    status?: FeedbackStatus
+    category?: FeedbackCategory
+    offset?: number
+    limit?: number
+  }) => {
+    const params = new URLSearchParams()
+    if (opts.status) params.set('status', opts.status)
+    if (opts.category) params.set('category', opts.category)
+    if (opts.offset) params.set('offset', String(opts.offset))
+    if (opts.limit) params.set('limit', String(opts.limit))
+    const qs = params.toString()
+    return request<FeedbackListResponse>(`/feedback${qs ? `?${qs}` : ''}`)
+  },
+  updateFeedbackStatus: (id: string, status: FeedbackStatus) =>
+    request<FeedbackItem>(`/feedback/${id}`, { method: 'PATCH', body: { status } }),
 }

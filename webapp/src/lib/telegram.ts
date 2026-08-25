@@ -62,6 +62,16 @@ export function isInTelegram(): boolean {
   return !!wa()?.initData
 }
 
+/** Telegram client platform ('ios', 'android', 'tdesktop'…); 'browser' outside Telegram. */
+export function getPlatform(): string {
+  return wa()?.platform ?? 'browser'
+}
+
+/** Telegram Bot API version of the client; '' outside Telegram. */
+export function getTgVersion(): string {
+  return wa()?.version ?? ''
+}
+
 /** Open a t.me link inside Telegram (e.g. a bot deep link). No-op in a browser. */
 export function openTelegramLink(url: string): void {
   wa()?.openTelegramLink(url)
