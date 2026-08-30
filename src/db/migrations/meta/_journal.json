@@ -50,6 +50,13 @@
       "when": 1787667078719,
       "tag": "0006_wild_leo",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788098294873,
+      "tag": "0007_gifted_blue_blade",
+      "breakpoints": true
     }
   ]
 }

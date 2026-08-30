@@ -80,7 +80,9 @@ import {
   StorageError,
 } from '../services/storage.service'
 import type { AllowedMime } from '../services/storage.service'
-import { scanReceipt, ReceiptScanError } from '../services/receipt-scan.service'
+import { ReceiptScanError } from '../services/receipt-scan.service'
+import { scanReceiptForUser, ScanLimitError } from '../services/scan-quota.service'
+import { retryAfterSeconds } from '../utils/scan-quota'
 import { config } from '../config'
 import { authenticate } from './auth'
 import { json, error } from './json'
@@ -256,7 +258,7 @@ export async function handleApi(
 
     // POST /api/receipts/scan — extract items from an uploaded receipt via Gemini
     if (seg[0] === 'receipts' && seg[1] === 'scan' && seg.length === 2 && method === 'POST') {
-      return await postReceiptScan(req)
+      return await postReceiptScan(req, user)
     }
 
     // GET /api/files/:id — stream a stored image (auth + ownership enforced)
@@ -658,17 +660,32 @@ async function postAttachment(req: Request): Promise<Response> {
   }
 }
 
-async function postReceiptScan(req: Request): Promise<Response> {
+async function postReceiptScan(req: Request, user: User): Promise<Response> {
   const { attachmentId, mime } = scanReceiptSchema.parse(await req.json())
   // Read the image the caller just uploaded. Like postAttachment, this trusts the
   // opaque server-generated uuid rather than binding files to a user — there is no
   // referencing bill yet at scan time (matches the pre-save receipt flow).
+  // Resolved before the quota check so a missing image never costs a scan.
   const found = await readAttachment(attachmentId, mime)
   if (!found) return error(404, 'Receipt image not found')
   const bytes = new Uint8Array(await found.file.arrayBuffer())
   try {
-    return json(await scanReceipt(bytes, mime as AllowedMime))
+    return json(await scanReceiptForUser(user.id, bytes, mime as AllowedMime))
   } catch (e) {
+    if (e instanceof ScanLimitError) {
+      // Sibling keys on the error envelope, like the 409 blockingBills case: the
+      // client reads them from ApiError.data to render "next scan at …".
+      return json(
+        {
+          error: e.message,
+          code: e.code,
+          retryAt: e.retryAt.toISOString(),
+          limit: e.limit,
+          windowHours: e.windowHours,
+        },
+        { status: 429, headers: { 'retry-after': String(retryAfterSeconds(e.retryAt, new Date())) } }
+      )
+    }
     if (e instanceof ReceiptScanError) {
       if (e.code === 'not_configured') return error(503, 'Receipt scanning is not configured')
       return error(

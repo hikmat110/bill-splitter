@@ -220,6 +220,18 @@ export interface ScannedReceiptItem {
   quantity: number
 }
 
+/** 429 body from POST /api/receipts/scan (surfaced as ApiError.data). */
+export interface ScanLimitBody {
+  error: string
+  code: 'user_limit' | 'global_limit'
+  /** ISO instant at which a scan is next admitted. */
+  retryAt: string
+  /** The limit that was hit (per-user count, or the global daily cap). */
+  limit: number
+  /** Window the limit applies to, in hours. */
+  windowHours: number
+}
+
 /** Response from POST /api/receipts/scan — extracted receipt data to prefill a draft. */
 export interface ScannedReceipt {
   items: ScannedReceiptItem[]

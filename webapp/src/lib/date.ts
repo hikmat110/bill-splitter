@@ -16,3 +16,15 @@ export function prettyDate(t: T, lang: string, iso: string): string {
   if (diff > 1 && diff < 7) return t('common.days_ago', { n: diff })
   return d.toLocaleDateString(DATE_LOCALE[lang] ?? 'en-US', { month: 'short', day: 'numeric' })
 }
+
+/** Local wall-clock time for a near-future instant: "14:05" if it falls on
+ *  today, else "16 Jul, 14:05". Device zone = the user's (Tashkent). */
+export function prettyTime(lang: string, iso: string): string {
+  const d = new Date(iso)
+  const sameDay = d.toDateString() === new Date().toDateString()
+  return d.toLocaleString(DATE_LOCALE[lang] ?? 'en-US', {
+    ...(sameDay ? {} : { month: 'short', day: 'numeric' }),
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}

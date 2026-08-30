@@ -31,6 +31,15 @@ const schema = z.object({
     .default('https://generativelanguage.googleapis.com'),
   // Shared secret the relay checks (sent as `x-relay-secret`). Unset = not sent.
   GEMINI_RELAY_SECRET: z.string().min(1).optional(),
+  // Receipt-scan limits (enforced in scan-quota.service). Per user: at most this
+  // many scans in any rolling SCAN_RATE_LIMIT_WINDOW_HOURS. 0 = no per-user limit.
+  // Note: z.coerce turns an empty `KEY=` line into 0 — comment out for the default.
+  SCAN_RATE_LIMIT_PER_USER: z.coerce.number().int().nonnegative().default(6),
+  SCAN_RATE_LIMIT_WINDOW_HOURS: z.coerce.number().positive().default(24),
+  // All users combined per Gemini free-tier day, which resets at midnight
+  // America/Los_Angeles. Google's free tier is 500 RPD; the default leaves
+  // headroom for concurrent over-admission. 0 = disabled.
+  SCAN_DAILY_GLOBAL_LIMIT: z.coerce.number().int().nonnegative().default(450),
   // 32-byte key for encrypting card numbers at rest (AES-256-GCM). Required —
   // an optional key would silently keep writing plaintext. Losing it makes all
   // encrypted cards unreadable, so back it up outside the server and DB.

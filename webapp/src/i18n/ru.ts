@@ -83,6 +83,10 @@ export const ru: Dict = {
     scan_failed: 'Не удалось распознать чек',
     scan_empty: 'На фото не найдено позиций — попробуйте снимок чётче',
     scan_not_configured: 'Сканирование сейчас недоступно',
+    scan_rate_limited:
+      'Лимит сканирования исчерпан ({{limit}} за {{hours}} ч). Следующее сканирование доступно с {{time}}',
+    scan_global_limited:
+      'Сканирование сейчас недоступно — дневной лимит исчерпан. Снова доступно с {{time}}',
     subtotal: 'Блюда {{amount}}',
     service: 'Сервис {{amount}}',
     tip_summary: 'Чаевые {{amount}}',

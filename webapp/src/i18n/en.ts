@@ -85,6 +85,10 @@ export const en = {
     scan_failed: "Couldn't read the receipt",
     scan_empty: 'No items found on this photo — try a clearer shot',
     scan_not_configured: "Scanning isn't available right now",
+    scan_rate_limited:
+      'Scan limit reached ({{limit}} per {{hours}} h). Next scan available at {{time}}',
+    scan_global_limited:
+      "Scanning is unavailable right now — today's quota is used up. Available again at {{time}}",
     subtotal: 'Subtotal {{amount}}',
     service: 'Service {{amount}}',
     tip_summary: 'Tip {{amount}}',

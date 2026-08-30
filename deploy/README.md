@@ -138,9 +138,27 @@ items. Gated by `GEMINI_API_KEY` in the server `.env`; unset = the endpoint answ
 after mid-2026 (Google answers 404).
 
 **Quota.** One scan = one request, regardless of receipt length. The free tier is
-500 requests/day, resetting at midnight Pacific = **12:00 Tashkent**; failed and
-test requests count. Your live numbers: https://aistudio.google.com/rate-limit.
-Paid tier costs ~$0.001 per scan (input $0.30/M, output $2.50/M tokens).
+500 requests/day, resetting at midnight Pacific = **12:00 Tashkent** (13:00 while
+LA is on PST, roughly November–March); failed and test requests count. Your live
+numbers: https://aistudio.google.com/rate-limit. Paid tier costs ~$0.001 per scan
+(input $0.30/M, output $2.50/M tokens).
+
+The app enforces its own limits so one afternoon cannot burn the day:
+`SCAN_RATE_LIMIT_PER_USER` scans per user in any rolling
+`SCAN_RATE_LIMIT_WINDOW_HOURS` (default 6 / 24 h — an anomaly guard, a normal
+user needs 1–3), and `SCAN_DAILY_GLOBAL_LIMIT` across everyone per Pacific day
+(default 450, leaving headroom under 500). `0` disables either. Both are read at
+boot, so a change is `.env` + `pm2 restart bill-splitter`. A hit answers `429`
+with `code: user_limit | global_limit` and `retryAt`; the Mini App shows that
+time in the user's local zone. Every attempt is a row in `scan_events`, inserted
+before the Gemini call and tagged afterwards: `ok` / `parse` count (Google
+answered, its RPD was consumed — parse failures count like Google counts them),
+`upstream` does not (timeout / non-2xx / not configured). Usage per Pacific day:
+
+```sql
+select date(created_at at time zone 'America/Los_Angeles') as day, status, count(*)
+from scan_events group by 1, 2 order by 1 desc, 2;
+```
 
 **Diagnosing failures.** The API turns *every* Gemini failure into a 502, so the
 status alone says nothing. The real reason is one log line:

@@ -13,7 +13,8 @@ import { api, ApiError, MAX_UPLOAD } from '../lib/api'
 import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
 import { cardLabel, defaultCardId } from '../lib/cards'
-import type { UserCard } from '../lib/types'
+import type { ScanLimitBody, UserCard } from '../lib/types'
+import { prettyTime } from '../lib/date'
 import { haptic, showAlert } from '../lib/telegram'
 import { useT } from '../i18n'
 
@@ -50,7 +51,7 @@ export function SplitScreen({
    *  prior experience — received bills arrive passively. */
   hasCreatedBills: boolean
 }) {
-  const { t } = useT()
+  const { t, lang } = useT()
   const toast = useToast()
   const scanFileRef = useRef<HTMLInputElement>(null)
   const [scanning, setScanning] = useState(false)
@@ -177,8 +178,23 @@ export function SplitScreen({
         mismatch ? 'ti-alert-triangle' : 'ti-sparkles'
       )
     } catch (e) {
-      haptic('error')
       const status = e instanceof ApiError ? e.status : 0
+      if (status === 429) {
+        // Rate-limited: an expected condition, not a failure — tell the user
+        // when the next scan is admitted (server sends the instant; format locally).
+        const d = (e instanceof ApiError ? e.data : null) as Partial<ScanLimitBody> | null
+        const time = d?.retryAt ? prettyTime(lang, d.retryAt) : '…'
+        haptic('warning')
+        showAlert(
+          t(d?.code === 'global_limit' ? 'split.scan_global_limited' : 'split.scan_rate_limited', {
+            time,
+            limit: d?.limit ?? '',
+            hours: d?.windowHours ?? '',
+          })
+        )
+        return
+      }
+      haptic('error')
       const friendly = t(status === 503 ? 'split.scan_not_configured' : 'split.scan_failed')
       // Surface the real reason via a native alert (the toast wasn't showing for
       // some users). Append the status + server message so failures are diagnosable.

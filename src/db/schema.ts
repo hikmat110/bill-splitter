@@ -8,6 +8,7 @@ import {
   boolean,
   timestamp,
   unique,
+  index,
   uniqueIndex,
   primaryKey,
 } from 'drizzle-orm/pg-core'
@@ -346,6 +347,44 @@ export const feedbackAttachmentsRelations = relations(
   })
 )
 
+// ─── scan_events ─────────────────────────────────────────────────────────────
+
+// One row per receipt-scan attempt, inserted BEFORE the Gemini call so that
+// concurrent requests are counted. Backs the per-user sliding window and the
+// global daily cap in scan-quota.service. `status` is 'pending' while the call
+// is in flight, then 'ok' | 'parse' (Google answered → its RPD was consumed →
+// counts) or 'upstream' (network / timeout / non-2xx / not configured → no RPD
+// consumed → excluded from counts). Rows are never deleted: they double as
+// usage analytics (see deploy/README.md "Quota").
+export const scanEvents = pgTable(
+  'scan_events',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    status: text('status').notNull().default('pending'), // 'pending' | 'ok' | 'parse' | 'upstream'
+    model: text('model').notNull(),
+    duration_ms: integer('duration_ms'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index('scan_events_user_created_idx').on(t.user_id, t.created_at),
+    index('scan_events_created_idx').on(t.created_at),
+  ]
+)
+
+export const scanEventsRelations = relations(scanEvents, ({ one }) => ({
+  user: one(users, {
+    fields: [scanEvents.user_id],
+    references: [users.id],
+  }),
+}))
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect
@@ -357,3 +396,4 @@ export type BillItem = typeof billItems.$inferSelect
 export type BillParticipant = typeof billParticipants.$inferSelect
 export type Feedback = typeof feedback.$inferSelect
 export type FeedbackAttachment = typeof feedbackAttachments.$inferSelect
+export type ScanEvent = typeof scanEvents.$inferSelect

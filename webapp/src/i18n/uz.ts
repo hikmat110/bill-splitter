@@ -83,6 +83,10 @@ export const uz: Dict = {
     scan_failed: 'Chekni oʻqib boʻlmadi',
     scan_empty: 'Bu rasmda pozitsiyalar topilmadi — aniqroq suratga oling',
     scan_not_configured: 'Skanlash hozircha mavjud emas',
+    scan_rate_limited:
+      'Skanlash limiti tugadi ({{hours}} soatda {{limit}} ta). Keyingi skanlash {{time}} dan boshlab mavjud',
+    scan_global_limited:
+      'Skanlash hozircha mavjud emas — kunlik limit tugadi. {{time}} dan boshlab yana mavjud boʻladi',
     subtotal: 'Taomlar {{amount}}',
     service: 'Xizmat {{amount}}',
     tip_summary: 'Choy puli {{amount}}',
