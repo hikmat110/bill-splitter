@@ -3,6 +3,7 @@ import type { ReactNode } from 'react'
 import { Avatar } from '../components/Avatar'
 import { AuthImage } from '../components/AuthImage'
 import { Money } from '../components/Money'
+import { MoneyInput } from '../components/MoneyInput'
 import { SecTitle } from '../components/common'
 import { SnapSlider } from '../components/SnapSlider'
 import { useToast } from '../components/Toast'
@@ -511,14 +512,12 @@ export function SplitScreen({
             }}
           />
           {tipCustom && (
-            <input
-              className="inp"
-              type="number"
-              inputMode="numeric"
-              value={draft.tip || ''}
+            <MoneyInput
+              integer
+              value={draft.tip}
               placeholder="0"
               autoFocus
-              onChange={(e) => patch({ tip: Math.max(0, Math.floor(Number(e.target.value) || 0)) })}
+              onChange={(tip) => patch({ tip })}
               style={{ textAlign: 'right', fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
             />
           )}
@@ -876,18 +875,12 @@ function ItemCard({
           onChange={(e) => onPatch({ name: e.target.value })}
           style={{ flex: 1, fontWeight: 700, fontSize: 15 }}
         />
-        <input
-          className="inp"
-          type="number"
-          inputMode="decimal"
-          step="0.01"
-          value={item.price || ''}
+        <MoneyInput
+          value={item.price}
           placeholder="0"
           title={qty > 1 ? t('split.price_per_unit') : undefined}
-          onChange={(e) =>
-            onPatch({ price: Math.max(0, Math.round((Number(e.target.value) || 0) * 100) / 100) })
-          }
-          style={{ width: 96, textAlign: 'right', fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
+          onChange={(price) => onPatch({ price })}
+          style={{ width: 108, textAlign: 'right', fontWeight: 700, fontSize: 15, padding: '8px 10px' }}
         />
         <i
           className="ti ti-trash"
@@ -915,7 +908,13 @@ function ItemCard({
         )}
       </div>
 
-      <div className="row" style={{ gap: 6, marginTop: 11, flexWrap: 'wrap' }}>
+      {/* who shares this item — 36px circles inside 44px hit boxes (4px padding),
+          so neighbours sit 14px apart and a tap between two lands on the nearer
+          one. The negative margins cancel the padding so the row stays flush. */}
+      <div
+        className="row"
+        style={{ gap: 6, marginTop: 7, marginLeft: -4, marginRight: -4, flexWrap: 'wrap' }}
+      >
         {participants.map((id) => {
           const on = item.who.some((w) => w.id === id)
           return (
@@ -927,20 +926,21 @@ function ItemCard({
                 border: 'none',
                 background: 'none',
                 cursor: 'pointer',
-                padding: 0,
+                padding: 4,
                 position: 'relative',
+                touchAction: 'manipulation',
                 opacity: on ? 1 : 0.32,
                 filter: on ? 'none' : 'grayscale(.6)',
                 transition: 'opacity .15s, filter .15s',
               }}
             >
-              <Avatar id={id} name={nameById(id)} size={32} />
+              <Avatar id={id} name={nameById(id)} size={36} />
               {on && (
                 <span
                   style={{
                     position: 'absolute',
-                    right: -1,
-                    bottom: -1,
+                    right: 3,
+                    bottom: 3,
                     width: 14,
                     height: 14,
                     borderRadius: 999,
