@@ -17,8 +17,20 @@ const schema = z.object({
   // without it and POST /api/receipts/scan returns 503 when unset (so a
   // privacy-sensitive deploy can simply leave scanning disabled).
   GEMINI_API_KEY: z.string().min(1).optional(),
-  // Gemini model used for receipt scanning (free-tier Flash-Lite by default).
-  GEMINI_MODEL: z.string().default('gemini-2.5-flash-lite'),
+  // Gemini model used for receipt scanning. 2.5 Flash-Lite is closed to
+  // projects created after mid-2026 (Google answers 404), hence 3.5.
+  GEMINI_MODEL: z.string().default('gemini-3.5-flash-lite'),
+  // Origin the Gemini request is sent to — Google directly by default. Point it
+  // at the relay in deploy/cloudflare/gemini-relay.js when Google rejects this
+  // server's IP ("User location is not supported"); see deploy/README.md.
+  // Origin only: the app appends /v1beta/models/<model>:generateContent.
+  GEMINI_BASE_URL: z
+    .string()
+    .url()
+    .transform((s) => s.replace(/\/+$/, ''))
+    .default('https://generativelanguage.googleapis.com'),
+  // Shared secret the relay checks (sent as `x-relay-secret`). Unset = not sent.
+  GEMINI_RELAY_SECRET: z.string().min(1).optional(),
   // 32-byte key for encrypting card numbers at rest (AES-256-GCM). Required —
   // an optional key would silently keep writing plaintext. Losing it makes all
   // encrypted cards unreadable, so back it up outside the server and DB.

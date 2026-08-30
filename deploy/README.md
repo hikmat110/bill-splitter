@@ -128,6 +128,83 @@ backfill runs, so the rollout is zero-downtime — but the **order is load-beari
 3. `bun run db:encrypt-cards --rotate` — re-encrypts every row under the new key.
 4. Remove `CARD_ENCRYPTION_KEY_PREVIOUS`, restart again.
 
+## Gemini receipt scanning
+
+"Scan receipt" in the Mini App uploads the photo to this server, which sends it to
+Google's Gemini API (`src/services/receipt-scan.service.ts`) and returns the line
+items. Gated by `GEMINI_API_KEY` in the server `.env`; unset = the endpoint answers
+503 and the button just fails cleanly. Model is `GEMINI_MODEL`, default
+`gemini-3.5-flash-lite` — `gemini-2.5-flash-lite` is closed to projects created
+after mid-2026 (Google answers 404).
+
+**Quota.** One scan = one request, regardless of receipt length. The free tier is
+500 requests/day, resetting at midnight Pacific = **12:00 Tashkent**; failed and
+test requests count. Your live numbers: https://aistudio.google.com/rate-limit.
+Paid tier costs ~$0.001 per scan (input $0.30/M, output $2.50/M tokens).
+
+**Diagnosing failures.** The API turns *every* Gemini failure into a 502, so the
+status alone says nothing. The real reason is one log line:
+
+```
+pm2 logs bill-splitter --nostream --lines 300 | grep -E 'Gemini|Receipt scanned'
+```
+
+`Gemini returned an error status` carries Google's `status` and message —
+`429 … credits are depleted` (top up), `404 … no longer available` (model),
+`400 FAILED_PRECONDITION "User location is not supported"` (see below).
+
+### Relay: when Google rejects the server's IP
+
+`170.168.60.0/24` is a legacy ARIN block transferred to RIPE on 2025-06-30 and
+assigned to New Line Solutions (Tashkent) on 2025-09-26. Public geo databases have
+caught up; Google's has not — the free tier answers
+`User location is not supported for the API use` from this range while the same
+key works from any other Tashkent IP. Until Google's data is corrected, the Gemini
+call (and **only** that call — Telegram, Postgres, uploads are untouched) can go
+through a Cloudflare Worker whose egress Google accepts. The Worker is not a
+general proxy: one upstream host, one path prefix, POST only, shared secret
+required, stores and logs nothing. The API key stays in this server's `.env` and
+travels in the request header as before.
+
+Setup (≈5 minutes, free plan):
+
+1. Cloudflare dashboard → Workers & Pages → Create → *Start with Hello World* →
+   Edit code → paste `deploy/cloudflare/gemini-relay.js` → Deploy. Note the URL
+   (`https://<name>.<account>.workers.dev`).
+2. Worker → Settings → Variables and Secrets → add a **secret** `RELAY_SECRET`
+   with the output of `openssl rand -hex 32`.
+3. Prove it from the VPS before touching the app (replace the three values):
+
+   ```
+   S=<RELAY_SECRET>; KEY=<GEMINI_API_KEY>; W=https://<name>.<account>.workers.dev
+   BODY='{"contents":[{"parts":[{"text":"ping"}]}]}'
+   curl -s -X POST "$W/v1beta/models/gemini-3.5-flash-lite:generateContent" \
+     -H "x-relay-secret: $S" -H "x-goog-api-key: $KEY" \
+     -H 'content-type: application/json' -d "$BODY"          # → candidates JSON
+   curl -s -X POST "$W/v1beta/models/x:generateContent" -d "$BODY"   # → 403 relay: bad secret
+   ```
+
+4. Server `.env`:
+
+   ```
+   GEMINI_BASE_URL=https://<name>.<account>.workers.dev
+   GEMINI_RELAY_SECRET=<the same value as RELAY_SECRET>
+   ```
+
+   then `pm2 restart bill-splitter`, scan a receipt, and confirm `Receipt scanned`
+   appears in `pm2 logs`. A `403 relay: bad secret` in the log means the two
+   secrets differ.
+
+**Removing it** once Google accepts the IP again: delete the two `.env` lines,
+`pm2 restart bill-splitter`. The Worker can stay or be deleted; nothing else
+references it.
+
+**Permanent fix** (provider-side, slow): ask New Line Solutions to publish an
+RFC 8805 geofeed for `170.168.60.0/24` and submit it to Google, or file Google's
+IP-geolocation correction form quoting the range, AS49424, the RIPE `inetnum`
+created 2025-09-26, and the exact error above. Privacy note while the relay is
+on: receipt images transit Cloudflare on their way to Google.
+
 ## Day-2 operations
 
 **What's running?**

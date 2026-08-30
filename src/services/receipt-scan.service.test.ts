@@ -8,6 +8,10 @@ import { scanReceipt, ReceiptScanError } from './receipt-scan.service'
 beforeAll(() => {
   config.GEMINI_API_KEY = 'test-key'
   config.GEMINI_MODEL = 'gemini-test'
+  // Pin these too: `bun test` loads a developer's local .env, which may route
+  // through a relay.
+  config.GEMINI_BASE_URL = 'https://generativelanguage.googleapis.com'
+  config.GEMINI_RELAY_SECRET = undefined
 })
 
 const IMG = new Uint8Array([0xff, 0xd8, 0xff, 0xe0]) // bytes are opaque to the scanner
@@ -195,6 +199,51 @@ describe('scanReceipt', () => {
     expect(seenKey).toBe('test-key')
     expect(seenUrl).toContain('gemini-test:generateContent')
     expect(seenUrl).not.toContain('test-key')
+  })
+
+  test('talks to Google directly by default and sends no relay header', async () => {
+    let seenUrl = ''
+    let seenRelay: string | null = null
+    mockFetch(async (url, init) => {
+      seenUrl = String(url)
+      seenRelay = new Headers(init.headers).get('x-relay-secret')
+      return geminiResponse(JSON.stringify({ items: [], serviceAmount: 0 }))
+    })
+
+    await scanReceipt(IMG, 'image/jpeg')
+    expect(seenUrl).toBe(
+      'https://generativelanguage.googleapis.com/v1beta/models/gemini-test:generateContent'
+    )
+    expect(seenRelay).toBeNull()
+  })
+
+  test('routes via GEMINI_BASE_URL with the relay secret when configured', async () => {
+    const orig = { base: config.GEMINI_BASE_URL, secret: config.GEMINI_RELAY_SECRET }
+    config.GEMINI_BASE_URL = 'https://relay.example.workers.dev'
+    config.GEMINI_RELAY_SECRET = 's3cret'
+    try {
+      let seenUrl = ''
+      let seenRelay = ''
+      let seenKey = ''
+      mockFetch(async (url, init) => {
+        seenUrl = String(url)
+        const h = new Headers(init.headers)
+        seenRelay = h.get('x-relay-secret') ?? ''
+        seenKey = h.get('x-goog-api-key') ?? ''
+        return geminiResponse(JSON.stringify({ items: [], serviceAmount: 0 }))
+      })
+
+      await scanReceipt(IMG, 'image/jpeg')
+      expect(seenUrl).toBe(
+        'https://relay.example.workers.dev/v1beta/models/gemini-test:generateContent'
+      )
+      expect(seenRelay).toBe('s3cret')
+      // The key still travels with the request; the relay holds none of its own.
+      expect(seenKey).toBe('test-key')
+    } finally {
+      config.GEMINI_BASE_URL = orig.base
+      config.GEMINI_RELAY_SECRET = orig.secret
+    }
   })
 
   test('throws not_configured when the API key is missing', async () => {

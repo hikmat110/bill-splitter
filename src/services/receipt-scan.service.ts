@@ -5,7 +5,10 @@
 //
 // Privacy note: the image is sent to Google's Gemini API. The whole feature is
 // gated by config.GEMINI_API_KEY; when unset, scanReceipt throws 'not_configured'
-// and the API surfaces a 503 (see src/server/routes.ts).
+// and the API surfaces a 503 (see src/server/routes.ts). When GEMINI_BASE_URL
+// points at the relay in deploy/cloudflare/gemini-relay.js, the same request goes
+// via Cloudflare to Google unchanged — the key travels in the header either way,
+// and the relay stores nothing.
 
 import { z } from 'zod'
 import { config } from '../config'
@@ -17,7 +20,9 @@ const log = rootLogger.child({ module: 'receipt-scan' })
 // Gemini is a slow external call; cap it well under the server's idleTimeout (120s)
 // and Telegram's webview patience.
 const REQUEST_TIMEOUT_MS = 30_000
-const GEMINI_BASE = 'https://generativelanguage.googleapis.com/v1beta/models'
+// Path under whichever origin config.GEMINI_BASE_URL points at (Google, or the
+// relay — which forwards it to Google untouched).
+const GEMINI_PATH = '/v1beta/models'
 
 export interface ScannedItem {
   name: string
@@ -201,16 +206,20 @@ export async function scanReceipt(
     },
   })
 
+  const headers: Record<string, string> = {
+    'content-type': 'application/json',
+    'x-goog-api-key': apiKey,
+  }
+  if (config.GEMINI_RELAY_SECRET) headers['x-relay-secret'] = config.GEMINI_RELAY_SECRET
+
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS)
   let res: Response
   try {
-    res = await fetch(`${GEMINI_BASE}/${config.GEMINI_MODEL}:generateContent`, {
-      method: 'POST',
-      headers: { 'content-type': 'application/json', 'x-goog-api-key': apiKey },
-      body: requestBody,
-      signal: controller.signal,
-    })
+    res = await fetch(
+      `${config.GEMINI_BASE_URL}${GEMINI_PATH}/${config.GEMINI_MODEL}:generateContent`,
+      { method: 'POST', headers, body: requestBody, signal: controller.signal }
+    )
   } catch (e) {
     const aborted = e instanceof Error && e.name === 'AbortError'
     log.error({ err: e, aborted }, 'Gemini request failed')
