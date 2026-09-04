@@ -242,3 +242,113 @@ export interface ScannedReceipt {
   /** Printed grand total — a soft sanity hint, not authoritative. */
   total: number | null
 }
+
+// ─── admin ───────────────────────────────────────────────────────────────────
+// Mirrors src/server/admin-routes.ts. All routes are admin-only (me.isAdmin).
+
+export interface ScanWindow {
+  ok: number
+  parse: number
+  upstream: number
+  pending: number
+  /** Mean Gemini round-trip over successful scans; null when there were none. */
+  avgMs: number | null
+}
+
+export interface WeekBucket {
+  /** Monday of the week, YYYY-MM-DD in Asia/Tashkent. */
+  week: string
+  count: number
+}
+
+export interface AdminStats {
+  generatedAt: string
+  overview: {
+    users: {
+      total: number
+      new7d: number
+      new30d: number
+      active24h: number
+      active7d: number
+      active30d: number
+    }
+    languages: { uz: number; ru: number; en: number; other: number }
+    bills: { total: number; sent: number; settled: number; volume: number }
+    participants: { pending: number; marked_paid: number; confirmed: number; disputed: number }
+  }
+  scans: {
+    configured: boolean
+    model: string
+    relay: boolean
+    /** 0 = no global cap. */
+    dailyLimit: number
+    /** Scans against today's global quota (the Gemini quota day, not a local day). */
+    today: number
+    resetsAt: string
+    last24h: ScanWindow
+    last7d: ScanWindow
+  }
+  /** 12 buckets, oldest first; the last one is the current (partial) week. */
+  trends: { signups: WeekBucket[]; bills: WeekBucket[] }
+  feedback: { open: number }
+}
+
+export interface ActorRef {
+  id: string
+  firstName: string
+  username: string | null
+}
+
+export type ScanOutcome = 'ok' | 'parse' | 'upstream' | 'pending'
+
+export type AdminActivityItem =
+  | { kind: 'signup'; at: string; user: ActorRef }
+  | {
+      kind: 'bill'
+      at: string
+      user: ActorRef
+      billId: string
+      title: string
+      total: number
+      status: BillStatus
+    }
+  | { kind: 'scan'; at: string; user: ActorRef; status: ScanOutcome; durationMs: number | null }
+  | {
+      kind: 'feedback'
+      at: string
+      user: ActorRef
+      feedbackId: string
+      category: FeedbackCategory
+      status: FeedbackStatus
+    }
+
+export interface AdminUserSummary {
+  id: string
+  telegramId: number
+  firstName: string
+  lastName: string | null
+  username: string | null
+  phone: string
+  languageCode: string
+  createdAt: string
+  /** Null until the user's first request after the column shipped. */
+  lastSeenAt: string | null
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  counts: {
+    billsCreated: number
+    billsReceived: number
+    scansUsed: number
+    cards: number
+    feedback: number
+  }
+}
+
+export type AdminSendFailureCode = 'blocked' | 'chat_not_found' | 'rate_limited' | 'send_failed'
+
+/** Error body of POST /api/admin/users/:id/message (surfaced as ApiError.data). */
+export interface AdminMessageErrorBody {
+  error: string
+  code: AdminSendFailureCode
+}

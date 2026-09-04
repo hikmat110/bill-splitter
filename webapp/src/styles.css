@@ -16,6 +16,14 @@
   --pad-row: calc(13px * var(--dens));
   --gap: calc(11px * var(--dens));
   --gap-sm: calc(7px * var(--dens));
+
+  /* Telegram fullscreen puts the app under the status bar and the floating
+     close/collapse controls. Both insets are 0 outside fullscreen; env()
+     covers the plain-browser case. */
+  --inset-top: calc(
+    var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px))
+    + var(--tg-content-safe-area-inset-top, 0px)
+  );
 }
 
 /* ---- LIGHT (warm cream) ---- */
@@ -90,6 +98,8 @@ body {
   display: flex; flex-direction: column;
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   overflow: hidden;
+  /* tab screens have no top bar, so the shell itself clears the insets */
+  padding-top: calc(8px + var(--inset-top));
   transition: background .35s ease, color .35s ease;
 }
 .tg-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
@@ -257,16 +267,11 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
   to { transform: none; opacity: 1; }
 }
 
-/* top bar — in Telegram fullscreen the app sits under the status bar and the
-   floating close/collapse controls, so clear both Telegram-provided insets
-   (they're 0 outside fullscreen; env() covers the plain-browser case). */
+/* overlay top bar (bill detail, feedback inbox) — overlays are absolutely
+   positioned over the shell's padding, so they clear the insets themselves */
 .topbar {
   display: flex; align-items: center; gap: 12px;
-  padding:
-    calc(8px
-      + var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px))
-      + var(--tg-content-safe-area-inset-top, 0px))
-    14px 12px;
+  padding: calc(8px + var(--inset-top)) 14px 12px;
   flex-shrink: 0;
 }
 
@@ -343,3 +348,44 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
 .spin { display: inline-block; animation: spin .8s linear infinite; }
 
 @media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ---- admin tab ---- */
+/* stat tile: label + value (+ optional sub-line); proportional figures on purpose */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 12px 14px; box-shadow: var(--shadow-sm); min-width: 0;
+}
+.stat-lbl { font-size: 11.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .5px; line-height: 1.3; }
+.stat-val { font-size: 22px; font-weight: 800; letter-spacing: -.4px; margin-top: 4px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-sub { font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 3px; }
+
+/* meter — usage against a cap; the fill carries severity, the track is a lighter step */
+.meter { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.meter > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .5s cubic-bezier(.32,.72,0,1); }
+.meter > i.warn { background: var(--warn); }
+.meter > i.full { background: var(--neg); }
+
+/* weekly column chart — single series, HTML bars: rounded data-end, square baseline,
+   ≤24px thick with a surface gap; each slot centres its bar */
+.bars { display: flex; align-items: stretch; gap: 2px; height: 76px; border-bottom: 1px solid var(--border); }
+.bars > span { flex: 1 1 0; min-width: 0; display: flex; align-items: flex-end; justify-content: center; }
+.bars button {
+  width: 100%; max-width: 24px; min-height: 2px; padding: 0; border: none; cursor: pointer;
+  background: var(--accent); border-radius: 4px 4px 0 0;
+  transition: height .4s cubic-bezier(.32,.72,0,1), opacity .15s;
+}
+.bars button.zero { background: var(--border-2); border-radius: 1px 1px 0 0; }
+.bars button.last { opacity: .55; }
+.bars button.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+.bars-axis { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; font-weight: 600; color: var(--text-3); }
+
+/* activity feed row icon */
+.act-ico {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--text-2); font-size: 16px;
+}
+.act-ico.pos { background: var(--pos-soft); color: var(--pos-text); }
+.act-ico.neg { background: var(--neg-soft); color: var(--neg-text); }
+.act-ico.acc { background: var(--accent-soft); color: var(--accent-text); }

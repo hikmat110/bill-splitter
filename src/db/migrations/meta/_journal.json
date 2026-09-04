@@ -57,6 +57,13 @@
       "when": 1788098294873,
       "tag": "0007_gifted_blue_blade",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788519246790,
+      "tag": "0008_bitter_big_bertha",
+      "breakpoints": true
     }
   ]
 }

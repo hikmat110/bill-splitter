@@ -213,6 +213,9 @@ export const ru = {
     not_your_action: 'Это действие не для вас.',
     upload_failed: 'Не удалось сохранить фото. Попробуйте ещё раз или пропустите.',
   },
+  admin: {
+    dm_prefix: '📣 Сообщение от администратора Bill Split:',
+  },
 }
 
 export type Keys = typeof ru

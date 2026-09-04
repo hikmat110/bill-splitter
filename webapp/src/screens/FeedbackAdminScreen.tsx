@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from 'react'
 import { AuthImage } from '../components/AuthImage'
 import { PhotoModal } from '../components/PhotoModal'
-import { Segmented, Empty } from '../components/common'
+import { Segmented, Empty, OverlayHeader } from '../components/common'
 import { useToast } from '../components/Toast'
 import { api } from '../lib/api'
 import { prettyDate } from '../lib/date'
@@ -93,7 +93,7 @@ export function FeedbackAdminScreen({ onClose }: { onClose: () => void }) {
 
   return (
     <div className="overlay-screen">
-      <Header
+      <OverlayHeader
         title={t('feedback.admin_title')}
         sub={selected ? reporterName(selected) : t('feedback.admin_count', { n: String(total) })}
         onClose={selected ? () => setSelected(null) : onClose}
@@ -271,43 +271,6 @@ export function FeedbackAdminScreen({ onClose }: { onClose: () => void }) {
       )}
 
       <PhotoModal attachmentId={viewing} onClose={() => setViewing(null)} />
-    </div>
-  )
-}
-
-function Header({
-  title,
-  sub,
-  onClose,
-}: {
-  title: string
-  sub: string
-  onClose: () => void
-}) {
-  return (
-    <div className="topbar" style={{ gap: 8 }}>
-      <button className="icon-btn" onClick={onClose} aria-label="Back">
-        <i className="ti ti-chevron-left" />
-      </button>
-      <div className="col" style={{ flex: 1, minWidth: 0 }}>
-        <span
-          style={{
-            fontWeight: 800,
-            fontSize: 16.5,
-            letterSpacing: '-.3px',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-        >
-          {title}
-        </span>
-        {sub && (
-          <span className="muted3" style={{ fontSize: 12, fontWeight: 600 }}>
-            {sub}
-          </span>
-        )}
-      </div>
     </div>
   )
 }

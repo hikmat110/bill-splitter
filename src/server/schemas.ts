@@ -208,3 +208,13 @@ export const updateFeedbackSchema = z.object({
   status: feedbackStatusSchema,
 })
 export type UpdateFeedbackBody = z.infer<typeof updateFeedbackSchema>
+
+// ─── admin ───────────────────────────────────────────────────────────────────
+
+// Direct message an admin sends to one user through the bot. Sent with no
+// parse_mode, so any text is safe; 4000 stays under Telegram's 4096 cap with
+// room for the localized "from the admin" prefix.
+export const adminMessageSchema = z.object({
+  text: z.string().trim().min(1).max(4000),
+})
+export type AdminMessageBody = z.infer<typeof adminMessageSchema>

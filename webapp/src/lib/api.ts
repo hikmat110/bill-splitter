@@ -15,6 +15,10 @@ import type {
   UpdateBillPayload,
   UserCard,
   UsernameAddResult,
+  AdminStats,
+  AdminActivityItem,
+  AdminUserSummary,
+  AdminUserDetail,
 } from './types'
 
 const BASE = '/api'
@@ -164,4 +168,14 @@ export const api = {
   },
   updateFeedbackStatus: (id: string, status: FeedbackStatus) =>
     request<FeedbackItem>(`/feedback/${id}`, { method: 'PATCH', body: { status } }),
+
+  // ── admin (403 for non-admins; the tab is only rendered when me.isAdmin) ──
+  adminStats: () => request<AdminStats>('/admin/stats'),
+  adminActivity: (limit = 20) =>
+    request<{ items: AdminActivityItem[] }>(`/admin/activity?limit=${limit}`),
+  adminUsers: (q: string) =>
+    request<{ items: AdminUserSummary[] }>(`/admin/users?q=${encodeURIComponent(q)}`),
+  adminUser: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
+  adminMessage: (id: string, text: string) =>
+    request<{ ok: boolean }>(`/admin/users/${id}/message`, { method: 'POST', body: { text } }),
 }

@@ -213,4 +213,7 @@ export const uz = {
     not_your_action: 'Bu harakat siz uchun emas.',
     upload_failed: "Rasmni saqlab bo'lmadi. Qayta urinib ko'ring yoki o'tkazib yuboring.",
   },
+  admin: {
+    dm_prefix: '📣 Bill Split administratoridan xabar:',
+  },
 }

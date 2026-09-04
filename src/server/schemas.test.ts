@@ -8,6 +8,7 @@ import {
   addContactsByUsernameSchema,
   createFeedbackSchema,
   updateFeedbackSchema,
+  adminMessageSchema,
 } from './schemas'
 
 const P1 = '11111111-1111-4111-8111-111111111111'
@@ -308,5 +309,19 @@ describe('updateFeedbackSchema', () => {
     expect(updateFeedbackSchema.safeParse({ status: 'resolved' }).success).toBe(true)
     expect(updateFeedbackSchema.safeParse({ status: 'closed' }).success).toBe(false)
     expect(updateFeedbackSchema.safeParse({}).success).toBe(false)
+  })
+})
+
+describe('adminMessageSchema', () => {
+  it('accepts trimmed non-empty text up to 4000 chars', () => {
+    expect(adminMessageSchema.safeParse({ text: '  hello  ' }).success).toBe(true)
+    expect(adminMessageSchema.safeParse({ text: 'x'.repeat(4000) }).success).toBe(true)
+  })
+
+  it('rejects empty, whitespace-only, and oversized text', () => {
+    expect(adminMessageSchema.safeParse({ text: '' }).success).toBe(false)
+    expect(adminMessageSchema.safeParse({ text: '   ' }).success).toBe(false)
+    expect(adminMessageSchema.safeParse({ text: 'x'.repeat(4001) }).success).toBe(false)
+    expect(adminMessageSchema.safeParse({}).success).toBe(false)
   })
 })

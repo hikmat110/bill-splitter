@@ -12,6 +12,7 @@ import { InboxScreen } from './screens/InboxScreen'
 import { BillDetailScreen } from './screens/BillDetailScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { FeedbackAdminScreen } from './screens/FeedbackAdminScreen'
+import { AdminScreen } from './screens/AdminScreen'
 import { api, ApiError } from './lib/api'
 import { captureScreen } from './lib/capture'
 import { emptyDraft, uid } from './lib/draft'
@@ -33,17 +34,20 @@ import { BUILD } from './lib/version'
 import { useT } from './i18n'
 import type { BillDetail, BillsResponse, Me } from './lib/types'
 
-type Tab = 'split' | 'bills' | 'inbox' | 'profile'
+type Tab = 'split' | 'bills' | 'inbox' | 'profile' | 'admin'
 
 const TABS: {
   id: Tab
-  navKey: 'nav.split' | 'nav.bills' | 'nav.inbox' | 'nav.profile'
+  navKey: 'nav.split' | 'nav.bills' | 'nav.inbox' | 'nav.profile' | 'nav.admin'
   icon: string
+  /** Shown only for me.isAdmin; the server 403s the routes regardless. */
+  adminOnly?: boolean
 }[] = [
   { id: 'split', navKey: 'nav.split', icon: 'ti-receipt-2' },
   { id: 'bills', navKey: 'nav.bills', icon: 'ti-list-details' },
   { id: 'inbox', navKey: 'nav.inbox', icon: 'ti-inbox' },
   { id: 'profile', navKey: 'nav.profile', icon: 'ti-user' },
+  { id: 'admin', navKey: 'nav.admin', icon: 'ti-shield-check', adminOnly: true },
 ]
 
 export function App() {
@@ -392,55 +396,10 @@ export function App() {
     setCapturing(false)
   }
 
-  const subtitle =
-    tab === 'split'
-      ? draft.title.trim() || t('app.new_bill_subtitle')
-      : tab === 'bills'
-        ? t('nav.bills')
-        : tab === 'inbox'
-          ? t('nav.inbox')
-          : t('nav.profile')
-
   const badge = me ? inboxCount(bills, me) : 0
 
   return (
     <div className="tg-app" data-theme={dark ? 'dark' : 'light'}>
-      {/* top bar */}
-      <div className="topbar">
-        <div
-          style={{
-            width: 38,
-            height: 38,
-            borderRadius: 11,
-            background: 'var(--accent)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexShrink: 0,
-          }}
-        >
-          <i className="ti ti-receipt-2" style={{ fontSize: 21, color: 'var(--on-accent)' }} />
-        </div>
-        <div className="col" style={{ flex: 1, minWidth: 0 }}>
-          <span style={{ fontWeight: 800, fontSize: 17, letterSpacing: '-.3px' }}>Bill Split</span>
-          <span
-            className="muted3"
-            style={{
-              fontSize: 12,
-              fontWeight: 600,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
-            }}
-          >
-            {subtitle}
-          </span>
-        </div>
-        <button className="icon-btn" onClick={() => setDark((v) => !v)} title="Toggle theme">
-          <i className={'ti ' + (dark ? 'ti-sun' : 'ti-moon')} />
-        </button>
-      </div>
-
       {/* screens — boundary keeps a single screen's crash from blanking the whole app */}
       <ErrorBoundary resetKey={tab}>
         {tab === 'split' && me && (
@@ -479,8 +438,12 @@ export function App() {
             onCardDeleted={onCardDeleted}
             onOpenAddContact={() => setAddOpen('profile')}
             onContactDeleted={onContactDeleted}
-            onOpenFeedbackAdmin={() => setFeedbackAdminOpen(true)}
+            dark={dark}
+            onSetDark={setDark}
           />
+        )}
+        {tab === 'admin' && me?.isAdmin && (
+          <AdminScreen onOpenFeedbackAdmin={() => setFeedbackAdminOpen(true)} />
         )}
       </ErrorBoundary>
 
@@ -489,7 +452,7 @@ export function App() {
 
       {/* bottom nav */}
       <div className="tabbar">
-        {TABS.map((tb) => (
+        {TABS.filter((tb) => !tb.adminOnly || me?.isAdmin).map((tb) => (
           <button
             key={tb.id}
             className={'tabbar-item' + (tab === tb.id ? ' on' : '')}

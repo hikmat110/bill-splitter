@@ -2,11 +2,12 @@
 // with config (bot token) and user resolution against the DB.
 
 import { config } from '../config'
-import { findByTelegramId } from '../services/user.service'
+import { findByTelegramId, markSeen } from '../services/user.service'
 import type { User } from '../db/schema'
 import { error } from './json'
 import { verifyInitData } from './init-data'
 import { rootLogger } from '../bot/middleware/logger'
+import { shouldTouchLastSeen } from '../utils/last-seen'
 
 /** Pull the raw initData string from `Authorization: tma <initData>`. */
 export function extractInitData(req: Request): string | null {
@@ -42,6 +43,15 @@ export async function authenticate(req: Request): Promise<AuthOutcome> {
       'Mini App auth rejected'
     )
     return { response: error(401, 'User not registered — open the bot first') }
+  }
+
+  // Activity signal for the admin tab. Fire-and-forget: never delays the
+  // request, and the .catch keeps a DB hiccup from becoming an unhandled
+  // rejection. The `user` returned below keeps the pre-bump value — harmless.
+  if (shouldTouchLastSeen(user.last_seen_at, new Date())) {
+    markSeen(user.id).catch((err) =>
+      rootLogger.warn({ err, userId: user.id }, 'last_seen bump failed')
+    )
   }
 
   return { user }

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Avatar } from '../components/Avatar'
 import { Sheet } from '../components/Sheet'
-import { SecTitle } from '../components/common'
+import { SecTitle, Segmented } from '../components/common'
 import { useToast } from '../components/Toast'
 import { useContactDelete, BlockingBillsPanel } from '../components/ContactDelete'
 import { cardLabel, formatCard } from '../lib/cards'
@@ -29,7 +29,8 @@ export function ProfileScreen({
   onCardDeleted,
   onOpenAddContact,
   onContactDeleted,
-  onOpenFeedbackAdmin,
+  dark,
+  onSetDark,
 }: {
   me: Me
   /** The user's contacts (self excluded — the header covers "you"). */
@@ -40,7 +41,10 @@ export function ProfileScreen({
   onCardDeleted: (cardId: string) => Promise<void>
   onOpenAddContact: () => void
   onContactDeleted: (contactId: string) => Promise<void>
-  onOpenFeedbackAdmin: () => void
+  /** App-wide light/dark theme. State is owned by App (seeded from Telegram's
+   *  colorScheme and applied via data-theme on .tg-app). */
+  dark: boolean
+  onSetDark: (dark: boolean) => void
 }) {
   const { t, lang, setLang } = useT()
   const toast = useToast()
@@ -331,16 +335,22 @@ export function ProfileScreen({
         </div>
       </div>
 
-      {/* admin-only feedback inbox (me.isAdmin mirrors the server-side guard) */}
-      {me.isAdmin && (
-        <button
-          className="btn btn-block"
-          style={{ marginTop: 18 }}
-          onClick={onOpenFeedbackAdmin}
-        >
-          <i className="ti ti-message-report" /> {t('feedback.admin_row')}
-        </button>
-      )}
+      {/* theme — session-only: follows Telegram's colorScheme until picked here */}
+      <SecTitle>{t('profile.theme')}</SecTitle>
+      <div className="card" style={{ padding: 'calc(13px * var(--dens))' }}>
+        <Segmented<'light' | 'dark'>
+          value={dark ? 'dark' : 'light'}
+          onChange={(v) => {
+            if ((v === 'dark') === dark) return
+            haptic('light')
+            onSetDark(v === 'dark')
+          }}
+          options={[
+            { value: 'light', label: t('profile.theme_light') },
+            { value: 'dark', label: t('profile.theme_dark') },
+          ]}
+        />
+      </div>
 
       {/* build identity — tap to copy, so a bug report can quote it exactly */}
       <button

@@ -1,6 +1,7 @@
 import type { MiddlewareFn } from 'grammy'
 import type { MyContext } from '../index'
-import { findByTelegramId } from '../../services/user.service'
+import { findByTelegramId, markSeen } from '../../services/user.service'
+import { shouldTouchLastSeen } from '../../utils/last-seen'
 import { t } from '../../i18n'
 
 export const authMiddleware: MiddlewareFn<MyContext> = async (ctx, next) => {
@@ -20,5 +21,12 @@ export const authMiddleware: MiddlewareFn<MyContext> = async (ctx, next) => {
   }
 
   ctx.user = user
+
+  // Activity signal for the admin tab (same throttle as the Mini App API).
+  // Fire-and-forget so a slow write never delays the update.
+  if (shouldTouchLastSeen(user.last_seen_at, new Date())) {
+    markSeen(user.id).catch((err) => ctx.logger.warn({ err }, 'last_seen bump failed'))
+  }
+
   return next()
 }

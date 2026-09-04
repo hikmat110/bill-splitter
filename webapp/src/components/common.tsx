@@ -118,3 +118,67 @@ export function Field({ label, children }: { label?: string; children: ReactNode
     </label>
   )
 }
+
+/** Top bar for a full-screen overlay (bill detail, admin inbox, user detail):
+ *  back chevron + title + optional subtitle. Telegram's native back button is
+ *  wired separately by the screen via onBackButton. */
+export function OverlayHeader({
+  title,
+  sub,
+  onClose,
+  action,
+}: {
+  title: string
+  sub?: string
+  onClose: () => void
+  action?: ReactNode
+}) {
+  return (
+    <div className="topbar" style={{ gap: 8 }}>
+      <button className="icon-btn" onClick={onClose} aria-label="Back">
+        <i className="ti ti-chevron-left" />
+      </button>
+      <div className="col" style={{ flex: 1, minWidth: 0 }}>
+        <span
+          style={{
+            fontWeight: 800,
+            fontSize: 16.5,
+            letterSpacing: '-.3px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          {title}
+        </span>
+        {sub && (
+          <span
+            className="muted3"
+            style={{
+              fontSize: 12,
+              fontWeight: 600,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {sub}
+          </span>
+        )}
+      </div>
+      {action}
+    </div>
+  )
+}
+
+/** Stat tile: label + value (+ optional sub-line). Values keep proportional
+ *  figures — tabular digits only belong in columns. */
+export function Stat({ label, value, sub }: { label: string; value: ReactNode; sub?: string }) {
+  return (
+    <div className="stat">
+      <div className="stat-lbl">{label}</div>
+      <div className="stat-val">{value}</div>
+      {sub && <div className="stat-sub">{sub}</div>}
+    </div>
+  )
+}

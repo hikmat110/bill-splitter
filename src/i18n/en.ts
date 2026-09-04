@@ -213,4 +213,8 @@ export const en = {
     not_your_action: 'This action is not for you.',
     upload_failed: "Couldn't save the photo. Try again or skip.",
   },
+  admin: {
+    // Prefix on a message an admin sends to a user from the Mini App admin tab.
+    dm_prefix: '📣 Message from the Bill Split admin:',
+  },
 }

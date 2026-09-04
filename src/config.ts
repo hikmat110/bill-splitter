@@ -1,5 +1,9 @@
 import { z } from 'zod'
 
+/** Google's own Gemini origin. Exported so admin "relay in use" detection
+ *  compares against the same literal the default is built from. */
+export const GEMINI_DEFAULT_BASE_URL = 'https://generativelanguage.googleapis.com'
+
 const schema = z.object({
   BOT_TOKEN: z.string().min(1, 'BOT_TOKEN is required'),
   DATABASE_URL: z.string().min(1, 'DATABASE_URL is required'),
@@ -28,7 +32,7 @@ const schema = z.object({
     .string()
     .url()
     .transform((s) => s.replace(/\/+$/, ''))
-    .default('https://generativelanguage.googleapis.com'),
+    .default(GEMINI_DEFAULT_BASE_URL),
   // Shared secret the relay checks (sent as `x-relay-secret`). Unset = not sent.
   GEMINI_RELAY_SECRET: z.string().min(1).optional(),
   // Receipt-scan limits (enforced in scan-quota.service). Per user: at most this

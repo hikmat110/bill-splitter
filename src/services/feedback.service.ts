@@ -200,3 +200,12 @@ export async function findFeedbackAttachment(
     .limit(1)
   return rows[0] ?? null
 }
+
+/** How many feedback rows sit in `status` — the admin tab's inbox badge. */
+export async function countFeedback(status: string): Promise<number> {
+  const [counted] = await db
+    .select({ count: sql<number>`count(*)::int` })
+    .from(feedback)
+    .where(eq(feedback.status, status))
+  return counted?.count ?? 0
+}

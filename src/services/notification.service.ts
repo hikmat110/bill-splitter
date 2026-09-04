@@ -12,6 +12,9 @@ import type { BillWithDetails, BillParticipantWithContact } from './bill.service
 import { attachmentPath } from './storage.service'
 import { findById } from './user.service'
 import { formatMoney, formatCard } from '../utils/format'
+import { classifySendError } from '../utils/telegram-errors'
+import type { SendFailureCode } from '../utils/telegram-errors'
+import { rootLogger } from '../bot/middleware/logger'
 import { t, langCtx } from '../i18n'
 
 /** Edit a notification message to new text, transparently handling the case
@@ -375,4 +378,30 @@ export async function sendReminder(
     .catch(() => undefined)
 
   return true
+}
+
+export type AdminSendResult = { ok: true } | { ok: false; code: SendFailureCode }
+
+/**
+ * DM one user on behalf of an admin. The text is prefixed with a line in the
+ * recipient's language so the message has context, and sent without a
+ * parse_mode so admin-typed text can't trip Telegram's entity parser. Failures
+ * are classified (blocked / chat not found / rate limited / other) rather than
+ * swallowed — the admin needs to know the message didn't land.
+ */
+export async function sendAdminMessage(
+  bot: Bot<MyContext>,
+  recipient: { telegram_id: bigint; language_code: string },
+  text: string
+): Promise<AdminSendResult> {
+  const ctx = langCtx(recipient.language_code)
+  const body = `${t(ctx, 'admin.dm_prefix')}\n\n${text}`
+  try {
+    await bot.api.sendMessage(Number(recipient.telegram_id), body)
+    return { ok: true }
+  } catch (err) {
+    const code = classifySendError(err)
+    rootLogger.warn({ err, telegramId: Number(recipient.telegram_id), code }, 'Admin DM failed')
+    return { ok: false, code }
+  }
 }

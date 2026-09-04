@@ -34,6 +34,8 @@ export async function upsertFromContact(
     ? from.language_code
     : 'uz'
 
+  // Registering is activity: a fresh signup counts as active immediately.
+  const now = new Date()
   const [user] = await db
     .insert(users)
     .values({
@@ -43,6 +45,7 @@ export async function upsertFromContact(
       last_name: contact.last_name ?? null,
       username: from.username ?? null,
       language_code: lang,
+      last_seen_at: now,
     })
     .onConflictDoUpdate({
       target: users.telegram_id,
@@ -51,12 +54,30 @@ export async function upsertFromContact(
         first_name: contact.first_name,
         last_name: contact.last_name ?? null,
         username: from.username ?? null,
+        last_seen_at: now,
       },
     })
     .returning()
 
   if (!user) throw new Error('Failed to upsert user')
   return user
+}
+
+/**
+ * Bump last_seen_at. Callers gate on shouldTouchLastSeen (utils/last-seen)
+ * first so this is rarely issued; the SQL repeats the throttle so a burst of
+ * concurrent requests from one user collapses to a single write.
+ */
+export async function markSeen(userId: string): Promise<void> {
+  await db
+    .update(users)
+    .set({ last_seen_at: sql`now()` })
+    .where(
+      and(
+        eq(users.id, userId),
+        sql`(${users.last_seen_at} is null or ${users.last_seen_at} < now() - interval '5 minutes')`
+      )
+    )
 }
 
 export async function findUserByUsername(username: string): Promise<User | null> {

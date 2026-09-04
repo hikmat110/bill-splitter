@@ -29,6 +29,10 @@ export const users = pgTable('users', {
   created_at: timestamp('created_at', { withTimezone: true })
     .defaultNow()
     .notNull(),
+  // Last time this user hit the API or the bot, bumped at most once per
+  // LAST_SEEN_THROTTLE_MS (utils/last-seen). NULL = not seen since the column
+  // shipped. Feeds the admin tab's active-user counts.
+  last_seen_at: timestamp('last_seen_at', { withTimezone: true }),
 })
 
 export const usersRelations = relations(users, ({ many }) => ({

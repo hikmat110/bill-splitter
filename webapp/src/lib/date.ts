@@ -28,3 +28,17 @@ export function prettyTime(lang: string, iso: string): string {
     minute: '2-digit',
   })
 }
+
+/** "5 minutes ago" / "yesterday" for a past instant, in the UI language; beyond
+ *  a week it falls back to prettyDate so old items still read as a date. */
+export function relativeTime(t: T, lang: string, iso: string): string {
+  const diffMin = Math.round((Date.now() - new Date(iso).getTime()) / 60_000)
+  const rtf = new Intl.RelativeTimeFormat(DATE_LOCALE[lang] ?? 'en-US', { numeric: 'auto' })
+  if (diffMin < 1) return rtf.format(0, 'second')
+  if (diffMin < 60) return rtf.format(-diffMin, 'minute')
+  const hours = Math.round(diffMin / 60)
+  if (hours < 24) return rtf.format(-hours, 'hour')
+  const days = Math.round(hours / 24)
+  if (days < 7) return rtf.format(-days, 'day')
+  return prettyDate(t, lang, iso)
+}

@@ -106,6 +106,7 @@ import { parseCardNumber } from '../utils/format'
 import { parseUsernameList } from '../utils/username'
 import { toCreateBillInput, toUpdateBillInput } from './mappers'
 import { canManageBill, canMarkPaid, isAdmin } from './authz'
+import { handleAdmin } from './admin-routes'
 
 // ─── response shapers ──────────────────────────────────────────────────────────
 
@@ -321,6 +322,11 @@ export async function handleApi(
       if (seg.length === 1 && method === 'GET') return await getFeedbackList(user, url)
       if (seg.length === 2 && method === 'GET') return await getFeedbackRoute(user, seg[1]!)
       if (seg.length === 2 && method === 'PATCH') return await patchFeedback(req, user, seg[1]!)
+    }
+
+    // /api/admin/* — the admin tab; every route admin-only, guarded once inside
+    if (seg[0] === 'admin') {
+      return await handleAdmin(req, url, user, seg.slice(1), bot)
     }
 
     return error(404, 'Not found')
