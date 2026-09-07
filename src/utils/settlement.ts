@@ -92,8 +92,12 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
 
   // Phase 1: split each item across its sharers, truncated to 2 decimals.
   // Explicitly assigned units cost `units × price`; the unassigned remainder
-  // (all of it, when nobody has explicit units) splits equally among sharers —
-  // so all-null units reproduces the legacy equal split exactly.
+  // splits equally among the sharers WITHOUT an explicit count (`units: null`),
+  // so someone who took "1 of 3" is not also charged part of the leftover
+  // unit that two others are sharing. When nobody is unassigned (everyone has
+  // explicit units but Σunits < qty) the remainder falls back to an equal
+  // split across all sharers. All-null units reproduces the legacy equal split
+  // of the whole line exactly.
   // `subtotal` is the true sum of line totals (not the truncated per-shares).
   let subtotal = 0
   for (const item of spec.items) {
@@ -104,10 +108,13 @@ export function computeBreakdown(spec: BillSpec): BreakdownResult {
     subtotal = to2(subtotal + lineTotal)
     const assigned = item.shares.reduce((sum, s) => sum + (s.units ?? 0), 0)
     const remainder = Math.max(0, qty - assigned) // defensive: callers validate Σunits ≤ qty
-    const remainderPerHead = (remainder * item.price) / count
+    const unassignedCount = item.shares.filter((s) => s.units == null).length
+    const remainderSharers = unassignedCount > 0 ? unassignedCount : count
+    const remainderPerHead = (remainder * item.price) / remainderSharers
     for (const s of item.shares) {
       const units = s.units ?? 0
-      const share = to2(units * item.price + remainderPerHead)
+      const takesRemainder = unassignedCount === 0 || s.units == null
+      const share = to2(units * item.price + (takesRemainder ? remainderPerHead : 0))
       const p = ensure(s.contactId)
       p.items.push(
         qty > 1 && units > 0

@@ -200,9 +200,9 @@ describe('weighted units (quantity > 1)', () => {
     expect(result.total).toBe(70_000)
   })
 
-  test('partial assignment: unclaimed units split equally among all sharers', () => {
-    // qty 7, A takes 3 explicitly; remainder 4 units (40k) splits across the
-    // 3 sharers: 13_333.33 each (floored).
+  test('partial assignment: unclaimed units split only among sharers without explicit units', () => {
+    // qty 7, A takes 3 explicitly; the remaining 4 units (40k) belong to the
+    // two "auto" sharers B and C — 20k each. A pays for exactly their 3.
     const spec: BillSpec = {
       items: [
         {
@@ -220,11 +220,74 @@ describe('weighted units (quantity > 1)', () => {
       tip: 0,
     }
     const result = computeSettlement(spec)
-    assertSumWithinTotal(result)
-    expect(result.shares.get('A')).toBeCloseTo(43_333.33, 2)
-    expect(result.shares.get('B')).toBeCloseTo(13_333.33, 2)
-    expect(result.shares.get('C')).toBeCloseTo(13_333.33, 2)
+    assertSumEqualsTotal(result)
+    expect(result.shares.get('A')).toBe(30_000)
+    expect(result.shares.get('B')).toBe(20_000)
+    expect(result.shares.get('C')).toBe(20_000)
     expect(result.total).toBe(70_000)
+  })
+
+  test('regression: 4 people, 3 dishes — two take one each, two share the third', () => {
+    // 69k per dish × 3. A and B each explicitly take 1; C and D are left on
+    // "auto" and split the one remaining dish. Previously the leftover dish was
+    // divided across all four (17_250 each), so A/B were charged 86_250 and
+    // C/D only 17_250.
+    const spec: BillSpec = {
+      items: [
+        {
+          name: 'Dish',
+          price: 69_000,
+          quantity: 3,
+          shares: [
+            { contactId: 'A', units: 1 },
+            { contactId: 'B', units: 1 },
+            { contactId: 'C', units: null },
+            { contactId: 'D', units: null },
+          ],
+        },
+      ],
+      servicePct: 0,
+      serviceFixed: 0,
+      tip: 0,
+    }
+    const result = computeSettlement(spec)
+    assertSumEqualsTotal(result)
+    expect(result.shares.get('A')).toBe(69_000)
+    expect(result.shares.get('B')).toBe(69_000)
+    expect(result.shares.get('C')).toBe(34_500)
+    expect(result.shares.get('D')).toBe(34_500)
+    expect(result.subtotal).toBe(207_000)
+    expect(result.total).toBe(207_000)
+
+    // The breakdown line for an auto sharer carries no explicit unit count.
+    const { perContact } = computeBreakdown(spec)
+    expect(perContact.get('A')!.items[0]).toEqual({ name: 'Dish', share: 69_000, units: 1 })
+    expect(perContact.get('C')!.items[0]).toEqual({ name: 'Dish', share: 34_500 })
+  })
+
+  test('all sharers explicit but Σunits < qty: leftover falls back to an equal split across everyone', () => {
+    // Nobody is on "auto", so there is no one else to give the leftover unit
+    // to; it is spread over all sharers rather than silently dropped.
+    const spec: BillSpec = {
+      items: [
+        {
+          price: 10_000,
+          quantity: 3,
+          shares: [
+            { contactId: 'A', units: 1 },
+            { contactId: 'B', units: 1 },
+          ],
+        },
+      ],
+      servicePct: 0,
+      serviceFixed: 0,
+      tip: 0,
+    }
+    const result = computeSettlement(spec)
+    assertSumEqualsTotal(result)
+    expect(result.shares.get('A')).toBe(15_000)
+    expect(result.shares.get('B')).toBe(15_000)
+    expect(result.total).toBe(30_000)
   })
 
   test('all-null units with quantity behaves as a plain equal split of the line total', () => {
@@ -347,12 +410,13 @@ describe('weighted units (quantity > 1)', () => {
       serviceFixed: 0,
       tip: 0,
     }
+    // A pays for exactly their 3 kebabs; B (auto) takes the remaining 4.
     const { perContact } = computeBreakdown(spec)
     const a = perContact.get('A')!
-    expect(a.items[0]).toEqual({ name: 'Kebab', share: 50_000, units: 3 })
+    expect(a.items[0]).toEqual({ name: 'Kebab', share: 30_000, units: 3 })
     expect(a.items[1]).toEqual({ name: 'Salad', share: 10_000 })
     const b = perContact.get('B')!
-    expect(b.items[0]).toEqual({ name: 'Kebab', share: 20_000 })
+    expect(b.items[0]).toEqual({ name: 'Kebab', share: 40_000 })
   })
 
   test('defensive clamp: units above quantity never produce a negative remainder', () => {

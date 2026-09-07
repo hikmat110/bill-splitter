@@ -38,8 +38,10 @@ export function previewTotals(draft: DraftBill): {
 /** Per-person owed amount preview for the Split editor — mirrors the server's
  * computeSettlement (utils/settlement): explicitly assigned units cost
  * `units × price`, the unassigned remainder splits equally among the item's
- * sharers. Only people who share at least one priced item appear; tip splits
- * equally among those distinct sharers, matching the bill after it's sent. */
+ * sharers that have no explicit count (`units: null`); if everyone has an
+ * explicit count it falls back to all sharers. Only people who share at least
+ * one priced item appear; tip splits equally among those distinct sharers,
+ * matching the bill after it's sent. */
 export function previewShares(draft: DraftBill): { id: string; amount: number }[] {
   const base = new Map<string, number>()
   for (const it of draft.items) {
@@ -48,9 +50,12 @@ export function previewShares(draft: DraftBill): { id: string; amount: number }[
     const qty = itemQty(it)
     const assigned = it.who.reduce((s, w) => s + (w.units ?? 0), 0)
     const remainder = Math.max(0, qty - assigned)
-    const remainderPerHead = (remainder * it.price) / count
+    const unassignedCount = it.who.filter((w) => w.units == null).length
+    const remainderSharers = unassignedCount > 0 ? unassignedCount : count
+    const remainderPerHead = (remainder * it.price) / remainderSharers
     for (const w of it.who) {
-      const share = to2((w.units ?? 0) * it.price + remainderPerHead)
+      const takesRemainder = unassignedCount === 0 || w.units == null
+      const share = to2((w.units ?? 0) * it.price + (takesRemainder ? remainderPerHead : 0))
       base.set(w.id, to2((base.get(w.id) ?? 0) + share))
     }
   }
