@@ -1,17 +1,18 @@
 import type { Bot } from 'grammy'
 import type { MyContext } from '../index'
 import { t } from '../../i18n'
-import { saveImage, StorageError } from '../../services/storage.service'
+import { deleteAttachment, saveImage, StorageError } from '../../services/storage.service'
 import { downloadTelegramFile } from '../../services/telegram-file.service'
 import { markParticipantPaid, getParticipantById } from '../../services/bill.service'
 import { notifyCreatorOfPaymentMark } from '../../services/notification.service'
 import { showReview } from './new-bill'
+import { supportPhotoHandler } from './support'
 
 /**
  * Handles incoming photos, but only while a wizard is expecting one:
  *  - mark-paid wizard → attach a transfer-receipt proof to the participant
  *  - bill wizard → attach the main cheque photo to the bill being created
- * Any other photo is ignored silently (it isn't part of a known flow).
+ * Any other photo is a message to support (bot/handlers/support).
  */
 export async function photoHandler(ctx: MyContext, bot: Bot<MyContext>): Promise<void> {
   const markPaidWizard = ctx.session.mark_paid_wizard
@@ -19,8 +20,6 @@ export async function photoHandler(ctx: MyContext, bot: Bot<MyContext>): Promise
 
   const expectsProof = markPaidWizard?.step === 'awaiting_proof'
   const expectsReceipt = billWizard?.step === 'awaiting_receipt_photo'
-
-  if (!expectsProof && !expectsReceipt) return
 
   const photos = ctx.message?.photo
   const ph = photos?.at(-1)
@@ -38,6 +37,14 @@ export async function photoHandler(ctx: MyContext, bot: Bot<MyContext>): Promise
       ctx.logger.error({ err }, 'photo upload failed')
     }
     await ctx.reply(t(ctx, 'errors.upload_failed'))
+    return
+  }
+
+  if (!expectsProof && !expectsReceipt) {
+    // No wizard wanted this photo → it is a message to support. If support
+    // declined it (an admin, or over the daily cap) drop the file again.
+    const captured = await supportPhotoHandler(ctx, bot, stored)
+    if (!captured) await deleteAttachment(stored.id, stored.mime)
     return
   }
 

@@ -27,7 +27,13 @@ const SCAN_VERB: Record<ScanOutcome, I18nKey> = {
 /** Admin tab (me.isAdmin — the server 403s everyone else): usage overview,
  *  scan health, weekly trends, the feedback inbox entry, user lookup, and a
  *  recent-activity feed. Tab body, like Profile; user detail is an overlay. */
-export function AdminScreen({ onOpenFeedbackAdmin }: { onOpenFeedbackAdmin: () => void }) {
+export function AdminScreen({
+  onOpenFeedbackAdmin,
+  onOpenSupport,
+}: {
+  onOpenFeedbackAdmin: () => void
+  onOpenSupport: () => void
+}) {
   const { t, lang } = useT()
   const toast = useToast()
   const [stats, setStats] = useState<AdminStats | null>(null)
@@ -234,6 +240,25 @@ export function AdminScreen({ onOpenFeedbackAdmin }: { onOpenFeedbackAdmin: () =
           </span>
           {stats && stats.feedback.open > 0 ? (
             <span className="pill pill-neg">{stats.feedback.open}</span>
+          ) : (
+            <i className="ti ti-chevron-right muted3" />
+          )}
+        </button>
+
+        {/* ── support inbox (the SupportInboxScreen overlay, owned by App) ── */}
+        <button
+          className="btn btn-block"
+          style={{ justifyContent: 'space-between', marginBottom: 18 }}
+          onClick={() => {
+            haptic('light')
+            onOpenSupport()
+          }}
+        >
+          <span className="row" style={{ gap: 8 }}>
+            <i className="ti ti-messages" /> {t('admin.support_row')}
+          </span>
+          {stats && stats.support.unread > 0 ? (
+            <span className="pill pill-neg">{stats.support.unread}</span>
           ) : (
             <i className="ti ti-chevron-right muted3" />
           )}

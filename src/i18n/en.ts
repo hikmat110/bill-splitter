@@ -213,6 +213,12 @@ export const en = {
     not_your_action: 'This action is not for you.',
     upload_failed: "Couldn't save the photo. Try again or skip.",
   },
+  support: {
+    // Ack for a message the bot could not route to any flow — it became a
+    // message to support. Sent at most once per burst (utils/support).
+    received: "✅ Got it — your message reached the Bill Split team. We'll reply here.",
+    rate_limited: "You've sent a lot of messages today. Please continue tomorrow.",
+  },
   admin: {
     // Prefix on a message an admin sends to a user from the Mini App admin tab.
     dm_prefix: '📣 Message from the Bill Split admin:',

@@ -354,6 +354,63 @@ export async function notifyAdminsOfFeedback(
   }
 }
 
+export interface SupportCaptionInput {
+  message: string
+  sender: {
+    first_name: string
+    last_name: string | null
+    username: string | null
+    telegram_id: bigint
+  }
+  hasPhoto: boolean
+}
+
+/**
+ * Compose the admin DM announcing a new support message. Same budget as
+ * buildFeedbackCaption: plain text, truncated to fit Telegram's 1024-char photo
+ * caption, since the full thread lives in the admin tab anyway.
+ */
+export function buildSupportCaption(input: SupportCaptionInput): string {
+  const s = input.sender
+  const name = [s.first_name, s.last_name].filter(Boolean).join(' ')
+  const from = [name, s.username ? `@${s.username}` : null, `id ${s.telegram_id}`]
+    .filter(Boolean)
+    .join(' · ')
+
+  const head = `📨 Support message\nFrom: ${from}`
+  const tail = 'Reply from the Support inbox in the admin tab.'
+
+  const overhead = head.length + tail.length + 4 // the two "\n\n" separators
+  const room = Math.max(0, CAPTION_MAX - overhead)
+  const body = input.message.trim().length > 0 ? input.message : input.hasPhoto ? '(photo)' : ''
+  const message = body.length > room ? body.slice(0, Math.max(0, room - 1)) + '…' : body
+
+  return `${head}\n\n${message}\n\n${tail}`
+}
+
+/**
+ * DM every admin about a new support message — as a photo when the user sent
+ * one. Best-effort per admin; an empty admin list is a no-op (the message is
+ * already stored and shows in the admin tab).
+ */
+export async function notifyAdminsOfSupportMessage(
+  bot: Bot<MyContext>,
+  input: SupportCaptionInput & { attachment: { attachment_id: string; mime: string } | null }
+): Promise<void> {
+  const caption = buildSupportCaption(input)
+
+  for (const adminId of config.ADMIN_TELEGRAM_IDS) {
+    await (input.attachment
+      ? bot.api.sendPhoto(
+          adminId,
+          new InputFile(attachmentPath(input.attachment.attachment_id, input.attachment.mime)),
+          { caption }
+        )
+      : bot.api.sendMessage(adminId, caption)
+    ).catch(() => undefined)
+  }
+}
+
 export async function sendReminder(
   bot: Bot<MyContext>,
   participantId: string
@@ -380,7 +437,9 @@ export async function sendReminder(
   return true
 }
 
-export type AdminSendResult = { ok: true } | { ok: false; code: SendFailureCode }
+export type AdminSendResult =
+  | { ok: true; messageId: number }
+  | { ok: false; code: SendFailureCode }
 
 /**
  * DM one user on behalf of an admin. The text is prefixed with a line in the
@@ -397,8 +456,8 @@ export async function sendAdminMessage(
   const ctx = langCtx(recipient.language_code)
   const body = `${t(ctx, 'admin.dm_prefix')}\n\n${text}`
   try {
-    await bot.api.sendMessage(Number(recipient.telegram_id), body)
-    return { ok: true }
+    const sent = await bot.api.sendMessage(Number(recipient.telegram_id), body)
+    return { ok: true, messageId: sent.message_id }
   } catch (err) {
     const code = classifySendError(err)
     rootLogger.warn({ err, telegramId: Number(recipient.telegram_id), code }, 'Admin DM failed')

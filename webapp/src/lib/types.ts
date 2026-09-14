@@ -291,6 +291,7 @@ export interface AdminStats {
   /** 12 buckets, oldest first; the last one is the current (partial) week. */
   trends: { signups: WeekBucket[]; bills: WeekBucket[] }
   feedback: { open: number }
+  support: { unread: number }
 }
 
 export interface ActorRef {
@@ -351,4 +352,32 @@ export type AdminSendFailureCode = 'blocked' | 'chat_not_found' | 'rate_limited'
 export interface AdminMessageErrorBody {
   error: string
   code: AdminSendFailureCode
+  /** The stored row: a refused message is still recorded, so the thread can
+   *  show it as an undelivered bubble. */
+  message?: SupportMessage
+}
+
+// ─── support threads ─────────────────────────────────────────────────────────
+// Mirrors shapeSupportMessage / shapeThread in src/server/admin-routes.ts.
+
+export type SupportDirection = 'in' | 'out'
+
+export interface SupportMessage {
+  id: string
+  direction: SupportDirection
+  /** '' when a photo arrived with no caption. */
+  text: string
+  attachmentId: string | null
+  attachmentMime: string | null
+  adminUserId: string | null
+  /** Set when Telegram refused an outbound message — render as undelivered. */
+  failureCode: AdminSendFailureCode | null
+  readAt: string | null
+  createdAt: string
+}
+
+export interface SupportThread {
+  user: AdminUserSummary
+  lastMessage: SupportMessage
+  unread: number
 }

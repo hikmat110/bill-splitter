@@ -34,6 +34,7 @@ import {
   markPaidSkipHandler,
 } from './handlers/incoming'
 import { photoHandler } from './handlers/photo'
+import { supportTextHandler } from './handlers/support'
 import {
   historyHandler,
   historyTabHandler,
@@ -98,6 +99,10 @@ bot.on('message:text', async (ctx) => {
   if (ctx.session.bill_wizard) return billTextHandler(ctx)
   if (ctx.session.dispute_wizard) return disputeReasonHandler(ctx, bot)
   if (ctx.session.settings_wizard) return settingsTextHandler(ctx)
+  // Nothing is expecting this text → it is a message to support. This branch
+  // must stay last: any wizard added later has to be checked above it, or its
+  // input gets filed as a support message.
+  return supportTextHandler(ctx, bot)
 })
 
 // ─── Menu callbacks ───────────────────────────────────────────────────────────

@@ -389,3 +389,33 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
 .act-ico.pos { background: var(--pos-soft); color: var(--pos-text); }
 .act-ico.neg { background: var(--neg-soft); color: var(--neg-text); }
 .act-ico.acc { background: var(--accent-soft); color: var(--accent-text); }
+
+/* ---- support thread ---- */
+.thread { display: flex; flex-direction: column; gap: 8px; padding: 8px 14px 14px; }
+.bub {
+  max-width: 82%; padding: 9px 13px; border-radius: var(--r);
+  font-size: 14.5px; line-height: 1.45; font-weight: 500;
+  /* pre-wrap keeps the sender's line breaks; anywhere stops a pasted URL from
+     blowing the column out */
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.bub.in {
+  align-self: flex-start; background: var(--surface);
+  border: 1px solid var(--border); border-bottom-left-radius: var(--r-xs);
+}
+.bub.out {
+  align-self: flex-end; background: var(--accent); color: var(--on-accent);
+  border-bottom-right-radius: var(--r-xs);
+}
+.bub.out.failed { background: var(--neg-soft); color: var(--neg-text); }
+.bub-meta { font-size: 11px; font-weight: 600; margin-top: 4px; opacity: .72; }
+.bub.out .bub-meta { text-align: right; }
+.bub img { margin-bottom: 6px; border-radius: var(--r-sm); }
+
+/* composer — pinned footer of the thread overlay, above the keyboard */
+.composer {
+  display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0;
+  padding: 10px 14px calc(10px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  border-top: 1px solid var(--border); background: var(--surface);
+}
+.composer textarea.inp { flex: 1; min-height: 42px; max-height: 120px; resize: none; }

@@ -389,6 +389,74 @@ export const scanEventsRelations = relations(scanEvents, ({ one }) => ({
   }),
 }))
 
+// ─── support_messages ────────────────────────────────────────────────────────
+
+// A two-way support thread between one user and the admins. `user_id` is always
+// the non-admin side, in both directions; a thread is every row for that user
+// ordered by created_at. Inbound rows are written by the bot's text/photo
+// fallthrough (a message no wizard was expecting), outbound ones by the admin
+// tab. A Telegram message carries at most one photo, so the attachment lives
+// inline rather than in a child table.
+export const supportMessages = pgTable(
+  'support_messages',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    user_id: uuid('user_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    direction: text('direction').notNull(), // 'in' (user → admins) | 'out' (admin → user)
+    // Body of the message; '' when a photo arrived with no caption.
+    text: text('text').notNull(),
+    // Opaque attachment id (file on disk, see storage.service) + its mime.
+    // Unique so GET /api/files/:id can reverse-lookup the owning message.
+    attachment_id: text('attachment_id'),
+    attachment_mime: text('attachment_mime'),
+    // Which admin sent an 'out' row; null on 'in'. Kept as set-null so removing
+    // an admin's account never deletes the conversation.
+    admin_user_id: uuid('admin_user_id').references(() => users.id, {
+      onDelete: 'set null',
+    }),
+    // Telegram message id of the delivered/received message, for later edits.
+    tg_message_id: bigint('tg_message_id', { mode: 'bigint' }),
+    // Set once an admin has opened the thread ('in' rows only) — drives the
+    // unread badge. 'out' rows are read by definition and stay null.
+    read_at: timestamp('read_at', { withTimezone: true }),
+    // A SendFailureCode (utils/telegram-errors) when Telegram refused an 'out'
+    // message; null means delivered. Failed sends are still recorded so the
+    // thread shows an undelivered bubble instead of losing the message.
+    failure_code: text('failure_code'),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index('support_messages_user_created_idx').on(t.user_id, t.created_at),
+    uniqueIndex('support_messages_attachment_unique')
+      .on(t.attachment_id)
+      .where(sql`${t.attachment_id} IS NOT NULL`),
+    // Partial: only unread inbound rows are ever counted, and they are a tiny
+    // slice of the table.
+    index('support_messages_unread_idx')
+      .on(t.user_id)
+      .where(sql`${t.read_at} IS NULL`),
+  ]
+)
+
+export const supportMessagesRelations = relations(supportMessages, ({ one }) => ({
+  user: one(users, {
+    fields: [supportMessages.user_id],
+    references: [users.id],
+    relationName: 'supportUser',
+  }),
+  admin: one(users, {
+    fields: [supportMessages.admin_user_id],
+    references: [users.id],
+    relationName: 'supportAdmin',
+  }),
+}))
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect
@@ -401,3 +469,4 @@ export type BillParticipant = typeof billParticipants.$inferSelect
 export type Feedback = typeof feedback.$inferSelect
 export type FeedbackAttachment = typeof feedbackAttachments.$inferSelect
 export type ScanEvent = typeof scanEvents.$inferSelect
+export type SupportMessage = typeof supportMessages.$inferSelect

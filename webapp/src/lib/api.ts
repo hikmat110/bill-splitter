@@ -19,6 +19,8 @@ import type {
   AdminActivityItem,
   AdminUserSummary,
   AdminUserDetail,
+  SupportMessage,
+  SupportThread,
 } from './types'
 
 const BASE = '/api'
@@ -176,6 +178,20 @@ export const api = {
   adminUsers: (q: string) =>
     request<{ items: AdminUserSummary[] }>(`/admin/users?q=${encodeURIComponent(q)}`),
   adminUser: (id: string) => request<AdminUserDetail>(`/admin/users/${id}`),
+  adminSupportThreads: (limit = 30) =>
+    request<{ items: SupportThread[] }>(`/admin/support/threads?limit=${limit}`),
+  adminSupportThread: (id: string, opts: { before?: string; limit?: number } = {}) => {
+    const q = new URLSearchParams()
+    if (opts.before) q.set('before', opts.before)
+    if (opts.limit) q.set('limit', String(opts.limit))
+    const qs = q.toString()
+    return request<{ items: SupportMessage[]; hasMore: boolean }>(
+      `/admin/users/${id}/messages${qs ? `?${qs}` : ''}`
+    )
+  },
   adminMessage: (id: string, text: string) =>
-    request<{ ok: boolean }>(`/admin/users/${id}/message`, { method: 'POST', body: { text } }),
+    request<{ ok: boolean; message?: SupportMessage }>(`/admin/users/${id}/message`, {
+      method: 'POST',
+      body: { text },
+    }),
 }

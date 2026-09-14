@@ -12,6 +12,7 @@ import { InboxScreen } from './screens/InboxScreen'
 import { BillDetailScreen } from './screens/BillDetailScreen'
 import { ProfileScreen } from './screens/ProfileScreen'
 import { FeedbackAdminScreen } from './screens/FeedbackAdminScreen'
+import { SupportInboxScreen } from './screens/SupportInboxScreen'
 import { AdminScreen } from './screens/AdminScreen'
 import { api, ApiError } from './lib/api'
 import { captureScreen } from './lib/capture'
@@ -78,6 +79,7 @@ export function App() {
   const [feedbackShot, setFeedbackShot] = useState<File | null>(null)
   const [capturing, setCapturing] = useState(false)
   const [feedbackAdminOpen, setFeedbackAdminOpen] = useState(false)
+  const [supportOpen, setSupportOpen] = useState(false)
 
   useEffect(() => onThemeChange((s) => setDark(s === 'dark')), [])
 
@@ -377,13 +379,15 @@ export function App() {
   }
 
   // Where the user is right now — tagged onto feedback so reports are reproducible.
-  const currentScreen = feedbackAdminOpen
-    ? 'feedback_admin'
-    : showTour
-      ? 'tour'
-      : detailBillId
-        ? 'bill_detail'
-        : tab
+  const currentScreen = supportOpen
+    ? 'support_admin'
+    : feedbackAdminOpen
+      ? 'feedback_admin'
+      : showTour
+        ? 'tour'
+        : detailBillId
+          ? 'bill_detail'
+          : tab
 
   const openFeedback = async () => {
     haptic('light')
@@ -443,7 +447,10 @@ export function App() {
           />
         )}
         {tab === 'admin' && me?.isAdmin && (
-          <AdminScreen onOpenFeedbackAdmin={() => setFeedbackAdminOpen(true)} />
+          <AdminScreen
+            onOpenFeedbackAdmin={() => setFeedbackAdminOpen(true)}
+            onOpenSupport={() => setSupportOpen(true)}
+          />
         )}
       </ErrorBoundary>
 
@@ -489,6 +496,13 @@ export function App() {
             onClose={() => setDetailBillId(null)}
             onEdit={editBill}
           />
+        </ErrorBoundary>
+      )}
+
+      {/* admin-only support inbox — full-screen overlay */}
+      {supportOpen && me?.isAdmin && (
+        <ErrorBoundary resetKey="support-admin">
+          <SupportInboxScreen onClose={() => setSupportOpen(false)} />
         </ErrorBoundary>
       )}
 

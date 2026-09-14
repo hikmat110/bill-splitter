@@ -1,28 +1,15 @@
 import { useEffect, useState } from 'react'
 import { Empty, OverlayHeader, Stat } from '../components/common'
-import { Sheet } from '../components/Sheet'
 import { useToast } from '../components/Toast'
-import { api, ApiError } from '../lib/api'
+import { api } from '../lib/api'
 import { prettyDate, relativeTime } from '../lib/date'
 import { haptic, onBackButton, openTelegramLink } from '../lib/telegram'
 import { useT } from '../i18n'
-import type { I18nKey } from '../i18n'
-import type {
-  AdminMessageErrorBody,
-  AdminSendFailureCode,
-  AdminUserDetail as Detail,
-} from '../lib/types'
+import type { AdminUserDetail as Detail } from '../lib/types'
+import { SupportThreadScreen } from './SupportThreadScreen'
 
-// Explicit map (not a template key) so I18nKey typing stays intact.
-const DM_ERROR: Record<AdminSendFailureCode, I18nKey> = {
-  blocked: 'admin.dm_blocked',
-  chat_not_found: 'admin.dm_chat_not_found',
-  rate_limited: 'admin.dm_rate_limited',
-  send_failed: 'admin.dm_failed',
-}
-
-/** Admin-only user detail: identity, activity counts, and a "message via the
- *  bot" sheet. Full-screen overlay opened from the Admin tab. */
+/** Admin-only user detail: identity, activity counts, and a way into the
+ *  support conversation with this user. Full-screen overlay from the Admin tab. */
 export function AdminUserDetailScreen({
   userId,
   onClose,
@@ -34,15 +21,14 @@ export function AdminUserDetailScreen({
   const toast = useToast()
   const [user, setUser] = useState<Detail | null>(null)
   const [loading, setLoading] = useState(true)
-  const [dmOpen, setDmOpen] = useState(false)
-  const [text, setText] = useState('')
-  const [sending, setSending] = useState(false)
+  const [threadOpen, setThreadOpen] = useState(false)
 
-  // Native back closes the sheet first, then the screen.
-  useEffect(
-    () => onBackButton(dmOpen ? () => setDmOpen(false) : onClose),
-    [dmOpen, onClose]
-  )
+  // onBackButton *adds* a listener, so two mounted screens would both fire on
+  // one tap. While the thread is open it owns the back button.
+  useEffect(() => {
+    if (threadOpen) return
+    return onBackButton(onClose)
+  }, [threadOpen, onClose])
 
   useEffect(() => {
     let alive = true
@@ -62,29 +48,6 @@ export function AdminUserDetailScreen({
       alive = false
     }
   }, [userId, t, toast])
-
-  const send = async () => {
-    const body = text.trim()
-    if (!body || !user || sending) return
-    setSending(true)
-    try {
-      await api.adminMessage(user.id, body)
-      haptic('success')
-      toast(t('admin.dm_sent'), 'ti-send')
-      setText('')
-      setDmOpen(false)
-    } catch (e) {
-      haptic('error')
-      const code =
-        e instanceof ApiError
-          ? (e.data as Partial<AdminMessageErrorBody> | undefined)?.code
-          : undefined
-      const key = code ? DM_ERROR[code] : undefined
-      toast(key ? t(key) : e instanceof Error ? e.message : t('admin.dm_failed'), 'ti-alert-circle')
-    } finally {
-      setSending(false)
-    }
-  }
 
   const name = user ? [user.firstName, user.lastName].filter(Boolean).join(' ') : ''
   const sub = user ? [user.username ? `@${user.username}` : null, user.phone].filter(Boolean).join(' · ') : ''
@@ -126,10 +89,10 @@ export function AdminUserDetailScreen({
                 className="btn btn-primary btn-block"
                 onClick={() => {
                   haptic('light')
-                  setDmOpen(true)
+                  setThreadOpen(true)
                 }}
               >
-                <i className="ti ti-send" /> {t('admin.dm_button')}
+                <i className="ti ti-messages" /> {t('admin.support_open')}
               </button>
               {user.username && (
                 <button
@@ -144,34 +107,13 @@ export function AdminUserDetailScreen({
         )}
       </div>
 
-      <Sheet
-        open={dmOpen}
-        onClose={() => {
-          if (!sending) setDmOpen(false)
-        }}
-        title={t('admin.dm_title')}
-      >
-        <div className="col" style={{ gap: 12 }}>
-          <div className="muted" style={{ fontSize: 13, lineHeight: 1.45 }}>
-            {t('admin.dm_placeholder')}
-          </div>
-          <textarea
-            className="inp"
-            rows={5}
-            maxLength={4000}
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            disabled={sending}
-          />
-          <button
-            className="btn btn-primary btn-block"
-            disabled={sending || !text.trim()}
-            onClick={() => void send()}
-          >
-            <i className="ti ti-send" /> {sending ? t('admin.dm_sending') : t('admin.dm_send')}
-          </button>
-        </div>
-      </Sheet>
+      {threadOpen && user && (
+        <SupportThreadScreen
+          userId={user.id}
+          title={name || t('admin.users')}
+          onClose={() => setThreadOpen(false)}
+        />
+      )}
     </div>
   )
 }

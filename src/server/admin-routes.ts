@@ -21,8 +21,17 @@ import {
 } from '../services/admin.service'
 import type { ActivityItem } from '../services/admin.service'
 import { countFeedback } from '../services/feedback.service'
+import {
+  countUnread,
+  listThread,
+  listThreads,
+  markRead,
+  recordOutbound,
+} from '../services/support.service'
+import type { SupportThread } from '../services/support.service'
 import { findById } from '../services/user.service'
 import { sendAdminMessage } from '../services/notification.service'
+import type { SupportMessage } from '../db/schema'
 import type { SendFailureCode } from '../utils/telegram-errors'
 
 export async function handleAdmin(
@@ -41,6 +50,11 @@ export async function handleAdmin(
   // GET /api/admin/activity?limit=20
   if (seg[0] === 'activity' && seg.length === 1 && method === 'GET') return await getActivity(url)
 
+  // GET /api/admin/support/threads?limit=30 — the support inbox
+  if (seg[0] === 'support' && seg[1] === 'threads' && seg.length === 2 && method === 'GET') {
+    return await getSupportThreads(url)
+  }
+
   if (seg[0] === 'users') {
     // GET /api/admin/users?q=
     if (seg.length === 1 && method === 'GET') return await getUsers(url)
@@ -52,7 +66,11 @@ export async function handleAdmin(
       if (seg.length === 2 && method === 'GET') return await getUser(id.data)
       // POST /api/admin/users/:id/message
       if (seg.length === 3 && seg[2] === 'message' && method === 'POST') {
-        return await postMessage(req, id.data, bot)
+        return await postMessage(req, id.data, user, bot)
+      }
+      // GET /api/admin/users/:id/messages?before=<iso>&limit=50
+      if (seg.length === 3 && seg[2] === 'messages' && method === 'GET') {
+        return await getSupportThread(url, id.data)
       }
     }
   }
@@ -77,6 +95,28 @@ function shapeUser(u: User) {
   }
 }
 
+function shapeSupportMessage(m: SupportMessage) {
+  return {
+    id: m.id,
+    direction: m.direction,
+    text: m.text,
+    attachmentId: m.attachment_id,
+    attachmentMime: m.attachment_mime,
+    adminUserId: m.admin_user_id,
+    failureCode: m.failure_code,
+    readAt: m.read_at?.toISOString() ?? null,
+    createdAt: m.created_at.toISOString(),
+  }
+}
+
+function shapeThread(th: SupportThread) {
+  return {
+    user: shapeUser(th.user),
+    lastMessage: shapeSupportMessage(th.lastMessage),
+    unread: th.unread,
+  }
+}
+
 function shapeActivity(item: ActivityItem) {
   return { ...item, at: item.at.toISOString() }
 }
@@ -85,11 +125,12 @@ function shapeActivity(item: ActivityItem) {
 
 async function getStats(): Promise<Response> {
   const now = new Date()
-  const [overview, scans, trends, open] = await Promise.all([
+  const [overview, scans, trends, open, unreadSupport] = await Promise.all([
     getOverviewStats(now),
     getScanHealth(now),
     getWeeklyTrends(now),
     countFeedback('open'),
+    countUnread(),
   ])
   return json({
     generatedAt: now.toISOString(),
@@ -97,6 +138,7 @@ async function getStats(): Promise<Response> {
     scans: { ...scans, resetsAt: scans.resetsAt.toISOString() },
     trends,
     feedback: { open },
+    support: { unread: unreadSupport },
   })
 }
 
@@ -125,13 +167,62 @@ const SEND_FAILURE: Record<SendFailureCode, { status: number; message: string }>
   send_failed: { status: 502, message: 'Telegram rejected the message' },
 }
 
-async function postMessage(req: Request, id: string, bot: Bot<MyContext>): Promise<Response> {
+async function postMessage(
+  req: Request,
+  id: string,
+  admin: User,
+  bot: Bot<MyContext>
+): Promise<Response> {
   const body = adminMessageSchema.parse(await req.json())
   const target = await findById(id)
   if (!target) return error(404, 'User not found')
 
   const result = await sendAdminMessage(bot, target, body.text)
-  if (result.ok) return json({ ok: true })
+
+  // Recorded either way: a refused message stays in the thread as an
+  // undelivered bubble instead of vanishing.
+  const row = await recordOutbound(target.id, admin.id, {
+    text: body.text,
+    tgMessageId: result.ok ? result.messageId : null,
+    failureCode: result.ok ? null : result.code,
+  })
+
+  if (result.ok) return json({ ok: true, message: shapeSupportMessage(row) })
   const failure = SEND_FAILURE[result.code]
-  return json({ error: failure.message, code: result.code }, { status: failure.status })
+  // The row goes out with the error too, so the thread can render it as an
+  // undelivered bubble instead of dropping what the admin typed.
+  return json(
+    { error: failure.message, code: result.code, message: shapeSupportMessage(row) },
+    { status: failure.status }
+  )
+}
+
+const THREAD_PAGE_MAX = 100
+
+async function getSupportThread(url: URL, userId: string): Promise<Response> {
+  const limit = Math.min(
+    THREAD_PAGE_MAX,
+    Math.max(1, Number(url.searchParams.get('limit')) || 50)
+  )
+  const rawBefore = url.searchParams.get('before')
+  const parsedBefore = rawBefore ? new Date(rawBefore) : null
+  const before =
+    parsedBefore && !Number.isNaN(parsedBefore.getTime()) ? parsedBefore : undefined
+
+  const { items, hasMore } = await listThread(userId, { before, limit })
+
+  // Opening the thread marks it read — only the rows on this page, and only
+  // when there are any, so the 5s poll is a pure read after the first tick.
+  const unreadIds = items
+    .filter((m) => m.direction === 'in' && m.read_at === null)
+    .map((m) => m.id)
+  if (unreadIds.length > 0) await markRead(unreadIds)
+
+  return json({ items: items.map(shapeSupportMessage), hasMore })
+}
+
+async function getSupportThreads(url: URL): Promise<Response> {
+  const limit = Math.min(50, Math.max(1, Number(url.searchParams.get('limit')) || 30))
+  const threads = await listThreads(limit)
+  return json({ items: threads.map(shapeThread) })
 }

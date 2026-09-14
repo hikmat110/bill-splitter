@@ -73,6 +73,7 @@ import {
   FeedbackLimitError,
 } from '../services/feedback.service'
 import type { FeedbackWithDetails } from '../services/feedback.service'
+import { findSupportAttachment } from '../services/support.service'
 import {
   saveImage,
   readAttachment,
@@ -737,6 +738,14 @@ async function getFile(user: User, id: string): Promise<Response> {
     const canView = fb.feedback.user_id === user.id || isAdmin(user, config.ADMIN_TELEGRAM_IDS)
     if (!canView) return error(403, 'Forbidden')
     return streamAttachment(id, fb.attachment.mime)
+  }
+
+  const support = await findSupportAttachment(id)
+  if (support?.attachment_mime) {
+    // Support-thread photos: visible to the sender and to admins.
+    const canView = support.user_id === user.id || isAdmin(user, config.ADMIN_TELEGRAM_IDS)
+    if (!canView) return error(403, 'Forbidden')
+    return streamAttachment(id, support.attachment_mime)
   }
 
   return error(404, 'Not found')

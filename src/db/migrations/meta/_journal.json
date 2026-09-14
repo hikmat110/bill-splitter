@@ -64,6 +64,13 @@
       "when": 1788519246790,
       "tag": "0008_bitter_big_bertha",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788954351369,
+      "tag": "0009_optimal_thunderbolt",
+      "breakpoints": true
     }
   ]
 }
