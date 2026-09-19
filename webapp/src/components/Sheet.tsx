@@ -6,12 +6,17 @@ export function Sheet({
   onClose,
   title,
   children,
+  footer,
   maxHeight,
 }: {
   open: boolean
   onClose: () => void
   title?: ReactNode
   children: ReactNode
+  /** Pinned call-to-action. When set, the sheet stops scrolling as a whole: the
+   *  handle/title become a fixed header, `children` scroll between them, and this
+   *  stays put at the bottom edge so it survives a long list. */
+  footer?: ReactNode
   maxHeight?: number | string
 }) {
   const [mounted, setMounted] = useState(open)
@@ -28,13 +33,20 @@ export function Sheet({
       }}
     >
       <div
-        className="sheet"
+        className={'sheet' + (footer ? ' with-footer' : '')}
         style={maxHeight ? { maxHeight } : undefined}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="sheet-handle" />
         {title && <div className="sheet-title">{title}</div>}
-        {children}
+        {footer ? (
+          <>
+            <div className="sheet-body">{children}</div>
+            <div className="sheet-footer">{footer}</div>
+          </>
+        ) : (
+          children
+        )}
       </div>
     </div>
   )

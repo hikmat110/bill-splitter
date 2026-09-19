@@ -24,6 +24,23 @@ export function formatDate(date: Date): string {
   return dateFormatter.format(date)
 }
 
+const STAMP_LOCALE: Record<string, string> = { ru: 'ru-RU', uz: 'uz-UZ', en: 'en-US' }
+
+/** Day + short month + 24h time, pinned to Tashkent: "19 сент., 14:05". Feeds the
+ *  auto-generated name for a bill submitted without a title. Server-side only —
+ *  the Mini App stamps its own in the device's zone. */
+export function formatBillStamp(lang: string, date: Date = new Date()): string {
+  const loc = STAMP_LOCALE[lang] ?? 'uz-UZ'
+  const day = date.toLocaleDateString(loc, { timeZone: TZ, day: 'numeric', month: 'short' })
+  const time = date.toLocaleTimeString(loc, {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  return `${day}, ${time}`
+}
+
 /** Format 16-digit card number string as "XXXX XXXX XXXX XXXX" */
 export function formatCard(digits: string): string {
   return digits.replace(/(\d{4})(\d{4})(\d{4})(\d{4})/, '$1 $2 $3 $4')

@@ -62,7 +62,6 @@ export const en = {
     action: 'Update',
   },
   split: {
-    untitled: 'Untitled bill',
     people: '{{n}} people',
     items: 'Items · {{n}}',
     item: 'Item',
@@ -79,7 +78,8 @@ export const en = {
     sending: 'Sending…',
     update: 'Update',
     updating: 'Updating…',
-    receipt_photo: 'Receipt photo',
+    receipt_photo: 'Receipt',
+    default_title: 'Bill · {{when}}',
     receipt_hint: 'Optional — participants can see it',
     scan_receipt: 'Scan receipt',
     scanning: 'Scanning…',

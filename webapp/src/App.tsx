@@ -17,6 +17,7 @@ import { AdminScreen } from './screens/AdminScreen'
 import { api, ApiError } from './lib/api'
 import { captureScreen } from './lib/capture'
 import { emptyDraft, uid } from './lib/draft'
+import { billStamp } from './lib/date'
 import type { DraftBill, Person } from './lib/draft'
 import { loadDraft, saveDraft, clearDraft, isDraftEmpty } from './lib/draftStorage'
 import { hasSeenTour, markTourSeen } from './lib/firstRun'
@@ -218,6 +219,14 @@ export function App() {
   useEffect(() => {
     if (loading || deepLinkDone || !me) return
     setDeepLinkDone(true)
+    // Put the owner on their own bill. Done here rather than in the useState
+    // initializer because selfContactId isn't known at first render. Only fills
+    // an empty list, so the restore/editBill paths below still win.
+    setDraft((d) =>
+      d.participantIds.length === 0 && !d.editingBillId
+        ? { ...d, participantIds: [me.selfContactId] }
+        : d
+    )
     const param = startParam()
     if (param?.startsWith('edit_')) {
       const bill = bills.created.find((b) => b.id === param.slice('edit_'.length))
@@ -243,7 +252,7 @@ export function App() {
       }
     }
     const stored = loadDraft(me.id)
-    if (stored && !isDraftEmpty(stored)) {
+    if (stored && !isDraftEmpty(stored, me.selfContactId)) {
       // Contacts (and cards) may have been deleted since the draft was written — prune.
       const known = new Set([me.selfContactId, ...contacts.map((c) => c.id)])
       setDraft({
@@ -265,7 +274,7 @@ export function App() {
     // means they've used the app before; incoming bills don't count — those
     // arrive passively, possibly before the user ever opened the app.
     if (param?.startsWith('bill_')) return
-    if ((stored && !isDraftEmpty(stored)) || bills.created.length > 0) {
+    if ((stored && !isDraftEmpty(stored, me.selfContactId)) || bills.created.length > 0) {
       markTourSeen(me.id)
       return
     }
@@ -277,14 +286,14 @@ export function App() {
   useEffect(() => {
     if (!me || draft.editingBillId) return
     const timer = setTimeout(() => {
-      if (isDraftEmpty(draft)) clearDraft(me.id)
+      if (isDraftEmpty(draft, me.selfContactId)) clearDraft(me.id)
       else saveDraft(me.id, draft)
     }, 400)
     return () => clearTimeout(timer)
   }, [draft, me])
 
   const discardDraft = useCallback(() => {
-    setDraft(emptyDraft())
+    setDraft(emptyDraft(me?.selfContactId))
     if (me) clearDraft(me.id)
   }, [me])
 
@@ -303,7 +312,9 @@ export function App() {
     setSending(true)
     try {
       const payload = {
-        title: draft.title.trim(),
+        // Untitled bills get a date/time name, same idea as default_item_name
+        // below. Also covers an edit that clears the title rather than blanking it.
+        title: draft.title.trim() || t('split.default_title', { when: billStamp(lang) }),
         participantContactIds: draft.participantIds,
         items: draft.items
           .filter((i) => i.price > 0 && i.who.length > 0)
@@ -337,7 +348,7 @@ export function App() {
         ? await api.updateBill(editingId, payload)
         : await api.createBill(payload)
       await refresh()
-      setDraft(emptyDraft())
+      setDraft(emptyDraft(me.selfContactId))
       clearDraft(me.id)
       haptic('success')
       toast(t(editingId ? 'app.bill_updated' : 'app.bill_sent'), 'ti-send')

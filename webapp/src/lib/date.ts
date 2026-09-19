@@ -42,3 +42,16 @@ export function relativeTime(t: T, lang: string, iso: string): string {
   if (days < 7) return rtf.format(-days, 'day')
   return prettyDate(t, lang, iso)
 }
+
+/** Day + short month + time for auto-naming an untitled bill: "19 сент., 14:05".
+ *  Unlike prettyTime this always keeps the date, so bills stay distinguishable in
+ *  the list later. Date and time are formatted separately on purpose — a single
+ *  toLocaleString emits "Sep 19 at 14:05" for en-US. Device zone = the user's
+ *  (Tashkent). */
+export function billStamp(lang: string, d: Date = new Date()): string {
+  const locale = DATE_LOCALE[lang] ?? 'en-US'
+  const date = d.toLocaleDateString(locale, { day: 'numeric', month: 'short' })
+  // hourCycle h23, not hour12:false — the latter can render "24:07" at midnight on JSC.
+  const time = d.toLocaleTimeString(locale, { hour: '2-digit', minute: '2-digit', hourCycle: 'h23' })
+  return `${date}, ${time}`
+}

@@ -60,7 +60,6 @@ export const ru: Dict = {
     action: 'Обновить',
   },
   split: {
-    untitled: 'Счёт без названия',
     people: 'Участников: {{n}}',
     items: 'Позиции · {{n}}',
     item: 'Позиция',
@@ -77,7 +76,8 @@ export const ru: Dict = {
     sending: 'Отправка…',
     update: 'Обновить',
     updating: 'Обновление…',
-    receipt_photo: 'Фото чека',
+    receipt_photo: 'Чек',
+    default_title: 'Счёт · {{when}}',
     receipt_hint: 'Необязательно — увидят участники',
     scan_receipt: 'Сканировать чек',
     scanning: 'Сканирование…',

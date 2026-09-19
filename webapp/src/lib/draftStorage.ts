@@ -10,11 +10,15 @@ import type { DraftBill } from './draft'
 const VERSION = 2
 const key = (userId: string) => `billsplit.draft.v${VERSION}.${userId}`
 
-/** Nothing worth restoring: no title, people, items, or receipt. */
-export function isDraftEmpty(d: DraftBill): boolean {
+/** Nothing worth restoring: no title, items, or receipt, and nobody on the bill
+ *  beyond the owner — who is pre-selected on every fresh draft, so counting them
+ *  would make a pristine draft look like work in progress (a phantom "draft
+ *  restored" toast, and the welcome tour suppressed for brand-new users). */
+export function isDraftEmpty(d: DraftBill, selfContactId?: string | null): boolean {
+  const others = d.participantIds.filter((id) => id !== selfContactId)
   return (
     d.title.trim() === '' &&
-    d.participantIds.length === 0 &&
+    others.length === 0 &&
     d.items.length === 0 &&
     !d.receiptAttachmentId
   )

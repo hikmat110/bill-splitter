@@ -60,10 +60,15 @@ describe('createBillSchema', () => {
     expect(createBillSchema.safeParse({ ...validBill, servicePct: 150 }).success).toBe(false)
   })
 
-  it('rejects a missing title', () => {
+  it('defaults a missing title to empty (the route fills the real fallback)', () => {
     const { title, ...rest } = validBill
     void title
-    expect(createBillSchema.safeParse(rest).success).toBe(false)
+    expect(createBillSchema.parse(rest).title).toBe('')
+  })
+
+  // .max(200) is now the only guard on the title, so it needs its own case.
+  it('rejects an over-long title', () => {
+    expect(createBillSchema.safeParse({ ...validBill, title: 'x'.repeat(201) }).success).toBe(false)
   })
 
   it('rejects an item shared with a non-participant', () => {

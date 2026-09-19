@@ -80,6 +80,7 @@ export const uz = {
     batch_not_found: "🔍 Botda topilmadi (qo'shilmadi): {{names}}",
   },
   bill: {
+    default_title: 'Hisob · {{when}}',
     ask_title: '🧾 Hisob nomi:',
     ask_participants: 'Ishtirokchilarni tanlang:',
     no_contacts: "Avval «Kontaktlar» bo'limidan kontakt qo'shing.",

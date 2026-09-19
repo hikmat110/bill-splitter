@@ -103,7 +103,8 @@ import {
   feedbackCategorySchema,
   feedbackStatusSchema,
 } from './schemas'
-import { parseCardNumber } from '../utils/format'
+import { parseCardNumber, formatBillStamp } from '../utils/format'
+import { tLang } from '../i18n'
 import { parseUsernameList } from '../utils/username'
 import { toCreateBillInput, toUpdateBillInput } from './mappers'
 import { canManageBill, canMarkPaid, isAdmin } from './authz'
@@ -545,14 +546,27 @@ async function postCard(req: Request, user: User): Promise<Response> {
   }
 }
 
+// A blank title is allowed by the schema; name the bill after when it was made.
+// Lives here rather than in the pure, unit-tested mapper so `new Date()` stays out
+// of it. The Mini App normally sends its own stamp in the device's zone.
+function billTitleOrDefault(title: string, user: User): string {
+  return (
+    title ||
+    tLang(user.language_code, 'bill.default_title', { when: formatBillStamp(user.language_code) })
+  )
+}
+
 async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {
   const body = createBillSchema.parse(await req.json())
+  const title = billTitleOrDefault(body.title, user)
   const resolved = await resolveBillCardId(user, body.cardId)
   if ('response' in resolved) return resolved.response
   // Resolve the creator's own contact so a tip-payer of "the creator" is
   // normalized to null (default) rather than wrongly crediting their own share.
   const self = await findOrCreateSelfContact(user.id, user.first_name)
-  const bill = await createBill(toCreateBillInput(body, user.id, self.id, resolved.cardId))
+  const bill = await createBill(
+    toCreateBillInput({ ...body, title }, user.id, self.id, resolved.cardId)
+  )
   await sendBillNotifications(bot, bill.id)
   const d = await getBillWithDetails(bill.id)
   return json(d ? shapeBillDetail(d) : { id: bill.id }, { status: 201 })
@@ -573,6 +587,7 @@ async function patchBill(
   }
 
   const body = updateBillSchema.parse(await req.json())
+  const title = billTitleOrDefault(body.title, user)
   const resolved = await resolveBillCardId(user, body.cardId)
   if ('response' in resolved) return resolved.response
   const self = await findOrCreateSelfContact(user.id, user.first_name)
@@ -587,7 +602,9 @@ async function patchBill(
   const oldReceiptMime = d.bill.receipt_mime
 
   try {
-    await updateBill(toUpdateBillInput(body, billId, user.id, self.id, resolved.cardId))
+    await updateBill(
+      toUpdateBillInput({ ...body, title }, billId, user.id, self.id, resolved.cardId)
+    )
   } catch (e) {
     if (e instanceof BillNotEditableError) {
       return error(409, 'Bill can no longer be edited — someone has already responded')

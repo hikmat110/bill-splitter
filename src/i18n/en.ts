@@ -80,6 +80,7 @@ export const en = {
     batch_not_found: '🔍 Not on the bot yet (not added): {{names}}',
   },
   bill: {
+    default_title: 'Bill · {{when}}',
     ask_title: '🧾 Bill title:',
     ask_participants: 'Select participants:',
     no_contacts: 'Add contacts in the Contacts section first.',

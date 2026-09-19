@@ -44,10 +44,14 @@ export interface Person {
   linkedUserId?: string | null
 }
 
-export function emptyDraft(): DraftBill {
+/** A fresh draft. The owner is pre-selected when their self-contact id is known:
+ *  they're on their own bill by default, and it makes the scan / add-item
+ *  buttons usable right away (both are gated on having a participant). Callers
+ *  that don't know the id yet (first render, storage merge base) pass nothing. */
+export function emptyDraft(selfContactId?: string | null): DraftBill {
   return {
     title: '',
-    participantIds: [],
+    participantIds: selfContactId ? [selfContactId] : [],
     items: [],
     servicePct: 0,
     tip: 0,

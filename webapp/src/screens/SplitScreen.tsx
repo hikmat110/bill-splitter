@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { Avatar } from '../components/Avatar'
 import { AuthImage } from '../components/AuthImage'
@@ -14,7 +14,7 @@ import { uid } from '../lib/draft'
 import type { DraftBill, DraftItem, Person } from '../lib/draft'
 import { cardLabel, defaultCardId } from '../lib/cards'
 import type { ScanLimitBody, UserCard } from '../lib/types'
-import { prettyTime } from '../lib/date'
+import { billStamp, prettyTime } from '../lib/date'
 import { haptic, showAlert } from '../lib/telegram'
 import { useT } from '../i18n'
 
@@ -60,6 +60,9 @@ export function SplitScreen({
   const shares = previewShares(draft)
   const nameById = (id: string) => people.find((p) => p.id === id)?.name ?? '?'
   const participants = draft.participantIds
+  // Everyone but the owner, who is on the bill by default. Anything that asks
+  // "has the user added people yet?" must not count them.
+  const others = participants.filter((id) => id !== selfContactId)
   // "Custom" sits right after Off — much easier to spot than at the far end.
   const serviceOptions = [
     { value: 0, label: t('common.off') },
@@ -247,14 +250,18 @@ export function SplitScreen({
     }
   }
 
+  // The title is optional — an untitled bill is auto-named at send time.
   const canSend =
-    draft.title.trim().length > 0 &&
-    participants.length > 0 &&
-    draft.items.some((i) => i.price > 0 && i.who.length > 0)
+    participants.length > 0 && draft.items.some((i) => i.price > 0 && i.who.length > 0)
+
+  // Shown greyed in the title field so people see what the bill will be called.
+  // Frozen at mount (rather than re-derived per keystroke); the stored title is
+  // stamped independently at send time, which is the instant that matters.
+  const defaultTitle = useMemo(() => t('split.default_title', { when: billStamp(lang) }), [t, lang])
 
   const hasContent =
     draft.title.trim().length > 0 ||
-    participants.length > 0 ||
+    others.length > 0 ||
     draft.items.length > 0 ||
     !!draft.receiptAttachmentId
 
@@ -292,7 +299,7 @@ export function SplitScreen({
             <input
               className="inp ghost"
               value={draft.title}
-              placeholder={t('split.untitled')}
+              placeholder={defaultTitle}
               onChange={(e) => patch({ title: e.target.value })}
               style={{ fontSize: 19, fontWeight: 800, letterSpacing: '-.3px' }}
             />
@@ -360,6 +367,67 @@ export function SplitScreen({
         </div>
       </div>
 
+      {/* scan / receipt photo — leads the form: it's the main way items get
+          entered, and scanned items attach to whoever is on the bill above. */}
+      <SecTitle>{t('split.receipt_photo')}</SecTitle>
+      <div className="card" style={{ marginBottom: 14, padding: 'calc(14px * var(--dens))' }}>
+        <input
+          ref={scanFileRef}
+          type="file"
+          accept="image/*"
+          style={{ display: 'none' }}
+          onChange={(e) => {
+            onScanReceipt(e.target.files?.[0])
+            e.target.value = '' // allow re-picking the same file
+          }}
+        />
+        {scanning ? (
+          <div
+            className="row"
+            style={{ gap: 10, alignItems: 'center', justifyContent: 'center', padding: '6px 0' }}
+          >
+            <i className="ti ti-loader-2 spin" style={{ fontSize: 18, color: 'var(--accent)' }} />
+            <span className="muted" style={{ fontSize: 13.5, fontWeight: 600 }}>
+              {t('split.scanning')}
+            </span>
+          </div>
+        ) : draft.receiptAttachmentId ? (
+          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
+            {draft.receiptPreviewUrl ? (
+              <img
+                src={draft.receiptPreviewUrl}
+                alt=""
+                style={{ width: 56, height: 56, borderRadius: 'var(--r)', objectFit: 'cover', flexShrink: 0 }}
+              />
+            ) : (
+              <AuthImage
+                attachmentId={draft.receiptAttachmentId}
+                style={{ width: 56, height: 56, borderRadius: 'var(--r)', flexShrink: 0 }}
+              />
+            )}
+            <span className="muted" style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>
+              {t('split.receipt_hint')}
+            </span>
+            <i
+              className="ti ti-trash"
+              onClick={removeReceipt}
+              style={{ fontSize: 18, color: 'var(--text-3)', cursor: 'pointer', flexShrink: 0 }}
+            />
+          </div>
+        ) : (
+          // Same people-first gate as the checklist's scan button: scanned
+          // items are assigned to the current participants, so scanning with
+          // nobody on the bill produces items nobody owns.
+          <button
+            className="btn btn-block"
+            disabled={participants.length === 0}
+            onClick={() => scanFileRef.current?.click()}
+          >
+            <i className="ti ti-sparkles" /> {t('split.scan_receipt')}
+          </button>
+        )}
+      </div>
+
       {/* items */}
       <SecTitle>{t('split.items', { n: draft.items.length })}</SecTitle>
 
@@ -386,10 +454,10 @@ export function SplitScreen({
             <div className="col" style={{ gap: 12 }}>
               <GsStep
                 n={1}
-                done={participants.length > 0}
+                done={others.length > 0}
                 label={t('split.gs_people')}
                 action={
-                  participants.length === 0 && (
+                  others.length === 0 && (
                     <button
                       className="btn btn-sm btn-soft"
                       onClick={onAddPeople}
@@ -640,66 +708,6 @@ export function SplitScreen({
               <i className={'ti ' + (cardBusy ? 'ti-loader-2' : 'ti-check')} />
             </button>
           </div>
-        )}
-      </div>
-
-      {/* receipt photo (optional) */}
-      <SecTitle>{t('split.receipt_photo')}</SecTitle>
-      <div className="card" style={{ padding: 'calc(14px * var(--dens))' }}>
-        <input
-          ref={scanFileRef}
-          type="file"
-          accept="image/*"
-          style={{ display: 'none' }}
-          onChange={(e) => {
-            onScanReceipt(e.target.files?.[0])
-            e.target.value = '' // allow re-picking the same file
-          }}
-        />
-        {scanning ? (
-          <div
-            className="row"
-            style={{ gap: 10, alignItems: 'center', justifyContent: 'center', padding: '6px 0' }}
-          >
-            <i className="ti ti-loader-2 spin" style={{ fontSize: 18, color: 'var(--accent)' }} />
-            <span className="muted" style={{ fontSize: 13.5, fontWeight: 600 }}>
-              {t('split.scanning')}
-            </span>
-          </div>
-        ) : draft.receiptAttachmentId ? (
-          <div className="row" style={{ gap: 12, alignItems: 'center' }}>
-            {draft.receiptPreviewUrl ? (
-              <img
-                src={draft.receiptPreviewUrl}
-                alt=""
-                style={{ width: 56, height: 56, borderRadius: 'var(--r)', objectFit: 'cover', flexShrink: 0 }}
-              />
-            ) : (
-              <AuthImage
-                attachmentId={draft.receiptAttachmentId}
-                style={{ width: 56, height: 56, borderRadius: 'var(--r)', flexShrink: 0 }}
-              />
-            )}
-            <span className="muted" style={{ flex: 1, fontSize: 12.5, fontWeight: 600 }}>
-              {t('split.receipt_hint')}
-            </span>
-            <i
-              className="ti ti-trash"
-              onClick={removeReceipt}
-              style={{ fontSize: 18, color: 'var(--text-3)', cursor: 'pointer', flexShrink: 0 }}
-            />
-          </div>
-        ) : (
-          // Same people-first gate as the checklist's scan button: scanned
-          // items are assigned to the current participants, so scanning with
-          // nobody on the bill produces items nobody owns.
-          <button
-            className="btn btn-block"
-            disabled={participants.length === 0}
-            onClick={() => scanFileRef.current?.click()}
-          >
-            <i className="ti ti-sparkles" /> {t('split.scan_receipt')}
-          </button>
         )}
       </div>
 

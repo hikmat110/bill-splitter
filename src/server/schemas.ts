@@ -23,7 +23,10 @@ export const imageMimeSchema = z.enum(['image/jpeg', 'image/png', 'image/webp'])
 
 export const createBillSchema = z
   .object({
-    title: z.string().trim().min(1).max(200),
+    // Optional: an untitled bill is auto-named. The Mini App sends its own
+    // device-local default; postBill/patchBill fill the fallback for anything
+    // that sends '' — nothing downstream renders a blank title gracefully.
+    title: z.string().trim().max(200).default(''),
     participantContactIds: z.array(z.uuid()).min(1),
     items: z.array(createBillItemSchema).min(1),
     servicePct: z.number().min(0).max(100).default(0),

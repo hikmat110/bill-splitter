@@ -27,8 +27,22 @@ export function PeopleSheet({
   const { t } = useT()
   const { busy, blocked, cancelBlocked, requestDelete, forceDelete } = useContactDelete(onDeleted)
 
+  // The Done button is pinned via the sheet's footer slot so a long contact list
+  // can't push it below the fold. The `blocked` branch has its own actions, so it
+  // gets no footer.
   return (
-    <Sheet open={open} onClose={onClose} title={t('people.title')}>
+    <Sheet
+      open={open}
+      onClose={onClose}
+      title={t('people.title')}
+      footer={
+        blocked ? undefined : (
+          <button className="btn btn-primary btn-block btn-lg" onClick={onClose}>
+            {t('people.done', { n: selected.length })}
+          </button>
+        )
+      }
+    >
       {blocked ? (
         <BlockingBillsPanel
           blocked={blocked}
@@ -112,10 +126,6 @@ export function PeopleSheet({
               </div>
             )}
           </div>
-
-          <button className="btn btn-primary btn-block btn-lg" onClick={onClose}>
-            {t('people.done', { n: selected.length })}
-          </button>
         </div>
       )}
     </Sheet>

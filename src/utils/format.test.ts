@@ -5,6 +5,7 @@ import {
   formatParticipantSummary,
   cardNetwork,
   cardDisplayLabel,
+  formatBillStamp,
 } from './format'
 
 describe('formatMoney', () => {
@@ -88,5 +89,24 @@ describe('cardDisplayLabel', () => {
   test('composes network + last 4 when unnamed', () => {
     expect(cardDisplayLabel({ number: '8600123412346789', label: null })).toBe('Uzcard ••6789')
     expect(cardDisplayLabel({ number: '9860000011112222', label: null })).toBe('Humo ••2222')
+  })
+})
+
+describe('formatBillStamp', () => {
+  // Fixed instant: 2026-09-19 14:05 Tashkent (UTC+5).
+  const at = new Date('2026-09-19T09:05:00Z')
+
+  test('renders day, short month and 24h time', () => {
+    expect(formatBillStamp('ru', at)).toBe('19 сент., 14:05')
+    expect(formatBillStamp('en', at)).toBe('Sep 19, 14:05')
+  })
+
+  test('pins to Tashkent regardless of the machine zone', () => {
+    // 21:30 UTC is already the next day in Tashkent (02:30).
+    expect(formatBillStamp('en', new Date('2026-09-19T21:30:00Z'))).toBe('Sep 20, 02:30')
+  })
+
+  test('falls back to uz for an unknown language', () => {
+    expect(formatBillStamp('de', at)).toBe(formatBillStamp('uz', at))
   })
 })

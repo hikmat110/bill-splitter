@@ -60,7 +60,6 @@ export const uz: Dict = {
     action: 'Yangilash',
   },
   split: {
-    untitled: 'Nomsiz hisob',
     people: '{{n}} kishi',
     items: 'Mahsulotlar · {{n}}',
     item: 'Mahsulot',
@@ -77,7 +76,8 @@ export const uz: Dict = {
     sending: 'Yuborilmoqda…',
     update: 'Yangilash',
     updating: 'Yangilanmoqda…',
-    receipt_photo: 'Chek rasmi',
+    receipt_photo: 'Chek',
+    default_title: 'Hisob · {{when}}',
     receipt_hint: 'Ixtiyoriy — ishtirokchilar koʻradi',
     scan_receipt: 'Chekni skanlash',
     scanning: 'Skanlanmoqda…',

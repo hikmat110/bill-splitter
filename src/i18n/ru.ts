@@ -80,6 +80,7 @@ export const ru = {
     batch_not_found: '🔍 Не найдены в боте (не добавлены): {{names}}',
   },
   bill: {
+    default_title: 'Счёт · {{when}}',
     ask_title: '🧾 Название счёта:',
     ask_participants: 'Выберите участников:',
     no_contacts: 'Сначала добавьте контакты через раздел «Контакты».',
