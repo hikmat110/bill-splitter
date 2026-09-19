@@ -21,6 +21,7 @@ import type {
   AdminUserDetail,
   SupportMessage,
   SupportThread,
+  GroupSplit,
 } from './types'
 
 const BASE = '/api'
@@ -152,6 +153,9 @@ export const api = {
       method: 'POST',
       ...(proof ? { body: proof } : {}),
     }),
+  groupSplit: (id: string) => request<GroupSplit>(`/group-splits/${id}`),
+  claimGroupSplit: (id: string) =>
+    request<GroupSplit>(`/group-splits/${id}/claim`, { method: 'POST' }),
   createFeedback: (body: CreateFeedbackPayload) =>
     request<{ id: string }>('/feedback', { method: 'POST', body }),
   feedbackList: (opts: {

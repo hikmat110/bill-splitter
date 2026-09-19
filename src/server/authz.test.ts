@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { canManageBill, canMarkPaid, isAdmin } from './authz'
+import { canManageBill, canMarkPaid, isAdmin, canManageGroupSplit } from './authz'
 import type { User } from '../db/schema'
 
 const user = (id: string) => ({ id }) as User
@@ -33,5 +33,14 @@ describe('isAdmin', () => {
 
   it('is false for an empty admin list', () => {
     expect(isAdmin({ telegram_id: 123n }, [])).toBe(false)
+  })
+})
+
+describe('canManageGroupSplit', () => {
+  it('is true only for the host who started it', () => {
+    // The roster holds other people's names and telegram ids, so this is a
+    // privacy boundary, not just a workflow one.
+    expect(canManageGroupSplit(user('u1'), { creator_id: 'u1' })).toBe(true)
+    expect(canManageGroupSplit(user('u2'), { creator_id: 'u1' })).toBe(false)
   })
 })

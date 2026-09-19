@@ -13,6 +13,7 @@ import { attachmentPath } from './storage.service'
 import { findById } from './user.service'
 import { formatMoney, formatCard } from '../utils/format'
 import { classifySendError } from '../utils/telegram-errors'
+import { refreshBoardForParticipant } from './group-board.service'
 import type { SendFailureCode } from '../utils/telegram-errors'
 import { rootLogger } from '../bot/middleware/logger'
 import { t, langCtx } from '../i18n'
@@ -175,6 +176,12 @@ export async function notifyCreatorOfPaymentMark(
   bot: Bot<MyContext>,
   participantId: string
 ): Promise<void> {
+  // A bill created from a group carries a live board there. Refresh it here —
+  // the single point every payment transition already funnels through, from
+  // both the bot handlers and the Mini App API — and before the guards below,
+  // which return early for participants who cannot be DM'd.
+  await refreshBoardForParticipant(bot, participantId).catch(() => undefined)
+
   const participant = await getParticipantById(participantId)
   if (!participant) return
 
@@ -223,6 +230,12 @@ export async function notifyParticipantConfirmed(
   bot: Bot<MyContext>,
   participantId: string
 ): Promise<void> {
+  // A bill created from a group carries a live board there. Refresh it here —
+  // the single point every payment transition already funnels through, from
+  // both the bot handlers and the Mini App API — and before the guards below,
+  // which return early for participants who cannot be DM'd.
+  await refreshBoardForParticipant(bot, participantId).catch(() => undefined)
+
   const participant = await getParticipantById(participantId)
   if (!participant?.contact.linked_user_id) return
 
@@ -250,6 +263,12 @@ export async function notifyParticipantDisputed(
   participantId: string,
   reason: string
 ): Promise<void> {
+  // A bill created from a group carries a live board there. Refresh it here —
+  // the single point every payment transition already funnels through, from
+  // both the bot handlers and the Mini App API — and before the guards below,
+  // which return early for participants who cannot be DM'd.
+  await refreshBoardForParticipant(bot, participantId).catch(() => undefined)
+
   const participant = await getParticipantById(participantId)
   if (!participant?.contact.linked_user_id) return
 

@@ -24,3 +24,12 @@ export function canMarkPaid(
 ): boolean {
   return participant.contact.linked_user_id === user.id
 }
+
+/**
+ * Only the person who ran /split may read or build it. The roster contains
+ * other people's names and telegram ids, so this is a privacy boundary, not
+ * just a workflow one.
+ */
+export function canManageGroupSplit(user: User, split: { creator_id: string }): boolean {
+  return split.creator_id === user.id
+}

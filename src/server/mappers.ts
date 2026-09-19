@@ -53,3 +53,49 @@ export function toUpdateBillInput(
 ): UpdateBillInput {
   return { ...toCreateBillInput(body, creatorId, creatorSelfContactId, resolvedCardId), billId }
 }
+
+export interface GroupSplitShape {
+  id: string
+  title: string | null
+  status: string
+  receiptAttachmentId: string | null
+  receiptMime: string | null
+  /** Ready to seed the Split screen's participant selection. */
+  participantContactIds: string[]
+  members: { contactId: string | null; displayName: string; isRegistered: boolean }[]
+}
+
+/**
+ * The group roster as the Mini App needs it. Deliberately omits chat_id and
+ * telegram ids — the app has no use for them and they are other people's data.
+ */
+export function shapeGroupSplit(
+  split: {
+    id: string
+    title: string | null
+    status: string
+    receipt_attachment_id: string | null
+    receipt_mime: string | null
+  },
+  members: {
+    contact_id: string | null
+    display_name: string
+    user_id: string | null
+  }[]
+): GroupSplitShape {
+  return {
+    id: split.id,
+    title: split.title,
+    status: split.status,
+    receiptAttachmentId: split.receipt_attachment_id,
+    receiptMime: split.receipt_mime,
+    participantContactIds: members
+      .map((m) => m.contact_id)
+      .filter((id): id is string => id !== null),
+    members: members.map((m) => ({
+      contactId: m.contact_id,
+      displayName: m.display_name,
+      isRegistered: m.user_id !== null,
+    })),
+  }
+}

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'bun:test'
-import { toCreateBillInput } from './mappers'
+import { toCreateBillInput, shapeGroupSplit } from './mappers'
 import { createBillSchema } from './schemas'
 import { computeSettlement, type ItemSpec } from '../utils/settlement'
 
@@ -158,5 +158,46 @@ describe('toCreateBillInput', () => {
     // by `total` rather than nudged onto a participant.
     expect(sum).toBeLessThanOrEqual(settlement.total + 1e-9)
     expect(settlement.total - sum).toBeLessThan(1)
+  })
+})
+
+describe('shapeGroupSplit', () => {
+  const split = {
+    id: 'split-1',
+    title: 'Dinner',
+    status: 'collecting',
+    receipt_attachment_id: 'att-1',
+    receipt_mime: 'image/jpeg',
+  }
+
+  it('seeds the Split screen with the roster’s contact ids', () => {
+    const shaped = shapeGroupSplit(split, [
+      { contact_id: P1, display_name: 'Aziz', user_id: 'u1' },
+      { contact_id: P2, display_name: 'Madina', user_id: null },
+    ])
+    expect(shaped.participantContactIds).toEqual([P1, P2])
+    expect(shaped.members[1]).toEqual({
+      contactId: P2,
+      displayName: 'Madina',
+      isRegistered: false,
+    })
+    expect(shaped.receiptAttachmentId).toBe('att-1')
+  })
+
+  it('drops members with no contact yet rather than emitting nulls', () => {
+    const shaped = shapeGroupSplit(split, [
+      { contact_id: null, display_name: 'Ghost', user_id: null },
+      { contact_id: P1, display_name: 'Aziz', user_id: 'u1' },
+    ])
+    expect(shaped.participantContactIds).toEqual([P1])
+    expect(shaped.members).toHaveLength(2)
+  })
+
+  it('does not leak the chat id or telegram ids', () => {
+    const shaped = shapeGroupSplit(split, [
+      { contact_id: P1, display_name: 'Aziz', user_id: 'u1' },
+    ])
+    expect(JSON.stringify(shaped)).not.toContain('telegram')
+    expect(shaped).not.toHaveProperty('chat_id')
   })
 })

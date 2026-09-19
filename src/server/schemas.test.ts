@@ -330,3 +330,32 @@ describe('adminMessageSchema', () => {
     expect(adminMessageSchema.safeParse({}).success).toBe(false)
   })
 })
+
+describe('createBillSchema — groupSplitId', () => {
+  const base = {
+    participantContactIds: ['11111111-1111-4111-8111-111111111111'],
+    items: [
+      {
+        name: 'Plov',
+        price: 40000,
+        shareContactIds: ['11111111-1111-4111-8111-111111111111'],
+      },
+    ],
+  }
+
+  it('accepts a uuid', () => {
+    const parsed = createBillSchema.parse({
+      ...base,
+      groupSplitId: '99999999-9999-4999-8999-999999999999',
+    })
+    expect(parsed.groupSplitId).toBe('99999999-9999-4999-8999-999999999999')
+  })
+
+  it('tolerates its absence — most bills have no group', () => {
+    expect(createBillSchema.parse(base).groupSplitId).toBeUndefined()
+  })
+
+  it('rejects a non-uuid', () => {
+    expect(() => createBillSchema.parse({ ...base, groupSplitId: 'nope' })).toThrow()
+  })
+})

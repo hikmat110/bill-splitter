@@ -1,6 +1,6 @@
 import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/client'
-import { users, contacts } from '../db/schema'
+import { users, contacts, groupSplitMembers } from '../db/schema'
 import type { User } from '../db/schema'
 import { normalizePhone } from '../utils/phone'
 import { normalizeUsername } from '../utils/username'
@@ -128,4 +128,28 @@ export async function backfillLinkedUserByTelegramId(
 
 export async function updateLanguage(userId: string, lang: 'uz' | 'ru' | 'en'): Promise<void> {
   await db.update(users).set({ language_code: lang }).where(eq(users.id, userId))
+}
+
+/**
+ * Link every group-split roster entry this person left behind before they had
+ * an account.
+ *
+ * Runs unconditionally on registration, next to the contact backfills, so that
+ * linking never depends on the in-memory session or on which link they arrived
+ * through — a deploy between /start and the phone share must not cost someone
+ * their place in a split.
+ */
+export async function activateGroupSplitMembersByTelegramId(
+  telegramId: bigint,
+  userId: string
+): Promise<void> {
+  await db
+    .update(groupSplitMembers)
+    .set({ user_id: userId })
+    .where(
+      and(
+        eq(groupSplitMembers.telegram_id, telegramId),
+        isNull(groupSplitMembers.user_id)
+      )
+    )
 }

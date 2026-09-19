@@ -158,6 +158,20 @@ export interface CreateBillPayload {
   cardId?: string | null
   receiptAttachmentId?: string | null
   receiptMime?: string | null
+  /** Set when this bill is being built from a Telegram group split, so the
+   *  server can attach it and turn that group's card into a payment board. */
+  groupSplitId?: string | null
+}
+
+/** A roster collected by /split in a Telegram group. */
+export interface GroupSplit {
+  id: string
+  title: string | null
+  status: 'collecting' | 'building' | 'sent' | 'cancelled' | 'expired'
+  receiptAttachmentId: string | null
+  receiptMime: string | null
+  participantContactIds: string[]
+  members: { contactId: string | null; displayName: string; isRegistered: boolean }[]
 }
 
 // Editing replaces the whole bill, so the PATCH payload is the same shape.

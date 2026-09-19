@@ -13,14 +13,18 @@ type Path<T, Prefix extends string = ''> = T extends object
 
 export type I18nKey = Path<typeof ru>
 
-function resolvePath(obj: Record<string, unknown>, path: string): string {
+/** Returns undefined (not the path) when a key is missing, so `??` chains can
+ *  actually fall through to the next locale. Returning the path here used to
+ *  make the uz fallback below dead code: a key present in ru but missing from
+ *  uz rendered the literal "group.btn.join" to Uzbek users. */
+function resolvePath(obj: Record<string, unknown>, path: string): string | undefined {
   const parts = path.split('.')
   let cur: unknown = obj
   for (const part of parts) {
-    if (typeof cur !== 'object' || cur === null) return path
+    if (typeof cur !== 'object' || cur === null) return undefined
     cur = (cur as Record<string, unknown>)[part]
   }
-  return typeof cur === 'string' ? cur : path
+  return typeof cur === 'string' ? cur : undefined
 }
 
 export function t(ctx: Context, key: I18nKey, vars?: Record<string, string>): string {
@@ -28,9 +32,14 @@ export function t(ctx: Context, key: I18nKey, vars?: Record<string, string>): st
   const storedLang = (ctx as { user?: { language_code?: string } }).user?.language_code
   const lang = storedLang ?? ctx.from?.language_code ?? 'uz'
   const locale = (locales[lang] ?? locales['uz']!) as Record<string, unknown>
-  const fallback = locales['uz'] as Record<string, unknown>
 
-  let text = resolvePath(locale, key) ?? resolvePath(fallback, key) ?? key
+  // uz is the default language, ru is the canonical dictionary I18nKey is
+  // derived from — so ru is the last stop before giving up and showing the key.
+  let text =
+    resolvePath(locale, key) ??
+    resolvePath(locales['uz'] as Record<string, unknown>, key) ??
+    resolvePath(locales['ru'] as Record<string, unknown>, key) ??
+    key
 
   if (vars) {
     for (const [k, v] of Object.entries(vars)) {

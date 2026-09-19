@@ -34,6 +34,9 @@ export interface DraftBill {
   receiptPreviewUrl?: string | null
   /** When set, this draft edits an existing bill (PATCH) rather than creating. */
   editingBillId?: string | null
+  /** When set, this draft came from a Telegram group split and will attach to
+   *  it on send. Never persisted — see draftStorage. */
+  groupSplitId?: string | null
 }
 
 export interface Person {

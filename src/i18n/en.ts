@@ -12,11 +12,14 @@ export const en = {
     card_skipped: 'You can add cards anytime in ⚙️ Settings.',
     welcome_guide:
       "Here's how it works:\n\n1️⃣ Create a bill and mark who ate what\n2️⃣ Friends get a message with their share and your card\n3️⃣ They mark it paid — you confirm\n\nThe fastest way is the app: everything is on one screen, and it can scan a receipt. Type /help anytime for a refresher.",
+    group_split_ready: "You're on the split! Open the app to see your share once the host has worked it out.",
   },
   commands: {
     start: 'Main menu',
     help: 'How the bot works',
     cancel: 'Cancel the current action',
+    split: "Start a split in this group",
+    board: "Re-post the split card",
   },
   help: {
     text:
@@ -206,6 +209,76 @@ export const en = {
     sent: '📤 Sent',
     settled: '✅ Settled',
     cancelled: '❌ Cancelled',
+  },
+  group: {
+    help:
+      "I split bills where the dinner happens.\n\n" +
+      "<b>/split@{{bot}}</b> — start a split here. Everyone taps <b>Join</b>, then you open the app and mark who ate what.\n" +
+      "<b>/board@{{bot}}</b> — re-post the current card.\n" +
+      "<b>/cancel@{{bot}}</b> — cancel the open split.\n\n" +
+      "Tip: always type the <b>@{{bot}}</b> part — in a group I only reliably receive commands addressed to me.",
+    intro:
+      "👋 <b>Bill Split</b> — splitting the bill right where you\'re sitting.\n\n" +
+      "<b>1.</b> Type /split@{{bot}} when the bill arrives\n" +
+      "<b>2.</b> Everyone taps ✅ Join\n" +
+      "<b>3.</b> Reply to my card with a photo of the receipt (optional)\n" +
+      "<b>4.</b> Tap 🧮 Open &amp; finish and mark who had what\n" +
+      "<b>5.</b> I send everyone their share and keep score of who has paid\n\n" +
+      "Always include the <b>@{{bot}}</b> part — in a group I only reliably receive commands addressed to me.",
+    need_account: 'Start the bot in private first, then come back and try again.',
+    open_bot: '🤖 Start the bot',
+    default_title: 'Split',
+    split_exists: 'A split is already open here — scroll up to its card, or /cancel@{{bot}} it.',
+    no_split: 'No open split here. Start one with /split@{{bot}}.',
+    receipt_saved: '📸 Receipt saved. Tap <b>Open &amp; finish</b> to build the split.',
+    card: {
+      header: '🧾 <b>{{title}}</b> — started by {{host}}',
+      hint: "Tap <b>Join</b> and I'll add you to this split.",
+      receipt_hint: '📸 Reply to this message with a photo of the receipt.',
+      joined: 'Joined ({{count}}):',
+      more: '…and {{count}} more',
+      host_tag: 'host',
+      new_tag: 'new here',
+      receipt_attached: '📸 Receipt attached',
+      empty: 'Nobody has joined yet.',
+      building: '{{host}} is working out the split…',
+      cancelled: '❌ Split cancelled.',
+      expired: '⌛️ This split expired.',
+    },
+    board: {
+      header: '🧾 <b>{{title}}</b> · {{total}}',
+      host: 'Host: {{host}}',
+      awaiting: 'awaiting {{host}}',
+      summary: '{{paid}} of {{count}} settled · {{left}} left',
+      all_settled: '🎉 Everyone has settled up.',
+      remind_text: '🔔 Still unpaid: {{names}}',
+    },
+    btn: {
+      join: '✅ Join',
+      leave: '👋 Leave',
+      open: '🧮 Open &amp; finish',
+      open_app: '📲 Open in app',
+      activate: '📲 Activate my account',
+      cancel: '❌ Cancel',
+      paid: '✅ I paid',
+      remind: '🔔 Remind unpaid',
+    },
+    toast: {
+      joined: "You're in!",
+      already_joined: "You're already in this split.",
+      left: 'Removed you from this split.',
+      not_joined: "You haven't joined this split.",
+      closed: 'This split is already closed.',
+      not_creator: 'Only the person who started this split can do that.',
+      cancelled: 'Split cancelled.',
+      activate: 'Start the bot so I can send you your share.',
+      not_participant: "You're not on this bill.",
+      marked_paid: 'Marked as paid — waiting for confirmation.',
+      already_paid: 'Your share is already marked.',
+      reminded: 'Reminder sent.',
+      remind_cooldown: 'Already reminded recently — try again later.',
+      nothing_to_remind: 'Everyone has paid.',
+    },
   },
   errors: {
     generic: 'Something went wrong. Please try again.',

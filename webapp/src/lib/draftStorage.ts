@@ -1,8 +1,10 @@
 // Persist the in-progress Split draft to localStorage so closing the mini-app
 // doesn't lose it. Versioned: the stored shape must match the current DraftBill
 // (v2 = qty/units items); anything else is discarded rather than migrated.
-// Edit sessions (editingBillId) are intentionally never persisted — restoring a
-// stale edit could clobber a bill someone has since responded to.
+// Edit sessions (editingBillId) and group-split links (groupSplitId) are
+// intentionally never restored — a stale edit could clobber a bill someone has
+// since responded to, and a stale split link could attach a bill to a card that
+// no longer exists.
 
 import { emptyDraft } from './draft'
 import type { DraftBill } from './draft'
@@ -49,6 +51,9 @@ export function loadDraft(userId: string): DraftBill | null {
       ...(parsed.draft as Partial<DraftBill>),
       receiptPreviewUrl: null,
       editingBillId: null,
+      // A stale draft must never re-attach to a split that has since been
+      // cancelled, expired, or already turned into a bill.
+      groupSplitId: null,
     }
     if (!Array.isArray(d.participantIds) || !Array.isArray(d.items)) {
       localStorage.removeItem(key(userId))

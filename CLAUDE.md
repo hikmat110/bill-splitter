@@ -228,6 +228,39 @@ bun run db:studio               # Drizzle Studio
 bun run typecheck
 ```
 
+## Group Chats
+
+The bot works in groups as well as private chats. `src/bot/index.ts` splits every
+registration across two composers — `bot.chatType('private')` (the original bot,
+unchanged) and `bot.chatType(['group','supergroup'])`. **Nothing is registered on
+`bot` itself**, so channels and unknown chat types reach zero handlers. Never add
+a top-level `bot.on(...)`: it would receive group traffic, and the private
+`message:text` dispatcher files unrouted text as a *support ticket*.
+
+Rules that are easy to get wrong:
+
+- **Group callbacks answer with `answerCallbackQuery`, never a new message**
+  (`handlers/group/reply.ts`). The only group messages the bot ever sends are the
+  intro when added, the split card, one reminder the creator asked for, and the
+  "start the bot first" reply (throttled per chat+user).
+- **Privacy mode is ON in BotFather.** A bot then receives only `/cmd@bot`, a bare
+  `/cmd` if it sent the last bot message, **replies to its own messages**, and
+  service messages. Plain `@mentions` are NOT delivered, and media with a command
+  in the *caption* is undocumented — the receipt flow is built on replying to the
+  bot's card, which is guaranteed.
+- **Never add `chat_member` to `allowed_updates`.** It needs the bot to be a group
+  admin, and an admin bot receives every message regardless of privacy mode.
+  `my_chat_member` arrives by default and is all that is needed.
+- `web_app` inline buttons are private-chat-only. Groups reach the Mini App via
+  `utils/deep-link` — a direct-link Mini App when `WEBAPP_SHORT_NAME` is set,
+  else a `t.me/<bot>?start=…` bounce through the private chat.
+- The session key is per `(chat, member)` outside private chats; group flows are
+  stateless and DB-backed (`group_splits`, `group_split_members`).
+- The group is a **staging area, never the system of record**: once a bill exists
+  it stands on its own in the creator's history.
+
+Deploy needs `/setprivacy → Enable` and (optionally) `/newapp` + `WEBAPP_SHORT_NAME`.
+
 ## Out of Scope for MVP
 
 Do NOT build these — they are explicitly deferred:
@@ -236,7 +269,6 @@ Do NOT build these — they are explicitly deferred:
 - Web dashboard
 - Actual payment processing (only status tracking)
 - Multi-currency (UZS only)
-- Bot operating inside Telegram groups (private chats only)
 - Real-time balance graphs across all bills (history is per-bill only)
 
 ## Open Questions / Decisions Already Made

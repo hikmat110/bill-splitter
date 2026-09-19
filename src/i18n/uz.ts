@@ -12,11 +12,14 @@ export const uz = {
     card_skipped: "Kartalarni istalgan vaqtda ⚙️ Sozlamalarda qo'shish mumkin.",
     welcome_guide:
       "Bu qanday ishlaydi:\n\n1️⃣ Hisob yarating va kim nima yeganini belgilang\n2️⃣ Do'stlaringizga ulushi va kartangiz bilan xabar boradi\n3️⃣ Ular to'lovni belgilaydi — siz tasdiqlaysiz\n\nEng tez yo'li — ilova: hammasi bitta ekranda, chekni skanerlash ham mumkin. Istalgan vaqtda /help buyrug'ini yozing.",
+    group_split_ready: "Siz ro'yxatdasiz! Ilovani oching — mezbon hisoblagach, ulushingiz shu yerda bo'ladi.",
   },
   commands: {
     start: 'Asosiy menyu',
     help: 'Bot qanday ishlaydi',
     cancel: 'Joriy amalni bekor qilish',
+    split: "Guruhda bo'lishni boshlash",
+    board: "Kartochkani qayta yuborish",
   },
   help: {
     text:
@@ -206,6 +209,76 @@ export const uz = {
     sent: '📤 Yuborildi',
     settled: '✅ Yakunlandi',
     cancelled: 'Bekor qilindi',
+  },
+  group: {
+    help:
+      "Men hisobni siz ovqatlanayotgan joyda bo'laman.\n\n" +
+      '<b>/split@{{bot}}</b> — bo\'lishni boshlash. Hamma <b>Qo\'shilish</b>ni bosadi, keyin siz ilovada kim nima yeganini belgilaysiz.\n' +
+      '<b>/board@{{bot}}</b> — kartochkani qayta yuborish.\n' +
+      '<b>/cancel@{{bot}}</b> — ochiq bo\'lishni bekor qilish.\n\n' +
+      'Maslahat: doim <b>@{{bot}}</b> qismini yozing — guruhda men faqat menga yo\'llangan buyruqlarni ishonchli olaman.',
+    intro:
+      "👋 <b>Bill Split</b> — hisobni o\'sha stolning o\'zida bo\'lamiz.\n\n" +
+      "<b>1.</b> Hisob kelganda /split@{{bot}} deb yozing\n" +
+      "<b>2.</b> Hamma ✅ Qo\'shilish tugmasini bosadi\n" +
+      "<b>3.</b> Kartochkamga chek rasmini javob qilib yuboring (ixtiyoriy)\n" +
+      "<b>4.</b> 🧮 Ochish va hisoblash tugmasini bosib, kim nima yeganini belgilang\n" +
+      "<b>5.</b> Men har kimga ulushini yuboraman va kim to\'laganini kuzataman\n\n" +
+      "Doim <b>@{{bot}}</b> qismini qo\'shing — guruhda men faqat menga yo\'llangan buyruqlarni ishonchli olaman.",
+    need_account: "Avval botni shaxsiy chatda ishga tushiring, keyin qaytib keling.",
+    open_bot: '🤖 Botni ishga tushirish',
+    default_title: 'Hisob',
+    split_exists: "Bu yerda allaqachon ochiq bo'lish bor — kartochkaga qarang yoki /cancel@{{bot}} qiling.",
+    no_split: "Bu yerda ochiq bo'lish yo'q. /split@{{bot}} bilan boshlang.",
+    receipt_saved: "📸 Chek saqlandi. <b>Ochish va hisoblash</b>ni bosing.",
+    card: {
+      header: '🧾 <b>{{title}}</b> — {{host}} boshladi',
+      hint: "<b>Qo'shilish</b>ni bosing, men sizni qo'shaman.",
+      receipt_hint: '📸 Ushbu xabarga chek rasmini javob qilib yuboring.',
+      joined: "Qo'shildi ({{count}}):",
+      more: '…va yana {{count}} ta',
+      host_tag: "to'lovchi",
+      new_tag: 'yangi',
+      receipt_attached: '📸 Chek biriktirildi',
+      empty: "Hozircha hech kim qo'shilmadi.",
+      building: "{{host}} hisobni bo'lyapti…",
+      cancelled: "❌ Bo'lish bekor qilindi.",
+      expired: "⌛️ Bo'lish muddati o'tdi.",
+    },
+    board: {
+      header: '🧾 <b>{{title}}</b> · {{total}}',
+      host: "To'ladi: {{host}}",
+      awaiting: '{{host}} tasdiqlashini kutmoqda',
+      summary: "{{count}} tadan {{paid}} tasi hisoblashdi · {{left}} qoldi",
+      all_settled: '🎉 Hamma hisoblashdi.',
+      remind_text: "🔔 Hali to'lamaganlar: {{names}}",
+    },
+    btn: {
+      join: "✅ Qo'shilish",
+      leave: '👋 Chiqish',
+      open: '🧮 Ochish va hisoblash',
+      open_app: '📲 Ilovada ochish',
+      activate: '📲 Akkauntni faollashtirish',
+      cancel: '❌ Bekor qilish',
+      paid: "✅ Men to'ladim",
+      remind: '🔔 Eslatish',
+    },
+    toast: {
+      joined: "Qo'shildingiz!",
+      already_joined: "Siz allaqachon bu bo'lishdasiz.",
+      left: "Sizni bo'lishdan chiqardim.",
+      not_joined: "Siz bu bo'lishga qo'shilmagansiz.",
+      closed: "Bu bo'lish allaqachon yopilgan.",
+      not_creator: "Buni faqat bo'lishni boshlagan odam qila oladi.",
+      cancelled: "Bo'lish bekor qilindi.",
+      activate: "Botni ishga tushiring, men ulushingizni yuboraman.",
+      not_participant: "Siz bu hisobda yo'qsiz.",
+      marked_paid: "Belgilandi — tasdiqlash kutilmoqda.",
+      already_paid: 'Ulushingiz allaqachon belgilangan.',
+      reminded: 'Eslatma yuborildi.',
+      remind_cooldown: "Yaqinda eslatilgan — keyinroq urinib ko'ring.",
+      nothing_to_remind: "Hamma to'lagan.",
+    },
   },
   errors: {
     generic: "Nimadir noto'g'ri ketdi. Iltimos, qayta urinib ko'ring.",

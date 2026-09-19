@@ -82,6 +82,13 @@ import {
 } from '../services/storage.service'
 import type { AllowedMime } from '../services/storage.service'
 import { ReceiptScanError } from '../services/receipt-scan.service'
+import {
+  getSplitDetails,
+  claimSplit,
+  attachBill,
+} from '../services/group-split.service'
+import { refreshGroupBoard } from '../services/group-board.service'
+import type { GroupSplit, GroupSplitMember } from '../db/schema'
 import { scanReceiptForUser, ScanLimitError } from '../services/scan-quota.service'
 import { retryAfterSeconds } from '../utils/scan-quota'
 import { config } from '../config'
@@ -106,8 +113,8 @@ import {
 import { parseCardNumber, formatBillStamp } from '../utils/format'
 import { tLang } from '../i18n'
 import { parseUsernameList } from '../utils/username'
-import { toCreateBillInput, toUpdateBillInput } from './mappers'
-import { canManageBill, canMarkPaid, isAdmin } from './authz'
+import { toCreateBillInput, toUpdateBillInput, shapeGroupSplit } from './mappers'
+import { canManageBill, canMarkPaid, isAdmin, canManageGroupSplit } from './authz'
 import { handleAdmin } from './admin-routes'
 
 // ─── response shapers ──────────────────────────────────────────────────────────
@@ -305,6 +312,20 @@ export async function handleApi(
         if (action === 'confirm') return await confirm(user, pid, bot)
         if (action === 'dispute') return await dispute(req, user, pid, bot)
       }
+    }
+
+    // /api/group-splits/:id — roster collected by /split in a Telegram group
+    if (seg[0] === 'group-splits' && seg.length === 2 && method === 'GET') {
+      return await getGroupSplit(user, seg[1]!)
+    }
+    // POST /api/group-splits/:id/claim — freeze the roster, the host is building
+    if (
+      seg[0] === 'group-splits' &&
+      seg.length === 3 &&
+      seg[2] === 'claim' &&
+      method === 'POST'
+    ) {
+      return await claimGroupSplit(user, seg[1]!)
     }
 
     // /api/participants/:pid/mark_paid
@@ -568,6 +589,18 @@ async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<
     toCreateBillInput({ ...body, title }, user.id, self.id, resolved.cardId)
   )
   await sendBillNotifications(bot, bill.id)
+
+  // Built from a group split: attach it and turn that group's card into the
+  // live payment board. Best-effort — a group that has since kicked the bot
+  // must never fail the bill the host just created.
+  if (body.groupSplitId) {
+    const details = await getSplitDetails(body.groupSplitId)
+    if (details && canManageGroupSplit(user, details.split)) {
+      await attachBill(details.split.id, bill.id).catch(() => undefined)
+      await refreshGroupBoard(bot, details.split.id).catch(() => undefined)
+    }
+  }
+
   const d = await getBillWithDetails(bill.id)
   return json(d ? shapeBillDetail(d) : { id: bill.id }, { status: 201 })
 }
@@ -949,4 +982,34 @@ async function remind(user: User, pid: string, bot: Bot<MyContext>): Promise<Res
   if (!canManageBill(user, participant.bill)) return error(403, 'Forbidden')
   const ok = await sendReminder(bot, pid)
   return json({ ok })
+}
+
+// ─── group splits ─────────────────────────────────────────────────────────────
+
+/** Load a split, 404/403-ing unless the caller is the host who started it. */
+async function loadOwnedSplit(
+  user: User,
+  splitId: string
+): Promise<{ split: GroupSplit; members: GroupSplitMember[] } | Response> {
+  const details = await getSplitDetails(splitId)
+  if (!details) return error(404, 'Split not found')
+  if (!canManageGroupSplit(user, details.split)) return error(403, 'Not your split')
+  return { split: details.split, members: details.members }
+}
+
+async function getGroupSplit(user: User, splitId: string): Promise<Response> {
+  const loaded = await loadOwnedSplit(user, splitId)
+  if (loaded instanceof Response) return loaded
+  return json(shapeGroupSplit(loaded.split, loaded.members))
+}
+
+async function claimGroupSplit(user: User, splitId: string): Promise<Response> {
+  const loaded = await loadOwnedSplit(user, splitId)
+  if (loaded instanceof Response) return loaded
+  // Only a split still collecting can be claimed; re-claiming one already being
+  // built is a no-op so a refresh in the app is harmless.
+  if (loaded.split.status === 'collecting') await claimSplit(splitId)
+  else if (loaded.split.status !== 'building') return error(409, 'Split is closed')
+  const fresh = await getSplitDetails(splitId)
+  return json(shapeGroupSplit(fresh!.split, fresh!.members))
 }

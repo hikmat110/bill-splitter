@@ -228,6 +228,36 @@ export function App() {
         : d
     )
     const param = startParam()
+    // A split started with /split in a Telegram group: claim it (which freezes
+    // its roster) and seed the Split form with everyone who tapped Join. Runs
+    // before the bill branches below and wins over any stored draft.
+    if (param?.startsWith('gs_')) {
+      void (async () => {
+        try {
+          const split = await api.claimGroupSplit(param.slice('gs_'.length))
+          // The bot created these contacts moments ago, so pull them in for
+          // display. The roster itself needs no pruning — unlike a stored
+          // draft, it was just fetched, and every id in it is ours and live.
+          await refresh()
+          setDraft({
+            ...emptyDraft(me.selfContactId),
+            title: split.title ?? '',
+            participantIds: [
+              me.selfContactId,
+              ...split.participantContactIds.filter((id) => id !== me.selfContactId),
+            ],
+            receiptAttachmentId: split.receiptAttachmentId,
+            receiptMime: split.receiptMime,
+            groupSplitId: split.id,
+          })
+          setTab('split')
+          toast(t('app.group_split_loaded'), 'ti-users-group')
+        } catch {
+          toast(t('app.group_split_failed'), 'ti-alert-circle')
+        }
+      })()
+      return
+    }
     if (param?.startsWith('edit_')) {
       const bill = bills.created.find((b) => b.id === param.slice('edit_'.length))
       if (!bill) return
@@ -279,7 +309,7 @@ export function App() {
       return
     }
     if (!hasSeenTour(me.id)) setShowTour(true)
-  }, [loading, deepLinkDone, me, bills, contacts, editBill, openBill, t, toast])
+  }, [loading, deepLinkDone, me, bills, contacts, editBill, openBill, refresh, t, toast])
 
   // Persist the working draft (debounced). Edit sessions are never persisted —
   // restoring a stale edit later could clobber a bill someone responded to.
@@ -342,6 +372,9 @@ export function App() {
         cardId: draft.cardId === undefined ? defaultCardId(me.cards) : draft.cardId,
         receiptAttachmentId: draft.receiptAttachmentId,
         receiptMime: draft.receiptMime,
+        // Attaches the new bill to the group card it came from, turning that
+        // card into the live payment board. Only ever set on a create.
+        ...(draft.groupSplitId ? { groupSplitId: draft.groupSplitId } : {}),
       }
       const editingId = draft.editingBillId
       const saved = editingId

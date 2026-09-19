@@ -53,6 +53,8 @@ export const en = {
     bill_sent: 'Bill sent to participants',
     bill_send_failed: 'Could not send bill',
     bill_updated: 'Bill updated',
+    group_split_loaded: "Group split loaded — everyone who joined is on the bill",
+    group_split_failed: "Could not open that group split",
     bill_not_editable: 'This bill can no longer be edited',
     draft_restored: 'Draft restored',
     draft_discard: 'Discard this draft?',

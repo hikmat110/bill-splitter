@@ -10,6 +10,12 @@ const schema = z.object({
   // Public HTTPS origin of the Mini App (used for the bot's "Open App" button
   // and CORS allow-list). Optional in dev; required for the web_app button to work.
   WEBAPP_URL: z.string().url().optional(),
+  // BotFather app short name (/newapp), enabling a direct-link Mini App:
+  // t.me/<bot>/<short name>?startapp=… . Inline web_app buttons are
+  // private-chat-only, so this is the only way to open the app straight from a
+  // group. Optional — without it group buttons bounce through the private chat,
+  // which always works.
+  WEBAPP_SHORT_NAME: z.string().min(1).optional(),
   // HTTP port for the Mini App API / static server.
   PORT: z.coerce.number().int().positive().default(3000),
   // Directory where uploaded receipt/proof images are stored. Must live on a

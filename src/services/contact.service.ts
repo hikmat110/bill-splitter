@@ -3,6 +3,7 @@ import { db } from '../db/client'
 import { contacts, users, billParticipants, billItemShares, billItems, bills } from '../db/schema'
 import type { Bill, Contact } from '../db/schema'
 import { normalizePhone } from '../utils/phone'
+import { isUniqueViolation } from '../utils/pg-errors'
 import { findUserByUsername } from './user.service'
 
 export async function listContacts(ownerId: string): Promise<Contact[]> {
@@ -68,15 +69,6 @@ export async function addContact(
   return contact
 }
 
-function isUniqueViolation(err: unknown): boolean {
-  const code = (err as { code?: string })?.code
-  if (code === '23505') return true
-  return (
-    err instanceof Error &&
-    (err.message.includes('unique') || err.message.includes('duplicate'))
-  )
-}
-
 /**
  * Insert a contact, retrying with a numeric suffix (`Name (2)`, `Name (3)`…) on
  * the `(owner_id, display_name)` unique constraint. Returns null if no free name
@@ -105,6 +97,38 @@ async function insertContactWithUniqueName(
     }
   }
   return null
+}
+
+/**
+ * Find the owner's live contact for a given person, by whichever link is known.
+ *
+ * addLinkedContactsBatch reports names, not rows, so a caller that needs the
+ * contact id (the group Join flow, which records it on the split member) looks
+ * it up afterwards rather than widening that function's return type — it has
+ * several callers, including the Mini App API, and one dedupe implementation is
+ * worth keeping.
+ */
+export async function findContactByLink(
+  ownerId: string,
+  link: { userId?: string; telegramId?: bigint }
+): Promise<Contact | null> {
+  const clauses = []
+  if (link.userId) clauses.push(eq(contacts.linked_user_id, link.userId))
+  if (link.telegramId != null) clauses.push(eq(contacts.linked_telegram_id, link.telegramId))
+  if (clauses.length === 0) return null
+
+  const [row] = await db
+    .select()
+    .from(contacts)
+    .where(
+      and(
+        eq(contacts.owner_id, ownerId),
+        isNull(contacts.deleted_at),
+        clauses.length === 1 ? clauses[0] : or(...clauses)
+      )
+    )
+    .limit(1)
+  return row ?? null
 }
 
 export interface BatchPerson {

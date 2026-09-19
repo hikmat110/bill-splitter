@@ -115,6 +115,12 @@ export const contacts = pgTable(
     uniqueIndex('contacts_owner_name_unique')
       .on(t.owner_id, t.display_name)
       .where(sql`${t.deleted_at} IS NULL`),
+    // backfillLinkedUserByTelegramId runs on every registration and filters on
+    // this column; without an index that is a full scan of every contact row,
+    // and group joins make the path hot.
+    index('contacts_linked_telegram_idx')
+      .on(t.linked_telegram_id)
+      .where(sql`${t.linked_telegram_id} IS NOT NULL`),
   ]
 )
 
@@ -457,6 +463,132 @@ export const supportMessagesRelations = relations(supportMessages, ({ one }) => 
   }),
 }))
 
+// ─── group_splits ─────────────────────────────────────────────────────────────
+// A split started in a Telegram group with /split. It exists BEFORE a bill does:
+// people tap Join on the card, and only once the creator opens the Mini App is
+// an actual bill built from the collected roster.
+//
+// The group is a staging area, never the system of record — once a bill exists
+// it lives in the creator's private history and stands on its own, so losing
+// the group (bot kicked, chat deleted) never costs anyone money.
+
+export const groupSplits = pgTable(
+  'group_splits',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    // Telegram chat id of the group (negative). Deliberately not a FK: there is
+    // no groups table, because the only fact worth storing about a group is
+    // "is the bot still in it", which my_chat_member and a 403 answer for free.
+    chat_id: bigint('chat_id', { mode: 'bigint' }).notNull(),
+    creator_id: uuid('creator_id')
+      .notNull()
+      .references(() => users.id, { onDelete: 'cascade' }),
+    title: text('title'),
+    // The card the bot posted, edited in place as people join and later pay.
+    board_message_id: bigint('board_message_id', { mode: 'bigint' }),
+    // Forum topic the card lives in, so a re-post triggered outside a live
+    // update (a payment hook) lands in the right topic instead of General.
+    board_thread_id: integer('board_thread_id'),
+    // collecting → building → sent, or cancelled / expired.
+    status: text('status').notNull().default('collecting'),
+    bill_id: uuid('bill_id').references(() => bills.id, { onDelete: 'set null' }),
+    // Receipt photo replied to the card before the Mini App was opened; the app
+    // scans it through the existing POST /api/receipts/scan.
+    receipt_attachment_id: text('receipt_attachment_id'),
+    receipt_mime: text('receipt_mime'),
+    // Last successful board edit — the durable half of the flood guard, so a
+    // restart cannot burst edits past Telegram's per-group ceiling.
+    board_edited_at: timestamp('board_edited_at', { withTimezone: true }),
+    created_at: timestamp('created_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+    updated_at: timestamp('updated_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    index('group_splits_chat_status_idx').on(t.chat_id, t.status),
+    // "One open split per group" as a database invariant rather than a race: a
+    // second /split gets a clean unique violation instead of two rival cards.
+    uniqueIndex('group_splits_one_open_per_chat')
+      .on(t.chat_id)
+      .where(sql`${t.status} in ('collecting','building')`),
+    // Bill → board in one indexed lookup. The payment hooks run on every
+    // payment event, including the overwhelming majority that have no group.
+    uniqueIndex('group_splits_bill_unique')
+      .on(t.bill_id)
+      .where(sql`${t.bill_id} is not null`),
+  ]
+)
+
+export const groupSplitsRelations = relations(groupSplits, ({ one, many }) => ({
+  creator: one(users, {
+    fields: [groupSplits.creator_id],
+    references: [users.id],
+  }),
+  bill: one(bills, {
+    fields: [groupSplits.bill_id],
+    references: [bills.id],
+  }),
+  members: many(groupSplitMembers),
+}))
+
+// ─── group_split_members ──────────────────────────────────────────────────────
+// Who tapped Join. This is the roster: a bot cannot enumerate a Telegram group,
+// so opt-in taps are the only reliable membership source there is.
+
+export const groupSplitMembers = pgTable(
+  'group_split_members',
+  {
+    id: uuid('id')
+      .primaryKey()
+      .default(sql`gen_random_uuid()`),
+    split_id: uuid('split_id')
+      .notNull()
+      .references(() => groupSplits.id, { onDelete: 'cascade' }),
+    // Always known: a Join is a callback query, which always carries `from`.
+    telegram_id: bigint('telegram_id', { mode: 'bigint' }).notNull(),
+    // NULL = joined before registering. Filled by the registration backfill in
+    // user.service, so linking happens for anyone who starts the bot, from
+    // anywhere — the deep link is only a shortcut, never load-bearing.
+    user_id: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+    // The creator's contact row for this person, created on join.
+    contact_id: uuid('contact_id').references(() => contacts.id, {
+      onDelete: 'set null',
+    }),
+    // Name as Telegram reported it at join time, so redrawing the card needs
+    // no joins and still reads correctly for people who never registered.
+    display_name: text('display_name').notNull(),
+    username: text('username'),
+    joined_at: timestamp('joined_at', { withTimezone: true })
+      .defaultNow()
+      .notNull(),
+  },
+  (t) => [
+    // Makes a repeated Join tap idempotent: the second one conflicts, costs a
+    // single answerCallbackQuery, and never touches the board.
+    unique('group_split_members_split_tg_unique').on(t.split_id, t.telegram_id),
+    index('group_split_members_tg_idx').on(t.telegram_id),
+  ]
+)
+
+export const groupSplitMembersRelations = relations(groupSplitMembers, ({ one }) => ({
+  split: one(groupSplits, {
+    fields: [groupSplitMembers.split_id],
+    references: [groupSplits.id],
+  }),
+  user: one(users, {
+    fields: [groupSplitMembers.user_id],
+    references: [users.id],
+  }),
+  contact: one(contacts, {
+    fields: [groupSplitMembers.contact_id],
+    references: [contacts.id],
+  }),
+}))
+
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 export type User = typeof users.$inferSelect
@@ -470,3 +602,5 @@ export type Feedback = typeof feedback.$inferSelect
 export type FeedbackAttachment = typeof feedbackAttachments.$inferSelect
 export type ScanEvent = typeof scanEvents.$inferSelect
 export type SupportMessage = typeof supportMessages.$inferSelect
+export type GroupSplit = typeof groupSplits.$inferSelect
+export type GroupSplitMember = typeof groupSplitMembers.$inferSelect

@@ -71,6 +71,13 @@
       "when": 1788954351369,
       "tag": "0009_optimal_thunderbolt",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789805120301,
+      "tag": "0010_high_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

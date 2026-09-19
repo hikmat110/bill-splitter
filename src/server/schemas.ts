@@ -42,6 +42,9 @@ export const createBillSchema = z
     // POST /api/attachments, plus its mime. Both or neither.
     receiptAttachmentId: z.uuid().nullish(),
     receiptMime: imageMimeSchema.nullish(),
+    // Set when the bill is being built from a group split, so the server can
+    // attach it and start updating that group's board.
+    groupSplitId: z.uuid().nullish(),
   })
   .superRefine((data, ctx) => {
     // Every item's sharers must be among the bill's participants.

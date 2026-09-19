@@ -4,20 +4,29 @@ import { t } from '../../i18n'
 import { encode } from '../../utils/callback'
 import { config } from '../../config'
 import { cardDisplayLabel } from '../../utils/format'
+import { buildSplitPayload, miniAppLink, startLink } from '../../utils/deep-link'
 import type { Card, Contact } from '../../db/schema'
+
+/** Inline `web_app` buttons are accepted by Telegram only in private chats —
+ *  anywhere else the send fails with BUTTON_TYPE_INVALID. These keyboards are
+ *  built for the private bot, but guard here too so a group code path can never
+ *  turn a missing check into a failed send. */
+function canOpenApp(ctx: MyContext): boolean {
+  return !!config.WEBAPP_URL && ctx.chat?.type === 'private'
+}
 
 /** Prepend the Mini App launcher row (only when a public HTTPS URL is configured). */
 function withOpenApp(kb: InlineKeyboard, ctx: MyContext): InlineKeyboard {
-  if (config.WEBAPP_URL) {
-    kb.webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL).row()
+  if (canOpenApp(ctx)) {
+    kb.webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL!).row()
   }
   return kb
 }
 
 /** Just the Mini App launcher, or undefined when no URL is configured. */
 export function openAppKeyboard(ctx: MyContext): InlineKeyboard | undefined {
-  if (!config.WEBAPP_URL) return undefined
-  return new InlineKeyboard().webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL)
+  if (!canOpenApp(ctx)) return undefined
+  return new InlineKeyboard().webApp(t(ctx, 'menu.open_app'), config.WEBAPP_URL!)
 }
 
 export function mainMenuKeyboard(ctx: MyContext): InlineKeyboard {
@@ -299,4 +308,59 @@ export function cardDetailKeyboard(ctx: MyContext, card: Card): InlineKeyboard {
     .text(t(ctx, 'settings.delete_card'), encode('settings', 'card_del', card.id))
     .row()
     .text(t(ctx, 'contacts.back_button'), 'menu:settings')
+}
+
+// ─── Group keyboards ──────────────────────────────────────────────────────────
+// Group keyboards use text (callback) and url buttons only. `web_app` buttons
+// are rejected outside private chats, so the Mini App is reached here through a
+// t.me link instead — see utils/deep-link.
+
+/** Where "Open & finish" should send the creator for this split. */
+export function splitAppUrl(ctx: MyContext, splitId: string): string {
+  return miniAppLink(ctx.me.username, config.WEBAPP_SHORT_NAME, buildSplitPayload(splitId))
+}
+
+/** Private-chat link that registers an unregistered joiner, then returns them here. */
+export function splitActivateUrl(ctx: MyContext, splitId: string): string {
+  return startLink(ctx.me.username, buildSplitPayload(splitId))
+}
+
+export function splitCardKeyboard(
+  ctx: MyContext,
+  split: { id: string; status: string },
+  opts: { hasUnregistered: boolean }
+): InlineKeyboard | undefined {
+  // A finished split keeps its text but loses its buttons: nothing about it can
+  // still be acted on, and a dead button invites a pointless tap.
+  if (split.status !== 'collecting' && split.status !== 'building') return undefined
+
+  const kb = new InlineKeyboard()
+
+  if (split.status === 'collecting') {
+    kb.text(t(ctx, 'group.btn.join'), encode('g', 'j', split.id))
+      .text(t(ctx, 'group.btn.leave'), encode('g', 'l', split.id))
+      .row()
+  }
+
+  kb.url(t(ctx, 'group.btn.open'), splitAppUrl(ctx, split.id)).row()
+
+  if (opts.hasUnregistered) {
+    kb.url(t(ctx, 'group.btn.activate'), splitActivateUrl(ctx, split.id)).row()
+  }
+
+  kb.text(t(ctx, 'group.btn.cancel'), encode('g', 'x', split.id))
+  return kb
+}
+
+export function paymentBoardKeyboard(ctx: MyContext, splitId: string): InlineKeyboard {
+  return new InlineKeyboard()
+    .text(t(ctx, 'group.btn.paid'), encode('g', 'p', splitId))
+    .text(t(ctx, 'group.btn.remind'), encode('g', 'r', splitId))
+    .row()
+    .url(t(ctx, 'group.btn.open_app'), splitAppUrl(ctx, splitId))
+}
+
+/** Sole button on the "you need an account first" reply. */
+export function startBotKeyboard(ctx: MyContext): InlineKeyboard {
+  return new InlineKeyboard().url(t(ctx, 'group.open_bot'), `https://t.me/${ctx.me.username}`)
 }
