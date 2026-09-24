@@ -46,8 +46,10 @@ export function buildBillText(bill: BillDetail, t: TFn): string {
   }
 
   // The card attached to THIS bill (chosen at creation), not the sharer's default.
+  // Backticks make it inline code once pasted — Telegram renders that as a
+  // tap-to-copy block (like the bot's <code> card line), WhatsApp as monospace.
   if (bill.cardNumber) {
-    lines.push(t('share.pay_to', { card: formatCard(bill.cardNumber) }), '')
+    lines.push(t('share.pay_to', { card: `\`${formatCard(bill.cardNumber)}\`` }), '')
   }
 
   lines.push(t('share.footer'))
