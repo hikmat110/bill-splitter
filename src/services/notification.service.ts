@@ -33,12 +33,16 @@ async function editNotification(
 }
 
 /** Send (or re-send) the bill notification to a single participant, as a photo
- *  when the bill has a main receipt, else plain text. Records the message id. */
+ *  when the bill has a main receipt, else plain text. Records the message id.
+ *  `photoFileId` reuses a receipt Telegram already holds instead of uploading
+ *  the file again; returns the receipt's file_id once it has been sent, so a
+ *  loop over participants uploads the photo only once. */
 async function notifyParticipantOfBill(
   bot: Bot<MyContext>,
   details: BillWithDetails,
-  participant: BillParticipantWithContact
-): Promise<void> {
+  participant: BillParticipantWithContact,
+  photoFileId?: string
+): Promise<string | undefined> {
   if (!participant.contact.linked_user_id) return
   // Skip notifying the creator about their own share
   if (participant.contact.linked_user_id === details.bill.creator_id) return
@@ -70,18 +74,22 @@ async function notifyParticipantOfBill(
   const chatId = Number(participantUser.telegram_id)
   const { receipt_attachment_id, receipt_mime } = details.bill
   try {
-    const msg =
-      receipt_attachment_id && receipt_mime
-        ? await bot.api.sendPhoto(
-            chatId,
-            new InputFile(attachmentPath(receipt_attachment_id, receipt_mime)),
-            { caption: text, parse_mode: 'HTML', reply_markup: kb }
-          )
-        : await bot.api.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: kb })
+    if (receipt_attachment_id && receipt_mime) {
+      const msg = await bot.api.sendPhoto(
+        chatId,
+        photoFileId ?? new InputFile(attachmentPath(receipt_attachment_id, receipt_mime)),
+        { caption: text, parse_mode: 'HTML', reply_markup: kb }
+      )
+      await saveNotificationMessageId(participant.id, BigInt(msg.message_id))
+      // Telegram returns several sizes; any of them re-sends the original.
+      return photoFileId ?? msg.photo.at(-1)?.file_id
+    }
+    const msg = await bot.api.sendMessage(chatId, text, { parse_mode: 'HTML', reply_markup: kb })
     await saveNotificationMessageId(participant.id, BigInt(msg.message_id))
   } catch {
     // Don't abort — notify remaining participants
   }
+  return photoFileId
 }
 
 export async function sendBillNotifications(
@@ -91,8 +99,9 @@ export async function sendBillNotifications(
   const details = await getBillWithDetails(billId)
   if (!details) return
 
+  let photoFileId: string | undefined
   for (const participant of details.participants) {
-    await notifyParticipantOfBill(bot, details, participant)
+    photoFileId = await notifyParticipantOfBill(bot, details, participant, photoFileId)
   }
 }
 
@@ -128,6 +137,7 @@ export async function resendBillNotifications(
   const details = await getBillWithDetails(billId)
   if (!details) return
 
+  let photoFileId: string | undefined
   for (const participant of details.participants) {
     if (!participant.contact.linked_user_id) continue
     if (participant.contact.linked_user_id === details.bill.creator_id) continue
@@ -141,7 +151,7 @@ export async function resendBillNotifications(
           .catch(() => undefined)
       }
     }
-    await notifyParticipantOfBill(bot, details, participant)
+    photoFileId = await notifyParticipantOfBill(bot, details, participant, photoFileId)
   }
 }
 

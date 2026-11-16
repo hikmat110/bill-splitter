@@ -42,6 +42,9 @@ export const uz: Dict = {
     theme: 'Mavzu',
     theme_light: "Yorug'",
     theme_dark: "Qorong'i",
+    help: 'Yordam va fikr-mulohaza',
+    feedback_row: 'Fikr qoldirish',
+    feedback_hint: "Xatolik haqida xabar bering yoki g'oya taklif qiling",
   },
   app: {
     unauthorized_title: 'Telegram orqali oching',
@@ -78,6 +81,9 @@ export const uz: Dict = {
     sending: 'Yuborilmoqda…',
     update: 'Yangilash',
     updating: 'Yangilanmoqda…',
+    send_overlay: 'Hisob yuborilmoqda…',
+    update_overlay: 'Hisob yangilanmoqda…',
+    send_overlay_hint: "Hisob-kitob saqlanmoqda, do'stlaringizga xabar yuborilmoqda",
     receipt_photo: 'Chek',
     default_title: 'Hisob · {{when}}',
     receipt_hint: 'Ixtiyoriy — ishtirokchilar koʻradi',
@@ -262,6 +268,7 @@ export const uz: Dict = {
   },
   feedback: {
     title: 'Fikr-mulohaza',
+    notice: "Bu xabar do'stlaringizga emas, ilova dasturchilariga yuboriladi.",
     category_bug: 'Xatolik',
     category_suggestion: 'Taklif',
     category_other: 'Boshqa',

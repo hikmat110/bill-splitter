@@ -307,20 +307,24 @@ input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webk
   border-top: 1px solid var(--border);
 }
 
-/* feedback floating button — z 32: above .overlay-screen (30) so it shows over
-   bill detail / admin inbox, below .scrim (40) so any open sheet covers it */
-.feedback-fab {
-  position: absolute; right: 16px;
-  bottom: calc(84px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
-  z-index: 32;
-  width: 44px; height: 44px; border-radius: var(--r-pill);
-  display: flex; align-items: center; justify-content: center;
-  background: var(--surface); color: var(--text-2);
-  border: 1px solid var(--border); box-shadow: var(--shadow-lg);
-  cursor: pointer; font-size: 21px; opacity: .92;
-  transition: transform .12s ease, opacity .18s ease;
+/* "sending the bill" overlay — z 50: above sheets (40) and every screen, below
+   the toast (60) so a failure message still shows as the overlay closes */
+.sending-overlay {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 32px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: sending-in .18s ease;
 }
-.feedback-fab:active { transform: scale(0.9); }
+.sending-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  border-radius: var(--r-lg); padding: 24px 28px; max-width: 280px;
+}
+.sending-card .ti { font-size: 34px; color: var(--accent); margin-bottom: 4px; }
+.sending-title { font-weight: 800; font-size: 16.5px; }
+.sending-hint { color: var(--text-3); font-weight: 600; font-size: 13px; line-height: 1.45; }
+@keyframes sending-in { from { opacity: 0; } to { opacity: 1; } }
 
 /* toast */
 .toast {

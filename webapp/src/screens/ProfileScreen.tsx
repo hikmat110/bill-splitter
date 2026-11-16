@@ -31,6 +31,7 @@ export function ProfileScreen({
   onContactDeleted,
   dark,
   onSetDark,
+  onOpenFeedback,
 }: {
   me: Me
   /** The user's contacts (self excluded — the header covers "you"). */
@@ -45,6 +46,7 @@ export function ProfileScreen({
    *  colorScheme and applied via data-theme on .tg-app). */
   dark: boolean
   onSetDark: (dark: boolean) => void
+  onOpenFeedback: () => void
 }) {
   const { t, lang, setLang } = useT()
   const toast = useToast()
@@ -351,6 +353,33 @@ export function ProfileScreen({
           ]}
         />
       </div>
+
+      {/* feedback — a labelled row here, not a floating button: the old FAB sat
+          on top of the split screen's Send button and caught the taps meant for it */}
+      <SecTitle>{t('profile.help')}</SecTitle>
+      <button
+        className="card row"
+        onClick={onOpenFeedback}
+        style={{
+          width: '100%',
+          gap: 12,
+          alignItems: 'center',
+          padding: 'calc(13px * var(--dens))',
+          textAlign: 'left',
+          fontFamily: 'inherit',
+          color: 'inherit',
+          cursor: 'pointer',
+        }}
+      >
+        <i className="ti ti-message-report" style={{ fontSize: 22, color: 'var(--text-2)' }} />
+        <span className="col" style={{ flex: 1, minWidth: 0, gap: 2 }}>
+          <span style={{ fontWeight: 700, fontSize: 14.5 }}>{t('profile.feedback_row')}</span>
+          <span className="muted" style={{ fontSize: 12.5, fontWeight: 600 }}>
+            {t('profile.feedback_hint')}
+          </span>
+        </span>
+        <i className="ti ti-chevron-right muted3" />
+      </button>
 
       {/* build identity — tap to copy, so a bug report can quote it exactly */}
       <button

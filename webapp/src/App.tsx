@@ -3,7 +3,6 @@ import { PeopleSheet } from './components/PeopleSheet'
 import { AddContactSheet } from './components/AddContactSheet'
 import { ErrorBoundary } from './components/ErrorBoundary'
 import { UpdateBanner, useUpdateCheck } from './components/UpdateBanner'
-import { FeedbackFab } from './components/FeedbackFab'
 import { FeedbackSheet } from './components/FeedbackSheet'
 import { useToast } from './components/Toast'
 import { SplitScreen } from './screens/SplitScreen'
@@ -15,7 +14,6 @@ import { FeedbackAdminScreen } from './screens/FeedbackAdminScreen'
 import { SupportInboxScreen } from './screens/SupportInboxScreen'
 import { AdminScreen } from './screens/AdminScreen'
 import { api, ApiError } from './lib/api'
-import { captureScreen } from './lib/capture'
 import { emptyDraft, uid } from './lib/draft'
 import { billStamp } from './lib/date'
 import type { DraftBill, Person } from './lib/draft'
@@ -75,10 +73,8 @@ export function App() {
   const [fatal, setFatal] = useState<'unauthorized' | string | null>(null)
   const [showTour, setShowTour] = useState(false)
 
-  // Feedback widget: the FAB captures the screen first, then opens the sheet.
+  // Feedback form — opened from Profile's "Help & feedback" row.
   const [feedbackOpen, setFeedbackOpen] = useState(false)
-  const [feedbackShot, setFeedbackShot] = useState<File | null>(null)
-  const [capturing, setCapturing] = useState(false)
   const [feedbackAdminOpen, setFeedbackAdminOpen] = useState(false)
   const [supportOpen, setSupportOpen] = useState(false)
 
@@ -380,7 +376,14 @@ export function App() {
       const saved = editingId
         ? await api.updateBill(editingId, payload)
         : await api.createBill(payload)
-      await refresh()
+      // Show the saved bill straight away (it doubles as the detail overlay's
+      // seed) and reload the lists in the background instead of making the
+      // creator wait on another round trip.
+      setBills((b) => ({
+        ...b,
+        created: [saved, ...b.created.filter((x) => x.id !== saved.id)],
+      }))
+      void refresh().catch(() => undefined)
       setDraft(emptyDraft(me.selfContactId))
       clearDraft(me.id)
       haptic('success')
@@ -433,15 +436,9 @@ export function App() {
           ? 'bill_detail'
           : tab
 
-  const openFeedback = async () => {
+  const openFeedback = () => {
     haptic('light')
-    setCapturing(true)
-    // Capture BEFORE the sheet opens so the sheet isn't in the shot; null on
-    // failure — the form still opens, just without a screenshot.
-    const shot = await captureScreen()
-    setFeedbackShot(shot)
     setFeedbackOpen(true)
-    setCapturing(false)
   }
 
   const badge = me ? inboxCount(bills, me) : 0
@@ -488,6 +485,7 @@ export function App() {
             onContactDeleted={onContactDeleted}
             dark={dark}
             onSetDark={setDark}
+            onOpenFeedback={openFeedback}
           />
         )}
         {tab === 'admin' && me?.isAdmin && (
@@ -557,14 +555,22 @@ export function App() {
         </ErrorBoundary>
       )}
 
-      {/* feedback FAB — floats over every screen (open sheets cover it via the
-          scrim); hidden during the tour so it doesn't overlap the walkthrough */}
-      {me && !showTour && <FeedbackFab onClick={() => void openFeedback()} capturing={capturing} />}
+      {/* sending a bill — full-screen, blocks every tap until the save returns */}
+      {sending && (
+        <div className="sending-overlay" role="status" aria-live="polite">
+          <div className="sending-card pop">
+            <i className="ti ti-loader-2 spin" />
+            <div className="sending-title">
+              {t(draft.editingBillId ? 'split.update_overlay' : 'split.send_overlay')}
+            </div>
+            <div className="sending-hint">{t('split.send_overlay_hint')}</div>
+          </div>
+        </div>
+      )}
 
       <FeedbackSheet
         open={feedbackOpen}
         onClose={() => setFeedbackOpen(false)}
-        screenshot={feedbackShot}
         context={{
           screen: currentScreen,
           buildId: BUILD.buildId,

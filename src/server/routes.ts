@@ -116,6 +116,7 @@ import { parseUsernameList } from '../utils/username'
 import { toCreateBillInput, toUpdateBillInput, shapeGroupSplit } from './mappers'
 import { canManageBill, canMarkPaid, isAdmin, canManageGroupSplit } from './authz'
 import { handleAdmin } from './admin-routes'
+import { rootLogger } from '../bot/middleware/logger'
 
 // ─── response shapers ──────────────────────────────────────────────────────────
 
@@ -577,6 +578,26 @@ function billTitleOrDefault(title: string, user: User): string {
   )
 }
 
+// Telegram work that follows a bill save (participant DMs, the group board) runs
+// after the response, so the creator isn't left waiting on one Telegram call per
+// participant. Jobs for the same bill are chained, and edit/delete wait for the
+// chain first: they read the notification message ids those jobs write.
+const billJobs = new Map<string, Promise<void>>()
+
+function runBillJob(billId: string, label: string, job: () => Promise<void>): void {
+  const next = (billJobs.get(billId) ?? Promise.resolve())
+    .then(job)
+    .catch((err) => rootLogger.error({ err, billId }, `${label} failed`))
+  billJobs.set(billId, next)
+  void next.finally(() => {
+    if (billJobs.get(billId) === next) billJobs.delete(billId)
+  })
+}
+
+async function settleBillJobs(billId: string): Promise<void> {
+  await billJobs.get(billId)
+}
+
 async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<Response> {
   const body = createBillSchema.parse(await req.json())
   const title = billTitleOrDefault(body.title, user)
@@ -588,18 +609,21 @@ async function postBill(req: Request, user: User, bot: Bot<MyContext>): Promise<
   const bill = await createBill(
     toCreateBillInput({ ...body, title }, user.id, self.id, resolved.cardId)
   )
-  await sendBillNotifications(bot, bill.id)
+  const groupSplitId = body.groupSplitId
+  runBillJob(bill.id, 'bill send notifications', async () => {
+    await sendBillNotifications(bot, bill.id)
 
-  // Built from a group split: attach it and turn that group's card into the
-  // live payment board. Best-effort — a group that has since kicked the bot
-  // must never fail the bill the host just created.
-  if (body.groupSplitId) {
-    const details = await getSplitDetails(body.groupSplitId)
-    if (details && canManageGroupSplit(user, details.split)) {
-      await attachBill(details.split.id, bill.id).catch(() => undefined)
-      await refreshGroupBoard(bot, details.split.id).catch(() => undefined)
+    // Built from a group split: attach it and turn that group's card into the
+    // live payment board. Best-effort — a group that has since kicked the bot
+    // must never fail the bill the host just created.
+    if (groupSplitId) {
+      const details = await getSplitDetails(groupSplitId)
+      if (details && canManageGroupSplit(user, details.split)) {
+        await attachBill(details.split.id, bill.id).catch(() => undefined)
+        await refreshGroupBoard(bot, details.split.id).catch(() => undefined)
+      }
     }
-  }
+  })
 
   const d = await getBillWithDetails(bill.id)
   return json(d ? shapeBillDetail(d) : { id: bill.id }, { status: 201 })
@@ -611,6 +635,8 @@ async function patchBill(
   billId: string,
   bot: Bot<MyContext>
 ): Promise<Response> {
+  // A still-running send/resend would write message ids we need to capture below.
+  await settleBillJobs(billId)
   const d = await getBillWithDetails(billId)
   if (!d) return error(404, 'Bill not found')
   if (!canManageBill(user, d.bill)) return error(403, 'Forbidden')
@@ -645,7 +671,9 @@ async function patchBill(
     throw e
   }
 
-  await resendBillNotifications(bot, billId, oldMessageIds)
+  runBillJob(billId, 'bill resend notifications', async () => {
+    await resendBillNotifications(bot, billId, oldMessageIds)
+  })
 
   // Best-effort cleanup of a replaced main photo.
   if (oldReceiptId && oldReceiptId !== body.receiptAttachmentId && oldReceiptMime) {
@@ -661,6 +689,8 @@ async function deleteBillRoute(
   billId: string,
   bot: Bot<MyContext>
 ): Promise<Response> {
+  // Let an in-flight send finish, or its messages would escape the rewrite below.
+  await settleBillJobs(billId)
   const d = await getBillWithDetails(billId)
   if (!d) return error(404, 'Bill not found')
   if (!canManageBill(user, d.bill)) return error(403, 'Forbidden')

@@ -44,6 +44,9 @@ export const en = {
     theme: 'Theme',
     theme_light: 'Light',
     theme_dark: 'Dark',
+    help: 'Help & feedback',
+    feedback_row: 'Send feedback',
+    feedback_hint: 'Report a bug or suggest an idea',
   },
   app: {
     unauthorized_title: 'Open from Telegram',
@@ -80,6 +83,9 @@ export const en = {
     sending: 'Sending…',
     update: 'Update',
     updating: 'Updating…',
+    send_overlay: 'Sending the bill…',
+    update_overlay: 'Updating the bill…',
+    send_overlay_hint: 'Saving the split and notifying your friends',
     receipt_photo: 'Receipt',
     default_title: 'Bill · {{when}}',
     receipt_hint: 'Optional — participants can see it',
@@ -264,6 +270,7 @@ export const en = {
   },
   feedback: {
     title: 'Feedback',
+    notice: 'This goes to the app’s developers — not to your friends.',
     category_bug: 'Bug',
     category_suggestion: 'Idea',
     category_other: 'Other',

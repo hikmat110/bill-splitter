@@ -9,22 +9,19 @@ import type { AttachmentRef, FeedbackCategory, FeedbackContext } from '../lib/ty
 
 const MAX_SHOTS = 5
 
-type Shot = { file: File; previewUrl: string; isAutoCapture: boolean }
+type Shot = { file: File; previewUrl: string }
 
 /**
- * The "leave feedback" form, opened by the floating button from any screen.
- * `screenshot` is the auto-captured shot of the screen the user was on (null
- * when capture failed — the form still works, gallery attach included).
+ * The "leave feedback" form, opened from the Profile screen's "Help & feedback"
+ * row. Screenshots are attached from the gallery.
  */
 export function FeedbackSheet({
   open,
   onClose,
-  screenshot,
   context,
 }: {
   open: boolean
   onClose: () => void
-  screenshot: File | null
   context: FeedbackContext
 }) {
   const { t } = useT()
@@ -42,13 +39,7 @@ export function FeedbackSheet({
     setCategory('bug')
     setMessage('')
     uploadedRef.current.clear()
-    setShots(
-      screenshot
-        ? [{ file: screenshot, previewUrl: URL.createObjectURL(screenshot), isAutoCapture: true }]
-        : []
-    )
-    // Reset only on open — `screenshot` is set in the same render that opens the sheet.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    setShots([])
   }, [open])
 
   // Revoke previews when the sheet closes (or the component unmounts mid-open).
@@ -69,7 +60,7 @@ export function FeedbackSheet({
     setShots((prev) =>
       prev.length >= MAX_SHOTS
         ? prev
-        : [...prev, { file, previewUrl: URL.createObjectURL(file), isAutoCapture: false }]
+        : [...prev, { file, previewUrl: URL.createObjectURL(file) }]
     )
   }
 
@@ -91,7 +82,7 @@ export function FeedbackSheet({
           ref = await api.uploadAttachment(s.file)
           uploadedRef.current.set(s.file, ref)
         }
-        attachments.push({ attachmentId: ref.id, mime: ref.mime, isAutoCapture: s.isAutoCapture })
+        attachments.push({ attachmentId: ref.id, mime: ref.mime, isAutoCapture: false })
       }
       await api.createFeedback({ category, message: message.trim(), attachments, context })
       haptic('success')
@@ -122,6 +113,10 @@ export function FeedbackSheet({
         }}
       />
       <div className="col" style={{ gap: 14, paddingTop: 8 }}>
+        {/* Some users landed here meaning to send their bill — say plainly who reads this. */}
+        <div className="muted" style={{ fontSize: 13, fontWeight: 600, lineHeight: 1.45 }}>
+          {t('feedback.notice')}
+        </div>
         <Segmented
           value={category}
           onChange={setCategory}

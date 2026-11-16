@@ -42,6 +42,9 @@ export const ru: Dict = {
     theme: 'Тема',
     theme_light: 'Светлая',
     theme_dark: 'Тёмная',
+    help: 'Помощь и отзывы',
+    feedback_row: 'Написать отзыв',
+    feedback_hint: 'Сообщить об ошибке или предложить идею',
   },
   app: {
     unauthorized_title: 'Откройте из Telegram',
@@ -78,6 +81,9 @@ export const ru: Dict = {
     sending: 'Отправка…',
     update: 'Обновить',
     updating: 'Обновление…',
+    send_overlay: 'Отправляем счёт…',
+    update_overlay: 'Обновляем счёт…',
+    send_overlay_hint: 'Сохраняем расчёт и уведомляем друзей',
     receipt_photo: 'Чек',
     default_title: 'Счёт · {{when}}',
     receipt_hint: 'Необязательно — увидят участники',
@@ -262,6 +268,7 @@ export const ru: Dict = {
   },
   feedback: {
     title: 'Обратная связь',
+    notice: 'Это сообщение получат разработчики приложения, а не ваши друзья.',
     category_bug: 'Ошибка',
     category_suggestion: 'Идея',
     category_other: 'Другое',
