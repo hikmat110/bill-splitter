@@ -4,6 +4,7 @@ import { t, statusLabel } from '../../i18n'
 import {
   listBillsForParticipant,
   getBillWithDetails,
+  getBillBreakdown,
   getParticipantById,
   markParticipantPaid,
 } from '../../services/bill.service'
@@ -11,6 +12,7 @@ import { notifyCreatorOfPaymentMark } from '../../services/notification.service'
 import {
   incomingListKeyboard,
   incomingDetailKeyboard,
+  proofSkipKeyboard,
 } from '../keyboards'
 import { formatMoney } from '../../utils/format'
 
@@ -53,6 +55,18 @@ export async function incomingDetailHandler(ctx: MyContext, participantId: strin
     t(ctx, 'incoming.status_label', { status: statusLabel(ctx, participant.status) }),
   ]
 
+  // Recipient sees only their own items — what they're paying for.
+  const own = getBillBreakdown(details).get(participant.contact_id)
+  if (own && own.items.length > 0) {
+    lines.push(t(ctx, 'incoming.your_items_header'))
+    for (const it of own.items) {
+      const name = it.units ? `${it.name} ×${it.units}` : it.name
+      lines.push(t(ctx, 'history.detail_item_share', { name, amount: formatMoney(it.share) }))
+    }
+    if (own.service > 0) lines.push(t(ctx, 'history.detail_service_line', { amount: formatMoney(own.service) }))
+    if (own.tip > 0) lines.push(t(ctx, 'history.detail_tip_line', { amount: formatMoney(own.tip) }))
+  }
+
   await editOrReply(
     ctx,
     lines.join('\n'),
@@ -62,6 +76,42 @@ export async function incomingDetailHandler(ctx: MyContext, participantId: strin
 }
 
 export async function markPaidCallbackHandler(
+  ctx: MyContext,
+  participantId: string,
+  _bot: Bot<MyContext>
+): Promise<void> {
+  const participant = await getParticipantById(participantId)
+  if (!participant) {
+    await editOrReply(ctx, t(ctx, 'errors.not_found'))
+    return
+  }
+
+  if (participant.contact.linked_user_id !== ctx.user.id) {
+    await editOrReply(ctx, t(ctx, 'errors.not_your_action'))
+    return
+  }
+
+  if (participant.status !== 'pending') return
+
+  // Don't mark paid yet — first ask for an optional transfer-receipt photo.
+  // The actual markParticipantPaid happens once a photo arrives (photoHandler)
+  // or the user taps Skip (markPaidSkipHandler).
+  ctx.session.mark_paid_wizard = { step: 'awaiting_proof', participantId }
+  const promptMsgId = ctx.callbackQuery?.message?.message_id
+  if (promptMsgId) ctx.session.mark_paid_wizard.promptMessageId = promptMsgId
+
+  // The notification may have been sent as a photo (bill with a main receipt),
+  // which editMessageText can't edit — fall back to caption, then a fresh message.
+  const prompt = t(ctx, 'incoming.proof_prompt')
+  const kb = proofSkipKeyboard(participantId, ctx)
+  await ctx
+    .editMessageText(prompt, { reply_markup: kb })
+    .catch(() => ctx.editMessageCaption({ caption: prompt, reply_markup: kb }))
+    .catch(() => ctx.reply(prompt, { reply_markup: kb }))
+    .catch(() => undefined)
+}
+
+export async function markPaidSkipHandler(
   ctx: MyContext,
   participantId: string,
   bot: Bot<MyContext>
@@ -76,6 +126,8 @@ export async function markPaidCallbackHandler(
     await editOrReply(ctx, t(ctx, 'errors.not_your_action'))
     return
   }
+
+  ctx.session.mark_paid_wizard = undefined
 
   if (participant.status !== 'pending') return
 

@@ -6,6 +6,9 @@ out
 dist
 *.tgz
 
+# uploaded receipt/proof images (UPLOAD_DIR)
+uploads
+
 # code coverage
 coverage
 *.lcov

@@ -1,23 +1,29 @@
 import { session } from 'grammy'
 import type { SessionFlavor } from 'grammy'
+import type { DeepLink } from '../../utils/deep-link'
 
 export interface WizardItem {
   name: string
-  price: bigint
+  price: number // real 2-decimal som
   shareContactIds: string[]
 }
 
 export interface SessionData {
   mainMessageId?: number
 
+  /** /start payload seen before the user had an account, replayed after they
+   *  share their phone. A convenience only — the durable half of the group-split
+   *  link happens in the registration path itself (user.service). */
+  pending_start_link?: DeepLink
+
   contact_wizard?: {
-    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_contact_share' | 'awaiting_username'
+    step: 'awaiting_contact_source' | 'awaiting_name' | 'awaiting_phone' | 'awaiting_users_share' | 'awaiting_username'
     display_name?: string
     wizardMessageId?: number
+    /** Carrier message holding the request_users reply keyboard, deleted after selection. */
+    pickerMessageId?: number
   }
 
-  // NOTE: bigint fields are safe here because session is in-memory.
-  // If session storage moves to Redis/Postgres, add a BigInt-aware serializer.
   bill_wizard?: {
     step:
       | 'awaiting_title'
@@ -29,6 +35,8 @@ export interface SessionData {
       | 'awaiting_service_custom'
       | 'awaiting_tip'
       | 'awaiting_tip_custom'
+      | 'awaiting_tip_payer'
+      | 'awaiting_receipt_photo'
       | 'review'
     wizardMessageId?: number
     title?: string
@@ -36,8 +44,19 @@ export interface SessionData {
     items: WizardItem[]
     currentItem?: Partial<WizardItem>
     servicePct: number
-    serviceFixed: bigint
-    tip: bigint
+    serviceFixed: number
+    tip: number
+    /** Contact who paid the tip; undefined = creator (default). */
+    tipPaidByContactId?: string
+    /** Optional main receipt/cheque photo, set in the awaiting_receipt_photo step. */
+    receiptAttachmentId?: string
+    receiptMime?: string
+  }
+
+  mark_paid_wizard?: {
+    step: 'awaiting_proof'
+    participantId: string
+    promptMessageId?: number
   }
 
   dispute_wizard?: {
@@ -46,8 +65,12 @@ export interface SessionData {
   }
 
   settings_wizard?: {
-    step: 'awaiting_card_number'
+    step: 'awaiting_card_number' | 'awaiting_card_label'
     wizardMessageId?: number
+    /** Card being renamed (awaiting_card_label). */
+    editingCardId?: string
+    /** Registration onboarding: after save/skip, go to main menu, not settings. */
+    afterRegistration?: boolean
   }
 }
 
@@ -57,4 +80,18 @@ export function initial(): SessionData {
   return {}
 }
 
-export const sessionMiddleware = session({ initial })
+export const sessionMiddleware = session({
+  initial,
+  // grammY's default key is `ctx.chatId`, which in a group gives every member
+  // ONE shared session — one shared bill_wizard, one shared mainMessageId, so
+  // one person's wizard would swallow everyone else's messages.
+  //
+  // Private chats keep the default key verbatim (in a private chat
+  // `chat.id === from.id`, so the string is identical and nothing changes).
+  getSessionKey: (ctx) => {
+    const chat = ctx.chat
+    if (!chat) return undefined
+    if (chat.type === 'private') return String(chat.id)
+    return `${chat.id}:${ctx.from?.id ?? 'anon'}`
+  },
+})

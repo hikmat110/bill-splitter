@@ -1,0 +1,83 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1780904686826,
+      "tag": "0000_sleepy_moira_mactaggert",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1781434212011,
+      "tag": "0001_flaky_preak",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1781954417729,
+      "tag": "0002_moaning_micromacro",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1781957732782,
+      "tag": "0003_fantastic_kitty_pryde",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1783074828424,
+      "tag": "0004_salty_vin_gonzales",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1783091187030,
+      "tag": "0005_organic_metal_master",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1787667078719,
+      "tag": "0006_wild_leo",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1788098294873,
+      "tag": "0007_gifted_blue_blade",
+      "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1788519246790,
+      "tag": "0008_bitter_big_bertha",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1788954351369,
+      "tag": "0009_optimal_thunderbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1789805120301,
+      "tag": "0010_high_wilson_fisk",
+      "breakpoints": true
+    }
+  ]
+}

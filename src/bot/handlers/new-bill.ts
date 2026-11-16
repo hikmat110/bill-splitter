@@ -4,6 +4,7 @@ import type { MyContext } from '../index'
 import { t } from '../../i18n'
 import { listContacts, findContactById, findOrCreateSelfContact } from '../../services/contact.service'
 import { createBill } from '../../services/bill.service'
+import { getDefaultCard } from '../../services/card.service'
 import { sendBillNotifications } from '../../services/notification.service'
 import {
   participantSelectKeyboard,
@@ -11,7 +12,10 @@ import {
   itemNextKeyboard,
   serviceChargeKeyboard,
   tipKeyboard,
+  tipPayerKeyboard,
   billReviewKeyboard,
+  receiptSkipKeyboard,
+  noContactsKeyboard,
 } from '../keyboards'
 import { formatMoney } from '../../utils/format'
 import { computeSettlement } from '../../utils/settlement'
@@ -31,8 +35,8 @@ export async function newBillStartHandler(ctx: MyContext): Promise<void> {
     participantContactIds: [],
     items: [],
     servicePct: 0,
-    serviceFixed: 0n,
-    tip: 0n,
+    serviceFixed: 0,
+    tip: 0,
   }
 
   await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
@@ -91,6 +95,10 @@ export async function billCallbackHandler(
       return serviceChargeStep(ctx, id)
     case 'tip':
       return tipStep(ctx, id)
+    case 'tip_payer':
+      return tipPayerStep(ctx, id)
+    case 'receipt_skip':
+      return receiptSkipStep(ctx)
     case 'send':
       return sendBillStep(ctx, bot)
     case 'edit':
@@ -110,7 +118,7 @@ async function saveTitleStep(ctx: MyContext, title: string): Promise<void> {
   ])
 
   if (allContacts.length === 0) {
-    await editWizardMessage(ctx, t(ctx, 'bill.no_contacts'))
+    await editWizardMessage(ctx, t(ctx, 'bill.no_contacts'), noContactsKeyboard(ctx))
     ctx.session.bill_wizard = undefined
     return
   }
@@ -166,13 +174,13 @@ async function saveItemNameStep(ctx: MyContext, name: string): Promise<void> {
 
 async function saveItemPriceStep(ctx: MyContext, text: string): Promise<void> {
   const wizard = ctx.session.bill_wizard!
-  const parsed = parseInt(text.replace(/[\s,._]/g, ''), 10)
-  if (isNaN(parsed) || parsed <= 0 || parsed > 10_000_000_000) {
+  const parsed = parseMoneyInput(text)
+  if (parsed === null || parsed <= 0 || parsed > 10_000_000_000) {
     await editWizardMessage(ctx, t(ctx, 'bill.price_invalid'))
     return
   }
 
-  wizard.currentItem!.price = BigInt(parsed)
+  wizard.currentItem!.price = parsed
   wizard.step = 'awaiting_item_shares'
 
   const participantContacts = await getParticipantContacts(wizard.participantContactIds)
@@ -258,7 +266,7 @@ async function serviceChargeStep(ctx: MyContext, choice: string): Promise<void> 
   const pct = parseFloat(choice)
   if (isNaN(pct)) return
   wizard.servicePct = pct
-  wizard.serviceFixed = 0n
+  wizard.serviceFixed = 0
   wizard.step = 'awaiting_tip'
   await editWizardMessage(ctx, t(ctx, 'bill.ask_tip'), tipKeyboard(ctx))
 }
@@ -271,7 +279,7 @@ async function saveServiceCustomStep(ctx: MyContext, text: string): Promise<void
     return
   }
   wizard.servicePct = pct
-  wizard.serviceFixed = 0n
+  wizard.serviceFixed = 0
   wizard.step = 'awaiting_tip'
   await editWizardMessage(ctx, t(ctx, 'bill.ask_tip'), tipKeyboard(ctx))
 }
@@ -285,33 +293,79 @@ async function tipStep(ctx: MyContext, choice: string): Promise<void> {
     return
   }
 
-  const amount = parseInt(choice, 10)
+  const amount = parseFloat(choice)
   if (isNaN(amount)) return
-  wizard.tip = BigInt(amount)
-  wizard.step = 'review'
-  await showReview(ctx)
+  wizard.tip = amount
+  await proceedAfterTip(ctx)
 }
 
 async function saveTipCustomStep(ctx: MyContext, text: string): Promise<void> {
   const wizard = ctx.session.bill_wizard!
-  const amount = parseInt(text.replace(/[\s,._]/g, ''), 10)
-  if (isNaN(amount) || amount < 0) {
+  const amount = parseMoneyInput(text)
+  if (amount === null || amount < 0) {
     await editWizardMessage(ctx, t(ctx, 'bill.tip_invalid'))
     return
   }
-  wizard.tip = BigInt(amount)
+  wizard.tip = amount
+  await proceedAfterTip(ctx)
+}
+
+/**
+ * After the tip is set: if there's a tip and at least one non-creator
+ * participant, ask who paid it (default = creator). Otherwise offer the
+ * optional receipt photo step.
+ */
+async function proceedAfterTip(ctx: MyContext): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
+  if (wizard.tip > 0) {
+    const participantContacts = await getParticipantContacts(wizard.participantContactIds)
+    const others = participantContacts.filter((c) => c.linked_user_id !== ctx.user.id)
+    if (others.length > 0) {
+      wizard.step = 'awaiting_tip_payer'
+      await editWizardMessage(
+        ctx,
+        t(ctx, 'bill.ask_tip_payer'),
+        tipPayerKeyboard(others, wizard.tipPaidByContactId, ctx)
+      )
+      return
+    }
+  }
+  wizard.tipPaidByContactId = undefined
+  await askReceiptPhoto(ctx)
+}
+
+async function tipPayerStep(ctx: MyContext, choice: string): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
+  // "creator" is the default payer and is never credited.
+  wizard.tipPaidByContactId = choice === 'creator' ? undefined : choice
+  await askReceiptPhoto(ctx)
+}
+
+/**
+ * Optional main-cheque photo step, shown right before review. The user can send
+ * a photo (handled by photoHandler, which advances to review) or tap Skip
+ * (receipt_skip callback → goes straight to review).
+ */
+async function askReceiptPhoto(ctx: MyContext): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
+  wizard.step = 'awaiting_receipt_photo'
+  await editWizardMessage(ctx, t(ctx, 'split.receipt_prompt'), receiptSkipKeyboard(ctx))
+}
+
+async function receiptSkipStep(ctx: MyContext): Promise<void> {
+  const wizard = ctx.session.bill_wizard!
   wizard.step = 'review'
   await showReview(ctx)
 }
 
-async function showReview(ctx: MyContext): Promise<void> {
+export async function showReview(ctx: MyContext): Promise<void> {
   const wizard = ctx.session.bill_wizard!
   const participantContacts = await getParticipantContacts(wizard.participantContactIds)
   const contactMap = new Map(participantContacts.map((c) => [c.id, c]))
 
   const itemSpecs = wizard.items.map((it) => ({
     price: it.price,
-    shareContactIds: it.shareContactIds,
+    shares: it.shareContactIds.map((id) => ({ contactId: id, units: null })),
   }))
 
   const settlement = computeSettlement({
@@ -319,6 +373,7 @@ async function showReview(ctx: MyContext): Promise<void> {
     servicePct: wizard.servicePct,
     serviceFixed: wizard.serviceFixed,
     tip: wizard.tip,
+    tipPaidByContactId: wizard.tipPaidByContactId ?? null,
   })
 
   const lines: string[] = [
@@ -332,16 +387,26 @@ async function showReview(ctx: MyContext): Promise<void> {
   lines.push(`${t(ctx, 'bill.review_subtotal', { amount: formatMoney(settlement.subtotal) })}`)
   if (wizard.servicePct > 0) {
     const svcAmount = settlement.total - settlement.subtotal - wizard.tip
-    lines.push(t(ctx, 'bill.review_service', { amount: formatMoney(svcAmount > 0n ? svcAmount : 0n) }))
+    lines.push(t(ctx, 'bill.review_service', { amount: formatMoney(svcAmount > 0 ? svcAmount : 0) }))
   }
-  if (wizard.tip > 0n) {
+  if (wizard.tip > 0) {
     lines.push(t(ctx, 'bill.review_tip', { amount: formatMoney(wizard.tip) }))
+    if (wizard.tipPaidByContactId) {
+      const payer = contactMap.get(wizard.tipPaidByContactId)
+      if (payer) {
+        lines.push(t(ctx, 'bill.review_tip_payer', { name: payer.display_name }))
+      }
+    }
   }
   lines.push(t(ctx, 'bill.review_total', { amount: formatMoney(settlement.total) }))
   lines.push('')
   lines.push(t(ctx, 'bill.review_participants'))
   for (const [contactId, amount] of settlement.shares) {
-    const name = contactMap.get(contactId)?.display_name ?? contactId
+    const c = contactMap.get(contactId)
+    const name =
+      c?.linked_user_id === ctx.user.id
+        ? t(ctx, 'bill.me_label', { name: c?.display_name ?? '' })
+        : c?.display_name ?? contactId
     lines.push(t(ctx, 'bill.review_line', { name, amount: formatMoney(amount) }))
   }
 
@@ -350,6 +415,10 @@ async function showReview(ctx: MyContext): Promise<void> {
 
 async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> {
   const wizard = ctx.session.bill_wizard!
+
+  // The bot wizard has no card step — the default card is attached automatically
+  // (the mini-app has the per-bill picker).
+  const defaultCard = await getDefaultCard(ctx.user.id)
 
   let bill
   try {
@@ -361,12 +430,16 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
         price: it.price,
         quantity: 1,
         position: i,
-        shareContactIds: it.shareContactIds,
+        shares: it.shareContactIds.map((id) => ({ contactId: id, units: null })),
       })),
       servicePct: wizard.servicePct,
       serviceFixed: wizard.serviceFixed,
       tip: wizard.tip,
+      tipPaidByContactId: wizard.tipPaidByContactId ?? null,
+      cardId: defaultCard?.id ?? null,
       participantContactIds: wizard.participantContactIds,
+      receiptAttachmentId: wizard.receiptAttachmentId ?? null,
+      receiptMime: wizard.receiptMime ?? null,
     })
   } catch (err) {
     ctx.logger.error({ err }, 'createBill failed')
@@ -377,8 +450,8 @@ async function sendBillStep(ctx: MyContext, bot: Bot<MyContext>): Promise<void> 
   ctx.session.bill_wizard = undefined
   await showMainMenu(ctx)
 
-  // Send notifications non-blocking; pass creator's card number so recipients can copy it
-  await sendBillNotifications(bot, bill.id, ctx.user.card_number).catch((err) =>
+  // Notifications read the bill's attached card themselves.
+  await sendBillNotifications(bot, bill.id).catch((err) =>
     ctx.logger.error({ err, billId: bill.id }, 'sendBillNotifications failed')
   )
 }
@@ -390,8 +463,11 @@ async function editBillStep(ctx: MyContext): Promise<void> {
   wizard.items = []
   wizard.currentItem = undefined
   wizard.servicePct = 0
-  wizard.serviceFixed = 0n
-  wizard.tip = 0n
+  wizard.serviceFixed = 0
+  wizard.tip = 0
+  wizard.tipPaidByContactId = undefined
+  wizard.receiptAttachmentId = undefined
+  wizard.receiptMime = undefined
   await editWizardMessage(ctx, t(ctx, 'bill.ask_title'))
 }
 
@@ -401,6 +477,19 @@ async function cancelBillStep(ctx: MyContext): Promise<void> {
 }
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/**
+ * Parse a money amount typed by the user into a 2-decimal som number, or null if
+ * invalid. ru/uz locale: space/underscore group thousands, comma or dot is the
+ * decimal separator (so "10 000" → 10000, "10,33" → 10.33).
+ */
+function parseMoneyInput(text: string): number | null {
+  const normalized = text.replace(/[\s_]/g, '').replace(',', '.')
+  if (!/^\d+(\.\d+)?$/.test(normalized)) return null
+  const n = parseFloat(normalized)
+  if (!isFinite(n)) return null
+  return Math.round(n * 100) / 100
+}
 
 async function getParticipantContacts(ids: string[]): Promise<Contact[]> {
   if (ids.length === 0) return []

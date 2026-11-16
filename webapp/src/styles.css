@@ -1,0 +1,439 @@
+/* ============================================================
+   SPLITWELL — warm, friendly, theme-aware design system
+   Ported verbatim from the Splitwell.html prototype. Only the
+   phone-frame bits (body centering / .tg-app absolute inset) are
+   adapted so the app fills the Telegram viewport.
+   ============================================================ */
+:root {
+  --ah: 155;           /* accent hue: coral 35 / blue 245 / green 155 / violet 295 */
+  --dens: 1;           /* density multiplier (compact .82 / cozy 1 / roomy 1.15) */
+
+  /* radii */
+  --r-xs: 8px; --r-sm: 11px; --r: 16px; --r-lg: 21px; --r-xl: 28px; --r-pill: 999px;
+
+  /* density-driven spacing */
+  --pad-card: calc(17px * var(--dens));
+  --pad-row: calc(13px * var(--dens));
+  --gap: calc(11px * var(--dens));
+  --gap-sm: calc(7px * var(--dens));
+
+  /* Telegram fullscreen puts the app under the status bar and the floating
+     close/collapse controls. Both insets are 0 outside fullscreen; env()
+     covers the plain-browser case. */
+  --inset-top: calc(
+    var(--tg-safe-area-inset-top, env(safe-area-inset-top, 0px))
+    + var(--tg-content-safe-area-inset-top, 0px)
+  );
+}
+
+/* ---- LIGHT (warm cream) ---- */
+[data-theme="light"] {
+  --bg: oklch(0.975 0.009 75);
+  --surface: oklch(0.995 0.004 85);
+  --surface-2: oklch(0.955 0.011 75);
+  --elevated: oklch(1 0 0);
+  --text: oklch(0.29 0.018 60);
+  --text-2: oklch(0.52 0.016 62);
+  --text-3: oklch(0.66 0.013 64);
+  --border: oklch(0.905 0.011 72);
+  --border-2: oklch(0.865 0.013 72);
+  --shadow-sm: 0 1px 2px oklch(0.4 0.03 60 / 0.06), 0 1px 3px oklch(0.4 0.03 60 / 0.05);
+  --shadow: 0 4px 14px oklch(0.4 0.04 60 / 0.08), 0 1px 3px oklch(0.4 0.03 60 / 0.06);
+  --shadow-lg: 0 12px 36px oklch(0.35 0.05 55 / 0.16), 0 4px 12px oklch(0.4 0.04 60 / 0.08);
+  --accent-soft: oklch(0.95 0.045 var(--ah));
+  --accent-text: oklch(0.52 0.14 var(--ah));
+  --pos: oklch(0.62 0.12 170); --pos-soft: oklch(0.95 0.045 172); --pos-text: oklch(0.48 0.11 170);
+  --neg: oklch(0.6 0.17 26); --neg-soft: oklch(0.955 0.035 30); --neg-text: oklch(0.54 0.17 28);
+  --warn: oklch(0.7 0.13 70); --warn-soft: oklch(0.95 0.05 75);
+  --scrim: oklch(0.3 0.03 60 / 0.42);
+  --on-accent: oklch(0.99 0.01 var(--ah));
+}
+/* ---- DARK (warm charcoal) ---- */
+[data-theme="dark"] {
+  --bg: oklch(0.205 0.011 58);
+  --surface: oklch(0.246 0.013 60);
+  --surface-2: oklch(0.295 0.015 60);
+  --elevated: oklch(0.27 0.014 60);
+  --text: oklch(0.955 0.008 82);
+  --text-2: oklch(0.74 0.013 72);
+  --text-3: oklch(0.56 0.013 70);
+  --border: oklch(0.33 0.015 60);
+  --border-2: oklch(0.39 0.016 62);
+  --shadow-sm: 0 1px 2px oklch(0 0 0 / 0.3);
+  --shadow: 0 6px 18px oklch(0 0 0 / 0.34);
+  --shadow-lg: 0 16px 44px oklch(0 0 0 / 0.5);
+  --accent-soft: oklch(0.33 0.06 var(--ah));
+  --accent-text: oklch(0.82 0.11 var(--ah));
+  --pos: oklch(0.74 0.13 172); --pos-soft: oklch(0.34 0.055 172); --pos-text: oklch(0.84 0.11 172);
+  --neg: oklch(0.68 0.16 28); --neg-soft: oklch(0.34 0.07 28); --neg-text: oklch(0.8 0.13 30);
+  --warn: oklch(0.78 0.12 72); --warn-soft: oklch(0.36 0.06 72);
+  --scrim: oklch(0 0 0 / 0.6);
+  --on-accent: oklch(0.99 0.01 var(--ah));
+}
+:root, [data-theme] {
+  --accent: oklch(0.68 0.155 var(--ah));
+  --accent-press: oklch(0.6 0.155 var(--ah));
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+html { font-size: 16px; height: 100%; }
+body {
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  -webkit-font-smoothing: antialiased;
+  height: 100%;
+}
+#root { width: 100%; height: 100%; }
+
+/* App shell — fills the Telegram viewport */
+.tg-app {
+  position: relative;
+  height: 100dvh;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  background: var(--bg);
+  color: var(--text);
+  display: flex; flex-direction: column;
+  font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
+  overflow: hidden;
+  /* tab screens have no top bar, so the shell itself clears the insets */
+  padding-top: calc(8px + var(--inset-top));
+  transition: background .35s ease, color .35s ease;
+}
+.tg-scroll { flex: 1; overflow-y: auto; overflow-x: hidden; -webkit-overflow-scrolling: touch; }
+.tg-scroll::-webkit-scrollbar { width: 0; }
+
+/* numbers */
+.tnum { font-variant-numeric: tabular-nums; font-feature-settings: "tnum"; }
+
+/* generic helpers */
+.row { display: flex; align-items: center; }
+.col { display: flex; flex-direction: column; }
+.between { display: flex; align-items: center; justify-content: space-between; }
+.muted { color: var(--text-2); }
+.muted3 { color: var(--text-3); }
+.hidden { display: none !important; }
+
+/* cards */
+.card {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: var(--pad-card);
+  box-shadow: var(--shadow-sm);
+}
+
+/* buttons */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
+  font-family: inherit; font-weight: 600; font-size: 15px;
+  border-radius: var(--r-pill); border: 1px solid var(--border-2);
+  background: var(--surface); color: var(--text);
+  padding: 11px 18px; cursor: pointer; white-space: nowrap;
+  transition: transform .12s ease, background .18s ease, border-color .18s ease, opacity .18s;
+  user-select: none;
+}
+.btn:active { transform: scale(0.96); }
+.btn-primary { background: var(--accent); border-color: transparent; color: var(--on-accent); box-shadow: 0 4px 14px oklch(0.68 0.155 var(--ah) / 0.3); }
+.btn-primary:active { background: var(--accent-press); }
+.btn-soft { background: var(--accent-soft); border-color: transparent; color: var(--accent-text); }
+.btn-ghost { background: transparent; border-color: transparent; color: var(--text-2); }
+.btn-sm { padding: 8px 13px; font-size: 13.5px; }
+.btn-lg { padding: 15px 22px; font-size: 16px; }
+.btn-block { width: 100%; }
+.btn:disabled { opacity: .45; pointer-events: none; }
+
+/* icon button */
+.icon-btn {
+  width: 40px; height: 40px; border-radius: var(--r-pill);
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--text); border: 1px solid var(--border);
+  cursor: pointer; font-size: 19px; flex-shrink: 0;
+  transition: transform .12s ease, background .18s ease;
+}
+.icon-btn:active { transform: scale(0.9); }
+
+/* inputs */
+.field { display: flex; flex-direction: column; gap: 5px; }
+.field-label { font-size: 12.5px; font-weight: 600; color: var(--text-2); padding-left: 2px; }
+input.inp, select.inp, textarea.inp {
+  width: 100%; font-family: inherit; font-size: 15px; font-weight: 500;
+  color: var(--text); background: var(--surface-2);
+  border: 1.5px solid transparent; border-radius: var(--r-sm);
+  padding: 12px 14px; outline: none; -webkit-appearance: none; appearance: none;
+  transition: border-color .15s, background .15s;
+}
+input.inp::placeholder, textarea.inp::placeholder { color: var(--text-3); font-weight: 500; }
+input.inp:focus, select.inp:focus, textarea.inp:focus { border-color: var(--accent); background: var(--surface); }
+input.inp.ghost { background: transparent; padding: 4px 0; border-radius: 0; }
+input.inp.ghost:focus { background: transparent; border-color: transparent; }
+input[type=number].inp { -moz-appearance: textfield; }
+input[type=number].inp::-webkit-inner-spin-button, input[type=number].inp::-webkit-outer-spin-button { -webkit-appearance: none; }
+
+/* avatar */
+.avatar {
+  border-radius: var(--r-pill); display: flex; align-items: center; justify-content: center;
+  font-weight: 700; flex-shrink: 0; color: #fff; letter-spacing: .2px;
+}
+
+/* chip */
+.chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 8px 12px; border-radius: var(--r-pill); font-size: 13.5px; font-weight: 600;
+  background: var(--surface-2); color: var(--text-2); border: 1.5px solid transparent;
+  cursor: pointer; user-select: none; transition: all .14s ease;
+}
+.chip.on { background: var(--accent-soft); color: var(--accent-text); border-color: transparent; }
+.chip:active { transform: scale(0.95); }
+
+/* segmented */
+/* Scrolls horizontally (scrollbar hidden) when the chips don't fit — narrow
+   phones + long labels would otherwise clip the last option out of reach. */
+.seg {
+  display: flex; background: var(--surface-2); border-radius: var(--r-pill); padding: 3px; gap: 2px;
+  max-width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; scrollbar-width: none;
+}
+.seg::-webkit-scrollbar { display: none; }
+.seg button {
+  flex: 1 0 auto; border: none; background: transparent; font-family: inherit; font-weight: 600; font-size: 13px;
+  color: var(--text-2); padding: 8px 14px; border-radius: var(--r-pill); cursor: pointer; white-space: nowrap;
+  transition: color .18s;
+}
+.seg button.on { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+
+/* snap slider (service / tip) */
+.snap-ticks { display: flex; justify-content: space-between; font-size: 12px; font-weight: 600; color: var(--text-3); }
+.snap-ticks > span { transition: color .15s; white-space: nowrap; }
+.snap-ticks > span.on { color: var(--accent-text); font-weight: 800; }
+.snap-slider {
+  -webkit-appearance: none; appearance: none;
+  width: 100%; height: 6px; border-radius: 999px; outline: none; cursor: pointer; margin: 5px 0;
+  background: linear-gradient(to right, var(--accent) var(--fill, 0%), var(--surface-2) var(--fill, 0%));
+}
+.snap-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); cursor: pointer;
+}
+.snap-slider::-moz-range-thumb {
+  width: 22px; height: 22px; border-radius: 999px;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-sm); cursor: pointer;
+}
+
+/* pill badges */
+.pill { display: inline-flex; align-items: center; gap: 4px; padding: 4px 10px; border-radius: var(--r-pill); font-size: 12.5px; font-weight: 700; white-space: nowrap; }
+.pill-pos { background: var(--pos-soft); color: var(--pos-text); }
+.pill-neg { background: var(--neg-soft); color: var(--neg-text); }
+.pill-mut { background: var(--surface-2); color: var(--text-2); }
+.pill-acc { background: var(--accent-soft); color: var(--accent-text); }
+
+/* bottom nav */
+.tabbar {
+  display: flex; background: var(--surface);
+  border-top: 1px solid var(--border);
+  padding: 8px 8px calc(8px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  flex-shrink: 0; position: relative; z-index: 5;
+}
+.tabbar-item {
+  flex: 1; display: flex; flex-direction: column; align-items: center; gap: 3px;
+  border: none; background: none; cursor: pointer; padding: 6px 0 8px;
+  color: var(--text-3); font-family: inherit; font-weight: 600; font-size: 10.5px;
+  transition: color .18s; position: relative;
+}
+.tabbar-item .ti { font-size: 23px; transition: transform .2s; }
+.tabbar-item.on { color: var(--accent); }
+.tabbar-item.on .ti { transform: translateY(-1px); }
+
+/* count badge on a tabbar item (e.g. Inbox) */
+.tab-badge {
+  position: absolute; top: 2px; left: calc(50% + 6px);
+  min-width: 17px; height: 17px; padding: 0 5px; border-radius: 999px;
+  background: var(--accent); color: var(--on-accent);
+  font-size: 10.5px; font-weight: 800; line-height: 17px;
+  display: flex; align-items: center; justify-content: center;
+}
+
+/* full-screen detail overlay (bill detail) — covers content + tabbar */
+.overlay-screen {
+  position: absolute; inset: 0; z-index: 30;
+  background: var(--bg);
+  display: flex; flex-direction: column;
+  animation: overlay-in .26s cubic-bezier(.32,.72,0,1);
+}
+@keyframes overlay-in {
+  from { transform: translateX(28px); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+
+/* overlay top bar (bill detail, feedback inbox) — overlays are absolutely
+   positioned over the shell's padding, so they clear the insets themselves */
+.topbar {
+  display: flex; align-items: center; gap: 12px;
+  padding: calc(8px + var(--inset-top)) 14px 12px;
+  flex-shrink: 0;
+}
+
+/* sheets / modal */
+.scrim {
+  position: absolute; inset: 0; background: var(--scrim); z-index: 40;
+  display: flex; align-items: flex-end; justify-content: center;
+  opacity: 0; pointer-events: none; transition: opacity .28s ease;
+}
+.scrim.open { opacity: 1; pointer-events: auto; }
+.sheet {
+  width: 100%; background: var(--bg); border-radius: var(--r-xl) var(--r-xl) 0 0;
+  padding: 10px 18px calc(20px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  transform: translateY(100%); transition: transform .32s cubic-bezier(.32,.72,0,1);
+  max-height: 88%; overflow-y: auto; box-shadow: var(--shadow-lg);
+}
+.scrim.open .sheet { transform: translateY(0); }
+.sheet::-webkit-scrollbar { width: 0; }
+.sheet-handle { width: 38px; height: 4px; border-radius: 999px; background: var(--border-2); margin: 4px auto 14px; }
+.sheet-title { font-size: 19px; font-weight: 800; letter-spacing: -.3px; margin-bottom: 4px; }
+
+/* Sheets with a pinned CTA: the body scrolls, the footer stays put. The sheet
+   itself stops scrolling, so its bottom padding moves onto the footer. */
+.sheet.with-footer { display: flex; flex-direction: column; overflow: hidden; padding-bottom: 0; }
+.sheet.with-footer .sheet-handle,
+.sheet.with-footer .sheet-title { flex-shrink: 0; }
+.sheet-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.sheet-body::-webkit-scrollbar { width: 0; }
+.sheet-footer {
+  flex-shrink: 0;
+  padding: 12px 0 calc(20px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  background: var(--bg);
+  border-top: 1px solid var(--border);
+}
+
+/* "sending the bill" overlay — z 50: above sheets (40) and every screen, below
+   the toast (60) so a failure message still shows as the overlay closes */
+.sending-overlay {
+  position: absolute; inset: 0; z-index: 50;
+  display: flex; align-items: center; justify-content: center; padding: 32px;
+  background: color-mix(in srgb, var(--bg) 72%, transparent);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+  animation: sending-in .18s ease;
+}
+.sending-card {
+  display: flex; flex-direction: column; align-items: center; gap: 8px; text-align: center;
+  background: var(--surface); border: 1px solid var(--border); box-shadow: var(--shadow-lg);
+  border-radius: var(--r-lg); padding: 24px 28px; max-width: 280px;
+}
+.sending-card .ti { font-size: 34px; color: var(--accent); margin-bottom: 4px; }
+.sending-title { font-weight: 800; font-size: 16.5px; }
+.sending-hint { color: var(--text-3); font-weight: 600; font-size: 13px; line-height: 1.45; }
+@keyframes sending-in { from { opacity: 0; } to { opacity: 1; } }
+
+/* toast */
+.toast {
+  position: absolute; left: 50%; bottom: 92px; transform: translate(-50%, 20px);
+  background: var(--text); color: var(--bg); font-weight: 600; font-size: 13.5px;
+  padding: 11px 18px; border-radius: var(--r-pill); z-index: 60; box-shadow: var(--shadow-lg);
+  opacity: 0; pointer-events: none; transition: opacity .25s, transform .25s;
+  display: flex; align-items: center; gap: 8px; white-space: nowrap;
+}
+.toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* section heading */
+.sec-title { font-size: 13px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .6px; padding: 0 4px 8px; }
+
+/* stepper */
+.step-btn {
+  width: 26px; height: 26px; border-radius: 999px; border: none; background: transparent;
+  color: var(--text); font-size: 18px; font-weight: 700; cursor: pointer; line-height: 1;
+  display: flex; align-items: center; justify-content: center;
+}
+.step-btn:active { background: var(--surface-2); }
+
+/* progress bar */
+.bar { height: 7px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.bar > span { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .5s cubic-bezier(.32,.72,0,1); }
+
+/* entrance — base state is VISIBLE; animation only nudges position */
+@keyframes pop { from { transform: translateY(8px); } to { transform: none; } }
+.pop { animation: pop .32s cubic-bezier(.32,.72,0,1) both; }
+
+/* skeleton shimmer */
+@keyframes shimmer { to { background-position: 200% 0; } }
+.skel {
+  background: linear-gradient(90deg, var(--surface-2) 25%, var(--border) 50%, var(--surface-2) 75%);
+  background-size: 200% 100%; animation: shimmer 1.3s infinite; border-radius: var(--r-xs);
+}
+/* spinner — used for upload/scan loading icons */
+@keyframes spin { to { transform: rotate(1turn); } }
+.spin { display: inline-block; animation: spin .8s linear infinite; }
+
+@media (prefers-reduced-motion: reduce) { * { animation-duration: .01ms !important; transition-duration: .01ms !important; } }
+
+/* ---- admin tab ---- */
+/* stat tile: label + value (+ optional sub-line); proportional figures on purpose */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.stat {
+  background: var(--surface); border: 1px solid var(--border); border-radius: var(--r-lg);
+  padding: 12px 14px; box-shadow: var(--shadow-sm); min-width: 0;
+}
+.stat-lbl { font-size: 11.5px; font-weight: 700; color: var(--text-3); text-transform: uppercase; letter-spacing: .5px; line-height: 1.3; }
+.stat-val { font-size: 22px; font-weight: 800; letter-spacing: -.4px; margin-top: 4px; line-height: 1.15; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.stat-sub { font-size: 12px; font-weight: 600; color: var(--text-2); margin-top: 3px; }
+
+/* meter — usage against a cap; the fill carries severity, the track is a lighter step */
+.meter { height: 8px; border-radius: 999px; background: var(--surface-2); overflow: hidden; }
+.meter > i { display: block; height: 100%; border-radius: 999px; background: var(--accent); transition: width .5s cubic-bezier(.32,.72,0,1); }
+.meter > i.warn { background: var(--warn); }
+.meter > i.full { background: var(--neg); }
+
+/* weekly column chart — single series, HTML bars: rounded data-end, square baseline,
+   ≤24px thick with a surface gap; each slot centres its bar */
+.bars { display: flex; align-items: stretch; gap: 2px; height: 76px; border-bottom: 1px solid var(--border); }
+.bars > span { flex: 1 1 0; min-width: 0; display: flex; align-items: flex-end; justify-content: center; }
+.bars button {
+  width: 100%; max-width: 24px; min-height: 2px; padding: 0; border: none; cursor: pointer;
+  background: var(--accent); border-radius: 4px 4px 0 0;
+  transition: height .4s cubic-bezier(.32,.72,0,1), opacity .15s;
+}
+.bars button.zero { background: var(--border-2); border-radius: 1px 1px 0 0; }
+.bars button.last { opacity: .55; }
+.bars button.on { box-shadow: 0 0 0 2px var(--surface), 0 0 0 3.5px var(--accent); }
+.bars-axis { display: flex; justify-content: space-between; margin-top: 5px; font-size: 11px; font-weight: 600; color: var(--text-3); }
+
+/* activity feed row icon */
+.act-ico {
+  width: 32px; height: 32px; border-radius: 10px; flex-shrink: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--surface-2); color: var(--text-2); font-size: 16px;
+}
+.act-ico.pos { background: var(--pos-soft); color: var(--pos-text); }
+.act-ico.neg { background: var(--neg-soft); color: var(--neg-text); }
+.act-ico.acc { background: var(--accent-soft); color: var(--accent-text); }
+
+/* ---- support thread ---- */
+.thread { display: flex; flex-direction: column; gap: 8px; padding: 8px 14px 14px; }
+.bub {
+  max-width: 82%; padding: 9px 13px; border-radius: var(--r);
+  font-size: 14.5px; line-height: 1.45; font-weight: 500;
+  /* pre-wrap keeps the sender's line breaks; anywhere stops a pasted URL from
+     blowing the column out */
+  white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.bub.in {
+  align-self: flex-start; background: var(--surface);
+  border: 1px solid var(--border); border-bottom-left-radius: var(--r-xs);
+}
+.bub.out {
+  align-self: flex-end; background: var(--accent); color: var(--on-accent);
+  border-bottom-right-radius: var(--r-xs);
+}
+.bub.out.failed { background: var(--neg-soft); color: var(--neg-text); }
+.bub-meta { font-size: 11px; font-weight: 600; margin-top: 4px; opacity: .72; }
+.bub.out .bub-meta { text-align: right; }
+.bub img { margin-bottom: 6px; border-radius: var(--r-sm); }
+
+/* composer — pinned footer of the thread overlay, above the keyboard */
+.composer {
+  display: flex; align-items: flex-end; gap: 8px; flex-shrink: 0;
+  padding: 10px 14px calc(10px + var(--tg-safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
+  border-top: 1px solid var(--border); background: var(--surface);
+}
+.composer textarea.inp { flex: 1; min-height: 42px; max-height: 120px; resize: none; }

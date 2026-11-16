@@ -4,7 +4,15 @@ import type { MyContext } from '../index'
 import { config } from '../../config'
 
 export const rootLogger = pino(
-  { level: config.LOG_LEVEL },
+  {
+    level: config.LOG_LEVEL,
+    // Card numbers must never reach logs, even via a future `logger.info({ card })`.
+    // Broad on purpose; collateral redaction of unrelated `number` fields is fine.
+    redact: {
+      paths: ['number', 'cardNumber', 'card.number', '*.number', '*.cardNumber'],
+      censor: '[redacted]',
+    },
+  },
   config.NODE_ENV === 'development'
     ? pino.transport({ target: 'pino-pretty', options: { colorize: true } })
     : undefined

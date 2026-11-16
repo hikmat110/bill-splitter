@@ -9,15 +9,36 @@ const dateFormatter = new Intl.DateTimeFormat('ru-RU', {
   minute: '2-digit',
 })
 
-export function formatMoney(amount: bigint): string {
-  // Convert to number only for display — UZS bill totals safely fit in Number
-  const n = Number(amount)
-  const formatted = n.toLocaleString('ru-RU').replace(/,/g, ' ')
+export function formatMoney(amount: number): string {
+  // Real 2-decimal som; show decimals only when the amount isn't whole. ru-RU
+  // groups thousands with a space and uses a comma decimal separator, e.g.
+  // "33 333,33 UZS" / "100 000 UZS".
+  const formatted = amount.toLocaleString('ru-RU', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })
   return `${formatted} UZS`
 }
 
 export function formatDate(date: Date): string {
   return dateFormatter.format(date)
+}
+
+const STAMP_LOCALE: Record<string, string> = { ru: 'ru-RU', uz: 'uz-UZ', en: 'en-US' }
+
+/** Day + short month + 24h time, pinned to Tashkent: "19 сент., 14:05". Feeds the
+ *  auto-generated name for a bill submitted without a title. Server-side only —
+ *  the Mini App stamps its own in the device's zone. */
+export function formatBillStamp(lang: string, date: Date = new Date()): string {
+  const loc = STAMP_LOCALE[lang] ?? 'uz-UZ'
+  const day = date.toLocaleDateString(loc, { timeZone: TZ, day: 'numeric', month: 'short' })
+  const time = date.toLocaleTimeString(loc, {
+    timeZone: TZ,
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  })
+  return `${day}, ${time}`
 }
 
 /** Format 16-digit card number string as "XXXX XXXX XXXX XXXX" */
@@ -34,6 +55,22 @@ export function maskCard(digits: string): string {
 export function parseCardNumber(input: string): string | null {
   const digits = input.replace(/\D/g, '')
   return digits.length === 16 ? digits : null
+}
+
+export type CardNetwork = 'Uzcard' | 'Humo' | 'Visa' | 'Mastercard' | 'Card'
+
+/** Detect the card network from the number prefix ('Card' when unknown). */
+export function cardNetwork(digits: string): CardNetwork {
+  if (digits.startsWith('8600')) return 'Uzcard'
+  if (digits.startsWith('9860')) return 'Humo'
+  if (digits.startsWith('4')) return 'Visa'
+  if (digits.startsWith('5')) return 'Mastercard'
+  return 'Card'
+}
+
+/** "Kapital ish karta" (custom label) or a composed "Uzcard ••6789". */
+export function cardDisplayLabel(card: { number: string; label: string | null }): string {
+  return card.label ?? `${cardNetwork(card.number)} ••${card.number.slice(-4)}`
 }
 
 /** @deprecated Use i18n history.paid_summary instead */

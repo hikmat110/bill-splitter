@@ -1,6 +1,6 @@
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, inArray, isNull, sql } from 'drizzle-orm'
 import { db } from '../db/client'
-import { users, contacts } from '../db/schema'
+import { users, contacts, groupSplitMembers } from '../db/schema'
 import type { User } from '../db/schema'
 import { normalizePhone } from '../utils/phone'
 import { normalizeUsername } from '../utils/username'
@@ -34,6 +34,8 @@ export async function upsertFromContact(
     ? from.language_code
     : 'uz'
 
+  // Registering is activity: a fresh signup counts as active immediately.
+  const now = new Date()
   const [user] = await db
     .insert(users)
     .values({
@@ -43,6 +45,7 @@ export async function upsertFromContact(
       last_name: contact.last_name ?? null,
       username: from.username ?? null,
       language_code: lang,
+      last_seen_at: now,
     })
     .onConflictDoUpdate({
       target: users.telegram_id,
@@ -51,12 +54,30 @@ export async function upsertFromContact(
         first_name: contact.first_name,
         last_name: contact.last_name ?? null,
         username: from.username ?? null,
+        last_seen_at: now,
       },
     })
     .returning()
 
   if (!user) throw new Error('Failed to upsert user')
   return user
+}
+
+/**
+ * Bump last_seen_at. Callers gate on shouldTouchLastSeen (utils/last-seen)
+ * first so this is rarely issued; the SQL repeats the throttle so a burst of
+ * concurrent requests from one user collapses to a single write.
+ */
+export async function markSeen(userId: string): Promise<void> {
+  await db
+    .update(users)
+    .set({ last_seen_at: sql`now()` })
+    .where(
+      and(
+        eq(users.id, userId),
+        sql`(${users.last_seen_at} is null or ${users.last_seen_at} < now() - interval '5 minutes')`
+      )
+    )
 }
 
 export async function findUserByUsername(username: string): Promise<User | null> {
@@ -77,6 +98,12 @@ export async function findById(userId: string): Promise<User | null> {
   return result[0] ?? null
 }
 
+/** Resolve several Telegram ids to registered users in one query. */
+export async function findByTelegramIds(ids: bigint[]): Promise<User[]> {
+  if (ids.length === 0) return []
+  return db.select().from(users).where(inArray(users.telegram_id, ids))
+}
+
 export async function backfillLinkedUser(phone: string, userId: string): Promise<void> {
   const normalized = normalizePhone(phone)
   await db
@@ -85,10 +112,44 @@ export async function backfillLinkedUser(phone: string, userId: string): Promise
     .where(eq(contacts.phone, normalized))
 }
 
-export async function updateCardNumber(userId: string, cardNumber: string | null): Promise<void> {
-  await db.update(users).set({ card_number: cardNumber }).where(eq(users.id, userId))
+/**
+ * Link contacts that were added by Telegram id before this person registered
+ * (e.g. via the multi-select picker). Clears the now-resolved pending id.
+ */
+export async function backfillLinkedUserByTelegramId(
+  telegramId: bigint,
+  userId: string
+): Promise<void> {
+  await db
+    .update(contacts)
+    .set({ linked_user_id: userId, linked_telegram_id: null })
+    .where(and(eq(contacts.linked_telegram_id, telegramId), isNull(contacts.linked_user_id)))
 }
 
 export async function updateLanguage(userId: string, lang: 'uz' | 'ru' | 'en'): Promise<void> {
   await db.update(users).set({ language_code: lang }).where(eq(users.id, userId))
+}
+
+/**
+ * Link every group-split roster entry this person left behind before they had
+ * an account.
+ *
+ * Runs unconditionally on registration, next to the contact backfills, so that
+ * linking never depends on the in-memory session or on which link they arrived
+ * through — a deploy between /start and the phone share must not cost someone
+ * their place in a split.
+ */
+export async function activateGroupSplitMembersByTelegramId(
+  telegramId: bigint,
+  userId: string
+): Promise<void> {
+  await db
+    .update(groupSplitMembers)
+    .set({ user_id: userId })
+    .where(
+      and(
+        eq(groupSplitMembers.telegram_id, telegramId),
+        isNull(groupSplitMembers.user_id)
+      )
+    )
 }

@@ -1,0 +1,397 @@
+// Shared API response/request types — mirror the shapes built in src/server/routes.ts.
+
+/** One of the user's payment cards, as shaped by the API. */
+export interface UserCard {
+  id: string
+  number: string
+  /** Custom name; display falls back to `${network} ••${last4}`. */
+  label: string | null
+  network: string
+  last4: string
+  isDefault: boolean
+}
+
+export interface Me {
+  id: string
+  firstName: string
+  lastName: string | null
+  username: string | null
+  phone: string
+  languageCode: string
+  cards: UserCard[]
+  selfContactId: string
+  /** Bot handle (no `@`) for the native-contact-picker deep link; null if unknown. */
+  botUsername: string | null
+  /** Listed in the server's ADMIN_TELEGRAM_IDS — unlocks the feedback inbox. */
+  isAdmin: boolean
+}
+
+export interface ApiContact {
+  id: string
+  displayName: string
+  phone: string | null
+  linkedUserId: string | null
+}
+
+/** Response from POST /api/contacts/by-username — name arrays for a summary toast. */
+export interface UsernameAddResult {
+  added: string[]
+  skipped: string[]
+  notFound: string[]
+  selfSkipped: boolean
+}
+
+export type ParticipantStatus = 'pending' | 'marked_paid' | 'confirmed' | 'disputed'
+export type BillStatus = 'draft' | 'sent' | 'settled' | 'cancelled'
+
+/** One item line as it applies to a single participant. */
+export interface BreakdownItem {
+  name: string
+  share: number
+  /** Explicit unit count this person took (multi-unit items only). */
+  units?: number
+}
+
+/** Per-participant cost breakdown attached to participants by the API. */
+export interface Breakdown {
+  items: BreakdownItem[]
+  base: number
+  service: number
+  tip: number
+  /** Full tip this participant fronted (credit); 0 unless they paid the tip. */
+  tipPaid: number
+}
+
+export interface BillParticipant extends Breakdown {
+  id: string
+  contactId: string
+  displayName: string
+  linkedUserId: string | null
+  amount: number
+  status: ParticipantStatus
+  /** When they marked their share paid (awaiting confirmation), if ever. */
+  markedPaidAt: string | null
+  /** Proof-of-transfer photo the payer attached (creator-visible). */
+  paymentProofAttachmentId: string | null
+}
+
+export interface BillItem {
+  id: string
+  name: string
+  /** Per-unit price; the line total is `price × quantity`. */
+  price: number
+  quantity: number
+  position: number
+  shareContactIds: string[]
+  /** Explicit per-person unit counts; sharers absent here split the remainder. */
+  unitsByContactId?: Record<string, number>
+}
+
+export interface BillDetail {
+  id: string
+  title: string
+  subtotal: number
+  servicePct: number
+  serviceFixed: number
+  tip: number
+  tipPaidByContactId: string | null
+  total: number
+  status: BillStatus
+  /** Main receipt/cheque photo for the bill (participant-visible). */
+  receiptAttachmentId: string | null
+  receiptMime: string | null
+  /** Set when the creator archived the bill (hidden from default lists). */
+  archivedAt: string | null
+  createdAt: string
+  /** Card attached to THIS bill for paying (not the creator's current default). */
+  cardId: string | null
+  cardNumber: string | null
+  creator: { id: string; firstName: string }
+  items: BillItem[]
+  participants: BillParticipant[]
+}
+
+/** A bill blocking a contact delete (the 409 payload of DELETE /api/contacts/:id). */
+export interface BlockingBill {
+  id: string
+  title: string
+  status: BillStatus
+  createdAt: string
+}
+
+export interface IncomingBill {
+  bill: {
+    id: string
+    title: string
+    total: number
+    status: BillStatus
+    receiptAttachmentId: string | null
+    createdAt: string
+    creatorName: string
+    /** Creator's pay-to card, if one is attached to the bill. */
+    cardNumber: string | null
+  }
+  // Recipient's own itemization (what they're paying for).
+  participant: { id: string; amount: number; status: ParticipantStatus } & Breakdown
+}
+
+export interface BillsResponse {
+  created: BillDetail[]
+  incoming: IncomingBill[]
+}
+
+export interface CreateBillPayload {
+  title: string
+  participantContactIds: string[]
+  items: {
+    name: string
+    /** Per-unit price. */
+    price: number
+    quantity: number
+    shareContactIds: string[]
+    unitsByContactId?: Record<string, number>
+  }[]
+  servicePct: number
+  tip: number
+  tipPaidByContactId?: string | null
+  /** Card to attach: absent = server picks the default card; null = none. */
+  cardId?: string | null
+  receiptAttachmentId?: string | null
+  receiptMime?: string | null
+  /** Set when this bill is being built from a Telegram group split, so the
+   *  server can attach it and turn that group's card into a payment board. */
+  groupSplitId?: string | null
+}
+
+/** A roster collected by /split in a Telegram group. */
+export interface GroupSplit {
+  id: string
+  title: string | null
+  status: 'collecting' | 'building' | 'sent' | 'cancelled' | 'expired'
+  receiptAttachmentId: string | null
+  receiptMime: string | null
+  participantContactIds: string[]
+  members: { contactId: string | null; displayName: string; isRegistered: boolean }[]
+}
+
+// Editing replaces the whole bill, so the PATCH payload is the same shape.
+export type UpdateBillPayload = CreateBillPayload
+
+/** Response from POST /api/attachments. */
+export interface AttachmentRef {
+  id: string
+  mime: string
+}
+
+// ─── feedback ────────────────────────────────────────────────────────────────
+
+export type FeedbackCategory = 'bug' | 'suggestion' | 'other'
+export type FeedbackStatus = 'open' | 'in_progress' | 'resolved'
+
+/** Client context auto-attached to a feedback submission. */
+export interface FeedbackContext {
+  screen: string
+  buildId: string
+  platform: string
+  tgVersion: string
+  language: string
+}
+
+export interface CreateFeedbackPayload {
+  category: FeedbackCategory
+  message: string
+  attachments: { attachmentId: string; mime: string; isAutoCapture: boolean }[]
+  context: FeedbackContext
+}
+
+/** One feedback row as shaped for the admin inbox. */
+export interface FeedbackItem {
+  id: string
+  category: FeedbackCategory
+  message: string
+  status: FeedbackStatus
+  screen: string
+  buildId: string
+  platform: string
+  tgVersion: string
+  language: string
+  createdAt: string
+  reporter: { firstName: string; lastName: string | null; username: string | null }
+  attachments: { attachmentId: string; mime: string; isAutoCapture: boolean }[]
+}
+
+export interface FeedbackListResponse {
+  items: FeedbackItem[]
+  total: number
+}
+
+/** One line item extracted from a receipt photo. */
+export interface ScannedReceiptItem {
+  name: string
+  /** LINE total (quantity × unit price), not the unit price. */
+  price: number
+  /** Item count printed on the receipt, else 1. */
+  quantity: number
+}
+
+/** 429 body from POST /api/receipts/scan (surfaced as ApiError.data). */
+export interface ScanLimitBody {
+  error: string
+  code: 'user_limit' | 'global_limit'
+  /** ISO instant at which a scan is next admitted. */
+  retryAt: string
+  /** The limit that was hit (per-user count, or the global daily cap). */
+  limit: number
+  /** Window the limit applies to, in hours. */
+  windowHours: number
+}
+
+/** Response from POST /api/receipts/scan — extracted receipt data to prefill a draft. */
+export interface ScannedReceipt {
+  items: ScannedReceiptItem[]
+  /** Service charge as a money amount (UZS); 0 if none printed. */
+  serviceAmount: number
+  /** Printed service percentage if the receipt states one, else null. */
+  servicePct: number | null
+  /** Printed grand total — a soft sanity hint, not authoritative. */
+  total: number | null
+}
+
+// ─── admin ───────────────────────────────────────────────────────────────────
+// Mirrors src/server/admin-routes.ts. All routes are admin-only (me.isAdmin).
+
+export interface ScanWindow {
+  ok: number
+  parse: number
+  upstream: number
+  pending: number
+  /** Mean Gemini round-trip over successful scans; null when there were none. */
+  avgMs: number | null
+}
+
+export interface WeekBucket {
+  /** Monday of the week, YYYY-MM-DD in Asia/Tashkent. */
+  week: string
+  count: number
+}
+
+export interface AdminStats {
+  generatedAt: string
+  overview: {
+    users: {
+      total: number
+      new7d: number
+      new30d: number
+      active24h: number
+      active7d: number
+      active30d: number
+    }
+    languages: { uz: number; ru: number; en: number; other: number }
+    bills: { total: number; sent: number; settled: number; volume: number }
+    participants: { pending: number; marked_paid: number; confirmed: number; disputed: number }
+  }
+  scans: {
+    configured: boolean
+    model: string
+    relay: boolean
+    /** 0 = no global cap. */
+    dailyLimit: number
+    /** Scans against today's global quota (the Gemini quota day, not a local day). */
+    today: number
+    resetsAt: string
+    last24h: ScanWindow
+    last7d: ScanWindow
+  }
+  /** 12 buckets, oldest first; the last one is the current (partial) week. */
+  trends: { signups: WeekBucket[]; bills: WeekBucket[] }
+  feedback: { open: number }
+  support: { unread: number }
+}
+
+export interface ActorRef {
+  id: string
+  firstName: string
+  username: string | null
+}
+
+export type ScanOutcome = 'ok' | 'parse' | 'upstream' | 'pending'
+
+export type AdminActivityItem =
+  | { kind: 'signup'; at: string; user: ActorRef }
+  | {
+      kind: 'bill'
+      at: string
+      user: ActorRef
+      billId: string
+      title: string
+      total: number
+      status: BillStatus
+    }
+  | { kind: 'scan'; at: string; user: ActorRef; status: ScanOutcome; durationMs: number | null }
+  | {
+      kind: 'feedback'
+      at: string
+      user: ActorRef
+      feedbackId: string
+      category: FeedbackCategory
+      status: FeedbackStatus
+    }
+
+export interface AdminUserSummary {
+  id: string
+  telegramId: number
+  firstName: string
+  lastName: string | null
+  username: string | null
+  phone: string
+  languageCode: string
+  createdAt: string
+  /** Null until the user's first request after the column shipped. */
+  lastSeenAt: string | null
+}
+
+export interface AdminUserDetail extends AdminUserSummary {
+  counts: {
+    billsCreated: number
+    billsReceived: number
+    scansUsed: number
+    cards: number
+    feedback: number
+  }
+}
+
+export type AdminSendFailureCode = 'blocked' | 'chat_not_found' | 'rate_limited' | 'send_failed'
+
+/** Error body of POST /api/admin/users/:id/message (surfaced as ApiError.data). */
+export interface AdminMessageErrorBody {
+  error: string
+  code: AdminSendFailureCode
+  /** The stored row: a refused message is still recorded, so the thread can
+   *  show it as an undelivered bubble. */
+  message?: SupportMessage
+}
+
+// ─── support threads ─────────────────────────────────────────────────────────
+// Mirrors shapeSupportMessage / shapeThread in src/server/admin-routes.ts.
+
+export type SupportDirection = 'in' | 'out'
+
+export interface SupportMessage {
+  id: string
+  direction: SupportDirection
+  /** '' when a photo arrived with no caption. */
+  text: string
+  attachmentId: string | null
+  attachmentMime: string | null
+  adminUserId: string | null
+  /** Set when Telegram refused an outbound message — render as undelivered. */
+  failureCode: AdminSendFailureCode | null
+  readAt: string | null
+  createdAt: string
+}
+
+export interface SupportThread {
+  user: AdminUserSummary
+  lastMessage: SupportMessage
+  unread: number
+}
